@@ -4,8 +4,14 @@ using System.Collections.Generic;
 
 public static class RhythmAutoGenerator
 {
-    // Улучшенная 1-кнопка: спектральный флюкс + адаптивный порог + квантизация
-    public static void Generate(RhythmLevelData level, int seed = 0, float density = 0.65f, float threshold = 0.28f)
+    // Музыкальная автогенерация: сетка BPM + мульти-онсет (flux) + пер-препятствие скорость
+    // Сбалансированная плотность — 0.85/0.18 давало переспам
+    public static void Generate(RhythmLevelData level, int seed = 0, float density = 0.72f, float threshold = 0.24f)
+    {
+        Generate(level, seed, density, threshold, 9f, 20f);
+    }
+
+    public static void Generate(RhythmLevelData level, int seed, float density, float threshold, float minSpeed, float maxSpeed)
     {
         if (level == null || level.music == null) { Debug.LogWarning("[Auto] Нет music"); return; }
         var clip = level.music;
@@ -14,98 +20,288 @@ public static class RhythmAutoGenerator
         float[] data = new float[samples * channels];
         clip.GetData(data, 0);
 
+        // mono + нормализация громкости
         float[] mono = new float[samples];
         for (int i = 0; i < samples; i++)
         {
             float sum = 0;
-            for (int c = 0; c < channels; c++) sum += Mathf.Abs(data[i * channels + c]);
-            mono[i] = sum / channels;
+            for (int c = 0; c < channels; c++) sum += data[i * channels + c];
+            mono[i] = sum / Mathf.Max(1, channels);
         }
 
+        int freq = clip.frequency;
         float secPerBeat = 60f / Mathf.Max(1, level.bpm);
-        int win = Mathf.RoundToInt(clip.frequency * 0.09f); // ~90ms окно — ловит кики/снейры
-        if (win < 512) win = 512;
-        int hop = win / 2;
+        // два анализа: короткий для транзиентов, длинный для энергии
+        int winShort = Mathf.Clamp(Mathf.RoundToInt(freq * 0.06f), 512, 2048); // ~60ms
+        int hop = winShort / 2;
+        int winLong = winShort * 4;
 
         List<float> flux = new List<float>();
+        List<float> fluxHigh = new List<float>(); // высокочастотный транзиент (разность)
         List<float> times = new List<float>();
-        float prevEnergy = 0;
-        for (int i = 0; i + win < samples; i += hop)
+        List<float> rmsLong = new List<float>();
+
+        float prevEnergy = 0f;
+        float prevDiff = 0f;
+        for (int i = 0; i + winLong < samples; i += hop)
         {
-            float e = 0;
-            for (int j = 0; j < win; j++) e += Mathf.Abs(mono[i + j]);
-            e /= win;
-            float curFlux = Mathf.Max(0, e - prevEnergy);
+            float eShort = 0f;
+            for (int j = 0; j < winShort; j++) eShort += Mathf.Abs(mono[i + j]);
+            eShort /= winShort;
+
+            float eLong = 0f;
+            for (int j = 0; j < winLong; j++) eLong += mono[i + j] * mono[i + j];
+            eLong = Mathf.Sqrt(eLong / winLong); // RMS
+
+            float curFlux = Mathf.Max(0f, eShort - prevEnergy);
+            float diff = Mathf.Abs(mono[i + winShort/2] - mono[i]);
+            float highFlux = Mathf.Max(0f, diff - prevDiff * 0.5f);
+
             flux.Add(curFlux);
-            times.Add((float)i / clip.frequency);
-            prevEnergy = e;
+            fluxHigh.Add(highFlux);
+            rmsLong.Add(eLong);
+            times.Add((float)i / freq);
+            prevEnergy = eShort;
+            prevDiff = diff;
         }
 
-        // Нормализация
-        float maxF = 0; foreach (var f in flux) if (f > maxF) maxF = f;
+        // нормализация
+        float maxF = 0f, maxHF = 0f, maxRMS = 0f;
+        foreach (var f in flux) if (f > maxF) maxF = f;
+        foreach (var f in fluxHigh) if (f > maxHF) maxHF = f;
+        foreach (var f in rmsLong) if (f > maxRMS) maxRMS = f;
         if (maxF < 0.0001f) maxF = 1f;
+        if (maxHF < 0.0001f) maxHF = 1f;
+        if (maxRMS < 0.0001f) maxRMS = 1f;
         for (int i = 0; i < flux.Count; i++) flux[i] /= maxF;
+        for (int i = 0; i < fluxHigh.Count; i++) fluxHigh[i] /= maxHF;
+        for (int i = 0; i < rmsLong.Count; i++) rmsLong[i] /= maxRMS;
+
+        // комбинированный онсет: основной flux + взвешенный high
+        List<float> onset = new List<float>(flux.Count);
+        for (int i = 0; i < flux.Count; i++)
+            onset.Add(Mathf.Clamp01(flux[i] * 0.75f + fluxHigh[i] * 0.35f + rmsLong[i] * 0.12f));
 
         System.Random rng = new System.Random(seed == 0 ? level.name.GetHashCode() : seed);
         level.events.Clear();
 
-        // Адаптивный порог по локальному среднему
-        int avgWin = 12;
-        for (int i = avgWin; i < flux.Count - 1; i++)
-        {
-            float localSum = 0; for (int k = i - avgWin; k < i; k++) localSum += flux[k];
-            float localAvg = localSum / avgWin;
-            float localVar = 0; for (int k = i - avgWin; k < i; k++) localVar += (flux[k] - localAvg) * (flux[k] - localAvg);
-            float std = Mathf.Sqrt(localVar / avgWin);
-            float adaptThr = localAvg + std * 1.2f + threshold * 0.6f;
+        float totalSec = (float)samples / freq;
+        float totalBeats = level.TimeToBeat(totalSec);
+        // идём строго по сетке битов 0.5 — это гарантирует квантизацию под музыку
+        float stepBeat = 0.5f;
+        // адаптивное окно для порога — 2 секунды
+        int adaptBeats = Mathf.RoundToInt(2f / secPerBeat / stepBeat);
 
-            bool isPeak = flux[i] > adaptThr && flux[i] > flux[i - 1] && flux[i] > flux[i + 1] && flux[i] > 0.08f;
+        // Соберём онсет на сетке битов: для каждого бита найдём ближайший flux индекс
+        List<float> beatOnset = new List<float>();
+        List<float> beatTimes = new List<float>();
+        List<float> beats = new List<float>();
+        for (float b = 0f; b <= totalBeats; b += stepBeat)
+        {
+            float t = level.BeatToTime(b);
+            if (t < 0 || t >= totalSec) continue;
+            int idx = Mathf.Clamp(Mathf.RoundToInt(t * freq / hop), 0, onset.Count - 1);
+            // усредним ±1 вокруг
+            float v = onset[idx];
+            if (idx > 0) v = Mathf.Max(v, onset[idx - 1] * 0.9f);
+            if (idx + 1 < onset.Count) v = Mathf.Max(v, onset[idx + 1] * 0.9f);
+            beats.Add(b);
+            beatTimes.Add(t);
+            beatOnset.Add(v);
+        }
+
+        // сглаженные пороги
+        for (int i = 0; i < beats.Count; i++)
+        {
+            // локальное среднее и стд по окну adaptBeats
+            int a0 = Mathf.Max(0, i - adaptBeats);
+            int a1 = Mathf.Min(beats.Count - 1, i + adaptBeats);
+            float sum = 0f;
+            for (int k = a0; k <= a1; k++) sum += beatOnset[k];
+            float avg = sum / (a1 - a0 + 1);
+            float var = 0f;
+            for (int k = a0; k <= a1; k++) var += (beatOnset[k] - avg) * (beatOnset[k] - avg);
+            float std = Mathf.Sqrt(var / (a1 - a0 + 1) + 1e-6f);
+
+            float adaptThr = avg + std * 0.82f + threshold * 0.38f;
+            // RMS-коррекция: в тихих местах порог выше, в громких — ниже
+            float rmsAt = rmsLong[Mathf.Clamp(Mathf.RoundToInt(beatTimes[i] * freq / hop), 0, rmsLong.Count - 1)];
+            adaptThr = Mathf.Lerp(adaptThr, adaptThr * 0.78f, rmsAt); // громче → легче спавн
+
+            bool isPeak = beatOnset[i] > adaptThr && beatOnset[i] > 0.07f;
+            // локальный максимум по трём точкам сетки
+            if (i > 0 && i + 1 < beatOnset.Count)
+                isPeak = isPeak && beatOnset[i] >= beatOnset[i - 1] && beatOnset[i] >= beatOnset[i + 1];
             if (!isPeak) continue;
             if (rng.NextDouble() > density) continue;
 
-            float time = times[i];
-            float beat = level.TimeToBeat(time);
-            beat = Mathf.Round(beat * 2f) / 2f; // 0.5 бита
-            if (beat < 0) continue;
-            time = level.BeatToTime(beat);
-            if (level.events.Count > 0 && Mathf.Abs(level.events[level.events.Count - 1].beat - beat) < 0.45f) continue;
+            float beat = beats[i];
+            float time = beatTimes[i];
 
-            int prefab = 0;
-            if (level.obstaclePrefabs.Count > 1)
+            // ── защита от частых нот: нужен отдых ──
+            // минимум 1.0 бита между нотами (≈0.5-0.7с при BPM 120-82) — иначе не успеваешь прыгнуть/проскользить
+            const float minGap = 1.0f;
+            if (level.events.Count > 0)
             {
-                // Сильные пики — другой префаб
-                float strength = flux[i];
-                if (strength > 0.6f && level.obstaclePrefabs.Count > 2) prefab = 2;
-                else if (strength > 0.35f && level.obstaclePrefabs.Count > 1) prefab = 1;
-                else prefab = 0;
-                // немного рандома чтобы не однообразно
-                if (rng.NextDouble() < 0.12) prefab = rng.Next(0, level.obstaclePrefabs.Count);
+                float lastGap = beat - level.events[level.events.Count - 1].beat;
+                if (lastGap < minGap)
+                {
+                    // разрешаем только очень сильный пик (>0.75) с шансом, иначе пропуск
+                    if (beatOnset[i] < 0.75f || rng.NextDouble() > 0.25) continue;
+                }
+                // анти-серия: не более 2 подряд с интервалом <1.5 бита — третьей нужен отдых >=2 бита
+                if (level.events.Count >= 2)
+                {
+                    float gap1 = level.events[level.events.Count - 1].beat - level.events[level.events.Count - 2].beat;
+                    float gap2 = beat - level.events[level.events.Count - 1].beat;
+                    if (gap1 < 1.5f && gap2 < 1.5f)
+                    {
+                        // уже 2 подряд быстро — третью пропускаем
+                        continue;
+                    }
+                }
+                // также не более 3 нот в окне 4 бита (скользящее окно)
+                if (level.events.Count >= 3)
+                {
+                    int cntInWindow = 0;
+                    for (int k = level.events.Count - 1; k >= 0; k--)
+                    {
+                        if (beat - level.events[k].beat <= 4.0f) cntInWindow++;
+                        else break;
+                    }
+                    if (cntInWindow >= 3) continue;
+                }
             }
-            var ev = ObstacleEvent.Create(beat, prefab, Vector3.zero);
+
+            // выбор префаба по силе онсета + немного музыкальной логики: сильные — полные стены, средние — боковые
+            int prefab = 0;
+            if (level.obstaclePrefabs.Count > 0)
+            {
+                float strength = beatOnset[i];
+                // нормализуем с учётом rms
+                strength = Mathf.Clamp01(strength * (0.85f + rmsAt * 0.3f));
+                if (level.obstaclePrefabs.Count >= 7)
+                {
+                    if (strength > 0.68f) prefab = 0; // полная низкая — частая
+                    else if (strength > 0.52f) prefab = rng.NextDouble() < 0.6 ? 1 : 2; // боковые
+                    else if (strength > 0.38f) prefab = rng.Next(3, 5); // с проёмом
+                    else prefab = rng.Next(5, 7);
+                }
+                else if (level.obstaclePrefabs.Count > 1)
+                {
+                    if (strength > 0.6f && level.obstaclePrefabs.Count > 2) prefab = 2;
+                    else if (strength > 0.35f) prefab = 1;
+                    else prefab = 0;
+                    if (rng.NextDouble() < 0.10) prefab = rng.Next(0, level.obstaclePrefabs.Count);
+                }
+                // избегаем повтора одного префаба >2 раза подряд
+                if (level.events.Count >= 2)
+                {
+                    int p1 = level.events[level.events.Count - 1].prefabIndex;
+                    int p2 = level.events[level.events.Count - 2].prefabIndex;
+                    if (p1 == prefab && p2 == prefab) prefab = (prefab + 1 + rng.Next(0, level.obstaclePrefabs.Count - 1)) % level.obstaclePrefabs.Count;
+                }
+            }
+
+            // скорость по силе: сильнее = быстрее, громче = быстрее; bpm влияет
+            float bpmFactor = Mathf.Clamp(level.bpm / 120f, 0.75f, 1.35f);
+            float baseSpd = Mathf.Lerp(minSpeed, maxSpeed, Mathf.Pow(beatOnset[i], 0.8f));
+            baseSpd *= bpmFactor;
+            // добавим вариативность 15% и лёгкий рандом по префабу
+            float varScale = (float)(0.88 + rng.NextDouble() * 0.24);
+            float spd = baseSpd * varScale;
+            // небольшие префабы (боковые) чуть быстрее
+            if (prefab == 1 || prefab == 2) spd *= 1.08f;
+            spd = Mathf.Clamp(spd, 6f, 28f);
+
+            var ev = ObstacleEvent.Create(beat, prefab, Vector3.zero, spd);
             ev.time = time;
+            // небольшой свинг по времени по музыке — уже квантовано, не трогаем
             level.events.Add(ev);
         }
 
-        if (level.events.Count > 0 && level.events[0].beat > 3f)
+        // сдвиг чтобы первая нота была не позже 4 битов
+        if (level.events.Count > 0 && level.events[0].beat > 4f)
         {
-            float shift = Mathf.Floor(level.events[0].beat);
+            float shift = Mathf.Floor(level.events[0].beat - 2f);
             for (int i = 0; i < level.events.Count; i++) { var e = level.events[i]; e.beat -= shift; e.time = level.BeatToTime(e.beat); level.events[i] = e; }
         }
-        if (level.events.Count < 10)
+        // второй проход: заполняем только очень большие паузы (> 5 бит) — чтобы не было пустых кусков, но без переспама и с отдыхом
+        if (level.events.Count > 1)
         {
-            for (int i = 0; i < 20; i++)
+            var sorted = new List<ObstacleEvent>(level.events);
+            sorted.Sort((a,b)=>a.beat.CompareTo(b.beat));
+            List<ObstacleEvent> filled = new List<ObstacleEvent>(sorted);
+            float avgSpd = (minSpeed + maxSpeed) * 0.5f;
+            for (int i = 0; i < sorted.Count - 1; i++)
             {
-                float beat = i * 2f;
-                var ev = ObstacleEvent.Create(beat, i % Mathf.Max(1, level.obstaclePrefabs.Count), Vector3.zero);
+                float gap = sorted[i + 1].beat - sorted[i].beat;
+                if (gap > 5.0f)
+                {
+                    // одна нота в середине большой паузы
+                    float beat = sorted[i].beat + gap * 0.5f;
+                    beat = Mathf.Round(beat * 2f) / 2f;
+                    if (beat >= sorted[i + 1].beat - 0.9f) continue;
+                    // проверяем что не создаём серию из 3 в 4 бита
+                    int cntNear = 0;
+                    foreach (var ex in filled) if (Mathf.Abs(ex.beat - beat) <= 2.0f) cntNear++;
+                    if (cntNear >= 2) continue;
+                    int bIdx = beats.IndexOf(beat);
+                    if (bIdx < 0) bIdx = Mathf.Clamp(Mathf.RoundToInt(level.TimeToBeat(level.BeatToTime(beat)) * 2f), 0, beatOnset.Count - 1);
+                    if (bIdx >= 0 && bIdx < beatOnset.Count && beatOnset[bIdx] < 0.05f) continue;
+                    int p = rng.Next(0, Mathf.Max(1, level.obstaclePrefabs.Count));
+                    var ev = ObstacleEvent.Create(beat, p, Vector3.zero, avgSpd * (float)(0.92 + rng.NextDouble()*0.16));
+                    ev.time = level.BeatToTime(beat);
+                    filled.Add(ev);
+                }
+            }
+            level.events = filled;
+        }
+
+        // страховка минимального наполнения — умеренно, с учётом отдыха
+        // цель: ~0.32 ноты/бит (1 нота на ~3.1 бита) — чтобы не было стены подряд
+        int targetMin = Mathf.RoundToInt(totalBeats * 0.32f);
+        targetMin = Mathf.Clamp(targetMin, 16, 160);
+        if (level.events.Count < targetMin)
+        {
+            float avgSpd = (minSpeed + maxSpeed) * 0.5f;
+            int need = targetMin - level.events.Count;
+            // добавляем по сетке 1.5 бита, пропуская занятые и соблюдая minGap
+            for (float b = 2f; b < totalBeats && need > 0; b += 1.5f)
+            {
+                if (level.events.Exists(x => Mathf.Abs(x.beat - b) < 0.9f)) continue;
+                // проверка окна 4 бита
+                int cntInWin = 0;
+                foreach (var ex in level.events) if (Mathf.Abs(ex.beat - b) <= 4f) cntInWin++;
+                if (cntInWin >= 3) continue;
+                int bIdx = Mathf.Clamp(Mathf.RoundToInt((b - beats[0]) / stepBeat), 0, beatOnset.Count - 1);
+                if (bIdx >= 0 && bIdx < beatOnset.Count && beatOnset[bIdx] < 0.06f) continue;
+                if (rng.NextDouble() > 0.30) continue;
+                int p = rng.Next(0, Mathf.Max(1, level.obstaclePrefabs.Count));
+                var ev = ObstacleEvent.Create(b, p, Vector3.zero, avgSpd * (float)(0.92 + rng.NextDouble()*0.18));
+                ev.time = level.BeatToTime(b);
+                level.events.Add(ev);
+                need--;
+            }
+            // если всё ещё не хватает — равномерные 3 бита (с отдыхом)
+            for (int i = 0; level.events.Count < targetMin && i < 500; i++)
+            {
+                float beat = 4f + i * 3f;
+                if (beat >= totalBeats) break;
+                if (level.events.Exists(x => Mathf.Abs(x.beat - beat) < 0.9f)) continue;
+                int p = i % Mathf.Max(1, level.obstaclePrefabs.Count);
+                var ev = ObstacleEvent.Create(beat, p, Vector3.zero, avgSpd);
                 ev.time = level.BeatToTime(beat);
-                if (level.events.Exists(x => Mathf.Abs(x.beat - beat) < 0.3f)) continue;
                 level.events.Add(ev);
             }
         }
 
+        // доп. пасс: разрежаем слишком плотные кластеры (если >3 нот в 4 бита — удаляем слабейшую)
+        // и так уже редкие, пропустим
+
         level.SortByTime();
         EditorUtility.SetDirty(level);
         AssetDatabase.SaveAssets();
-        Debug.Log($"[Auto+] Сгенерировано {level.events.Count} нот (flux thr {threshold:0.00} dens {density:0.00})", level);
+        Debug.Log($"[Auto★] Сгенерировано {level.events.Count} нот (thr {threshold:0.00} dens {density:0.00} bpm {level.bpm} spd {minSpeed:0}-{maxSpeed:0})", level);
     }
 }

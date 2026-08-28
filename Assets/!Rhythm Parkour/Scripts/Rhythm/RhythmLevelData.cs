@@ -12,8 +12,10 @@ public struct ObstacleEvent
     public Vector3 rotation;    // Euler
     public Vector3 scale;
     public string comment;
+    [Tooltip("Индивидуальная скорость этого препятствия (м/с). 0 = дефолт из префаба/менеджера")]
+    public float speed;
 
-    public static ObstacleEvent Create(float beat, int prefabIndex, Vector3 pos)
+    public static ObstacleEvent Create(float beat, int prefabIndex, Vector3 pos, float speed = 0f)
     {
         return new ObstacleEvent
         {
@@ -21,7 +23,8 @@ public struct ObstacleEvent
             prefabIndex = prefabIndex,
             position = pos,
             rotation = Vector3.zero,
-            scale = Vector3.one
+            scale = Vector3.one,
+            speed = speed
         };
     }
 }

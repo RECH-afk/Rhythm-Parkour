@@ -1,0 +1,779 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a90bc5a694d3832478999b627f08a4e8, type: 3}
+  m_Name: YARARARA
+  m_EditorClassIdentifier: 
+  music: {fileID: 8300000, guid: b430e52bdf29d0d4fbe2f2ef207f3027, type: 3}
+  video: {fileID: 32900000, guid: 9e7c791516c10c749b2463df8ca28d44, type: 3}
+  bpm: 125
+  offset: 0
+  obstaclePrefabs:
+  - {fileID: 1618702742073132132, guid: 9cbd4a25fbf6d8d42a28d5f3d4f6b99a, type: 3}
+  - {fileID: 9211062225846140061, guid: 4b64278fece01cc4a8493308d91b10da, type: 3}
+  - {fileID: 9061343902686913011, guid: 304add070bf3f9f4584212b5213c2451, type: 3}
+  - {fileID: 8226235211069270399, guid: 5dfa243e61d4aa540b9d594bc06df40b, type: 3}
+  - {fileID: 5555170931705320691, guid: bdcf1322bb89217489ee452ef0c7bd81, type: 3}
+  - {fileID: 450351668688628145, guid: 76afb4ebdbae06c46b2f21e11ed1fe7f, type: 3}
+  - {fileID: 6403843449976154025, guid: 6366f0c8ece97374b840b2be22b9d468, type: 3}
+  events:
+  - time: 1.2
+    beat: 2.5
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 17.060823
+  - time: 1.92
+    beat: 4
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 3.36
+    beat: 7
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 4.08
+    beat: 8.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.878437
+  - time: 5.52
+    beat: 11.5
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.845798
+  - time: 6.48
+    beat: 13.5
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.0279045
+  - time: 7.68
+    beat: 16
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 8.64
+    beat: 18
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.56413
+  - time: 9.6
+    beat: 20
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.41328
+  - time: 10.8
+    beat: 22.5
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 12
+    beat: 25
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.5563135
+  - time: 13.44
+    beat: 28
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 14.88
+    beat: 31
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 16.08
+    beat: 33.5
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.56103
+  - time: 17.04
+    beat: 35.5
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.249838
+  - time: 18
+    beat: 37.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.11965
+  - time: 19.2
+    beat: 40
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 20.16
+    beat: 42
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.563556
+  - time: 21.12
+    beat: 44
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.816766
+  - time: 22.08
+    beat: 46
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.820916
+  - time: 23.52
+    beat: 49
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 24.96
+    beat: 52
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 26.4
+    beat: 55
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 28.08
+    beat: 58.5
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 29.28
+    beat: 61
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 30.48
+    beat: 63.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.860436
+  - time: 32.16
+    beat: 67
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15
+  - time: 33.36
+    beat: 69.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.734181
+  - time: 35.04
+    beat: 73
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.424155
+  - time: 35.76
+    beat: 74.5
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.386719
+  - time: 37.2
+    beat: 77.5
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 17.317305
+  - time: 38.4
+    beat: 80
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.040683
+  - time: 39.84
+    beat: 83
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.593611
+  - time: 41.04
+    beat: 85.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 11
+  - time: 42
+    beat: 87.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.38449
+  - time: 43.68
+    beat: 91
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.270103
+  - time: 45.12
+    beat: 94
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.80819
+  - time: 46.56
+    beat: 97
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.3731365
+  - time: 48
+    beat: 100
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.147845
+  - time: 49.2
+    beat: 102.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.654937
+  - time: 50.4
+    beat: 105
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.63563
+  - time: 52.32
+    beat: 109
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.631452
+  - time: 53.52
+    beat: 111.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.780873
+  - time: 55.68
+    beat: 116
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.590416
+  - time: 56.88
+    beat: 118.5
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.222857
+  - time: 58.56
+    beat: 122
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 18.172655
+  - time: 60.24
+    beat: 125.5
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.158731
+  - time: 61.44
+    beat: 128
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.690835
+  - time: 62.88
+    beat: 131
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 20.26299
+  - time: 64.32
+    beat: 134
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.000094
+  - time: 65.76
+    beat: 137
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.0852785
+  - time: 67.2
+    beat: 140
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 18.515625
+  - time: 69.12
+    beat: 144
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.258871
+  - time: 71.04
+    beat: 148
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 11
+  - time: 72.96
+    beat: 152
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 11
+  - time: 75.36
+    beat: 157
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.954931
+  - time: 76.56
+    beat: 159.5
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.20777
+  - time: 77.76
+    beat: 162
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 11
+  - time: 79.44
+    beat: 165.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 11
+  - time: 80.88
+    beat: 168.5
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.258928
+  - time: 81.84
+    beat: 170.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.402115
+  - time: 83.04
+    beat: 173
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.323322
+  - time: 85.44
+    beat: 178
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.776619
+  - time: 86.64
+    beat: 180.5
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.862333
+  - time: 87.84
+    beat: 183
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 11
+  - time: 89.04
+    beat: 185.5
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.488886
+  - time: 91.44
+    beat: 190.5
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 19.767582
+  - time: 93.12
+    beat: 194
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.754776
+  - time: 94.08
+    beat: 196
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.072227
+  - time: 95.52
+    beat: 199
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 17.350748
+  - time: 96.96
+    beat: 202
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.41005
+  - time: 99.12
+    beat: 206.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 18.861774
+  - time: 99.6
+    beat: 207.5
+    prefabIndex: 1
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.901118
+  - time: 101.52
+    beat: 211.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.623932
+  - time: 103.92
+    beat: 216.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.50927
+  - time: 106.8
+    beat: 222.5
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.018854
+  - time: 108.48
+    beat: 226
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.058083
+  - time: 109.68
+    beat: 228.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.234718
+  - time: 111.12
+    beat: 231.5
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.944698
+  - time: 113.28
+    beat: 236
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.334526
+  - time: 114.72
+    beat: 239
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.028625
+  - time: 115.92
+    beat: 241.5
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.599464
+  - time: 118.56
+    beat: 247
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.140909
+  - time: 120.96
+    beat: 252
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 20.587467
+  - time: 122.88
+    beat: 256
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.335956
+  - time: 124.32
+    beat: 259
+    prefabIndex: 6
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.44599
+  - time: 125.28
+    beat: 261
+    prefabIndex: 0
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 16.029213
+  - time: 126.48
+    beat: 263.5
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.930682
+  - time: 128.4
+    beat: 267.5
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.085891
+  - time: 129.6
+    beat: 270
+    prefabIndex: 4
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.1621275
+  - time: 131.04
+    beat: 273
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.711085
+  - time: 133.44
+    beat: 278
+    prefabIndex: 5
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 15.076667
+  - time: 134.64
+    beat: 280.5
+    prefabIndex: 3
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 14.150098
+  - time: 135.84
+    beat: 283
+    prefabIndex: 2
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
+    scale: {x: 1, y: 1, z: 1}
+    comment: 
+    speed: 13.8721075

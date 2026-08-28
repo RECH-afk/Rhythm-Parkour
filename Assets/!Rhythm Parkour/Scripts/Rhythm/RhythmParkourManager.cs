@@ -3,7 +3,10 @@ using UnityEngine;
 using UnityEngine.Video;
 
 /// <summary>
-/// Спавнит префабы из палитры в точке spawnPoint и двигает вперёд к despawnPoint под музыку.
+/// Спавнит префабы строго по дорожке и двигает к despawn под музыку.
+/// — Препятствия не выходят за пределы дорожки (кламп по X, лок Y).
+/// — Каждый префаб/ивет имеет свою скорость.
+/// — При перетаскивании префаба на spawnPoint он встаёт ровно (префабы центрированы в 0,0,0).
 /// </summary>
 public class RhythmParkourManager : MonoBehaviour
 {
@@ -15,20 +18,33 @@ public class RhythmParkourManager : MonoBehaviour
     public AudioSource musicSource;
     public VideoPlayer videoPlayer;
 
+    [Header("Дорожка")]
+    [Tooltip("Пол дорожки (Ground). Если пусто — найдётся объект с именем Ground)")]
+    public Transform trackFloor;
+    [Tooltip("Ширина дорожки. 0 = взять из trackFloor.localScale.x")]
+    public float trackWidth = 0f;
+    [HideInInspector] public float trackMinX;
+    [HideInInspector] public float trackMaxX;
+    [HideInInspector] public float trackY;
+
     [Header("Точки спавна")]
     [Tooltip("Откуда появляются препятствия")]
     public Transform spawnPoint;
     [Tooltip("Где удаляются (за экраном)")]
     public Transform despawnPoint;
-    [Tooltip("Куда двигаются — от spawn к despawn. Если despawn пусто — вперёд по Z")]
+    [Tooltip("Куда двигаются — от spawn к despawn. Если despawn пусто — вперёд по -Z")]
     public Vector3 moveDirection = Vector3.forward;
-    [Tooltip("Скорость движения препятствий")]
-    public float obstacleSpeed = 10f;
     [Tooltip("Родитель для спавна (для порядка в иерархии)")]
     public Transform spawnParent;
 
+    [Header("Скорость (дефолт)")]
+    [Tooltip("Дефолт если у префаба и у ивента speed=0")]
+    public float defaultObstacleSpeed = 12f;
+
+    [HideInInspector] public float obstacleSpeed = 12f; // legacy для совместимости
+
     [Header("Пул")]
-    public int poolSizePerPrefab = 10;
+    public int poolSizePerPrefab = 14;
 
     [Header("Автостарт")]
     public bool autoPlayOnStart = true;
@@ -54,22 +70,55 @@ public class RhythmParkourManager : MonoBehaviour
         if (musicSource == null) musicSource = gameObject.AddComponent<AudioSource>();
         conductor.musicSource = musicSource;
         if (spawnParent == null) spawnParent = transform;
+        UpdateTrackBounds();
         UpdateDirection();
     }
 
     void OnValidate()
     {
+        UpdateTrackBounds();
         UpdateDirection();
         if (spawnPoint != null && despawnPoint != null)
-            moveDirection = (despawnPoint.position - spawnPoint.position).normalized;
+            moveDirection = (despawnPoint.position - spawnPoint.position);
+        // горизонталим
+        moveDirection.y = 0f;
+        if (moveDirection.sqrMagnitude < 0.001f) moveDirection = new Vector3(0, 0, -1);
+    }
+
+    void UpdateTrackBounds()
+    {
+        if (trackFloor == null)
+        {
+            var go = GameObject.Find("Ground");
+            if (go != null) trackFloor = go.transform;
+        }
+        float width = trackWidth;
+        if (width <= 0.01f)
+        {
+            if (trackFloor != null) width = Mathf.Abs(trackFloor.localScale.x);
+            else width = 6f;
+        }
+        float centerX = trackFloor != null ? trackFloor.position.x : 0f;
+        // небольшой запас чтобы не прилипать к стене (половина толщины коллайдера)
+        float half = width * 0.5f - 0.05f;
+        trackMinX = centerX - half;
+        trackMaxX = centerX + half;
+        trackY = trackFloor != null ? trackFloor.position.y + trackFloor.localScale.y * 0.5f : 0.5f;
+        // legacy sync
+        if (defaultObstacleSpeed < 0.1f) defaultObstacleSpeed = obstacleSpeed > 0.1f ? obstacleSpeed : 12f;
+        else obstacleSpeed = defaultObstacleSpeed;
     }
 
     void UpdateDirection()
     {
+        Vector3 dir;
         if (spawnPoint != null && despawnPoint != null)
-            dirNormalized = (despawnPoint.position - spawnPoint.position).normalized;
+            dir = despawnPoint.position - spawnPoint.position;
         else
-            dirNormalized = moveDirection.sqrMagnitude > 0.001f ? moveDirection.normalized : Vector3.forward;
+            dir = moveDirection;
+        dir.y = 0f; // строго по горизонту дорожки
+        if (dir.sqrMagnitude < 0.001f) dir = new Vector3(0, 0, -1);
+        dirNormalized = dir.normalized;
     }
 
     void Start()
@@ -79,8 +128,14 @@ public class RhythmParkourManager : MonoBehaviour
             spawnPoint = null;
         if (despawnPoint != null && (despawnPoint.name == "Obstacle" || despawnPoint.name == "Colider"))
             despawnPoint = null;
-        if (spawnPoint == null) spawnPoint = EnsurePoint("SpawnPoint", new Vector3(0, 1, 40));
-        if (despawnPoint == null) despawnPoint = EnsurePoint("DespawnPoint", new Vector3(0, 1, -15));
+
+        UpdateTrackBounds();
+        // Спавн/деспавн строго по центру дорожки X=0, Y на уровне земли
+        if (spawnPoint == null) spawnPoint = EnsurePoint("SpawnPoint", new Vector3(0f, 0f, 52f));
+        if (despawnPoint == null) despawnPoint = EnsurePoint("DespawnPoint", new Vector3(0f, 0f, -8f));
+        // выравниваем по дорожке
+        AlignPointToTrack(spawnPoint);
+        AlignPointToTrack(despawnPoint);
         if (spawnParent == null) spawnParent = spawnPoint;
 
         if (musicSource == null) musicSource = GetComponent<AudioSource>();
@@ -91,7 +146,6 @@ public class RhythmParkourManager : MonoBehaviour
 
         if (levelData == null)
         {
-            // пробуем найти любой LevelData в проекте
 #if UNITY_EDITOR
             var guids = UnityEditor.AssetDatabase.FindAssets("t:RhythmLevelData");
             if (guids.Length > 0)
@@ -110,6 +164,18 @@ public class RhythmParkourManager : MonoBehaviour
             Invoke(nameof(Play), autoPlayDelay);
     }
 
+    void AlignPointToTrack(Transform t)
+    {
+        if (t == null) return;
+        Vector3 p = t.position;
+        p.x = Mathf.Clamp(p.x, trackMinX, trackMaxX);
+        // Y ставим на 0 (корень префаба имеет мешь +0.5 для высоты) — чтобы bottom точно на дорожке
+        p.y = 0f;
+        t.position = p;
+        // поворот вдоль дорожки
+        t.rotation = Quaternion.LookRotation(dirNormalized != Vector3.zero ? dirNormalized : Vector3.forward, Vector3.up);
+    }
+
     Transform EnsurePoint(string name, Vector3 pos)
     {
         var go = GameObject.Find(name);
@@ -122,10 +188,13 @@ public class RhythmParkourManager : MonoBehaviour
         levelData = data;
         if (data == null) return;
         data.SortByTime();
+        // мигрируем старые ивенты где speed=0 -> дефолт из префаба или менеджера
+        MigrateSpeeds(data);
         sortedEvents = new List<ObstacleEvent>(data.events);
         nextEventIndex = 0;
         active.Clear();
         pools.Clear();
+        UpdateTrackBounds();
         UpdateDirection();
 
         for (int i = 0; i < data.obstaclePrefabs.Count; i++)
@@ -148,6 +217,32 @@ public class RhythmParkourManager : MonoBehaviour
         }
 
         if (videoPlayer != null && data.video != null) videoPlayer.clip = data.video;
+    }
+
+    void MigrateSpeeds(RhythmLevelData data)
+    {
+        bool dirty = false;
+        for (int i = 0; i < data.events.Count; i++)
+        {
+            var e = data.events[i];
+            if (e.speed < 0.01f)
+            {
+                var prefab = data.GetPrefab(e.prefabIndex);
+                float prefSpeed = 0f;
+                if (prefab != null)
+                {
+                    var ob = prefab.GetComponent<Obstacle>();
+                    if (ob != null) prefSpeed = ob.baseSpeed;
+                }
+                if (prefSpeed < 0.1f) prefSpeed = defaultObstacleSpeed > 0.1f ? defaultObstacleSpeed : 12f;
+                e.speed = prefSpeed;
+                data.events[i] = e;
+                dirty = true;
+            }
+        }
+#if UNITY_EDITOR
+        if (dirty) UnityEditor.EditorUtility.SetDirty(data);
+#endif
     }
 
     public void Play()
@@ -198,18 +293,33 @@ public class RhythmParkourManager : MonoBehaviour
         Obstacle ob = GetFromPool(evt.prefabIndex, prefab);
         if (ob == null) return;
 
-        // Точно как перетаскивание префаба на объект спавна — без рандома, ровно по дорожке
+        // Строго как перетаскивание префаба на объект спавна — ровно по дорожке, без выхода за пределы
         Transform sp = spawnPoint != null ? spawnPoint : transform;
+        // ставим в мир позицию спавна, клампим X
+        Vector3 worldPos = sp.position;
+        worldPos.x = Mathf.Clamp(worldPos.x, trackMinX, trackMaxX);
+        worldPos.y = sp.position.y; // 0 — высота учтена в меше (+0.5)
+        // если префаб имел смещение по X для лейна (уже запечено в меше), оно сохранится т.к. мешь центрирована
         ob.transform.SetParent(sp, false);
         ob.transform.localPosition = Vector3.zero;
         ob.transform.localRotation = Quaternion.identity;
-        // Размер строго как в префабе
         ob.transform.localScale = prefab.transform.localScale;
+        // мировую позицию уточняем (на случай если sp имеет поворот)
+        ob.transform.position = worldPos;
+        // поворот вдоль дорожки
+        if (dirNormalized.sqrMagnitude > 0.001f)
+            ob.transform.rotation = Quaternion.LookRotation(dirNormalized, Vector3.up);
         // Если в событии указан поворот/масштаб — применяем как множитель
-        if (evt.rotation != Vector3.zero) ob.transform.localRotation = Quaternion.Euler(evt.rotation);
-        if (evt.scale != Vector3.zero && evt.scale != Vector3.one) ob.transform.localScale = Vector3.Scale(prefab.transform.localScale, evt.scale);
+        if (evt.rotation != Vector3.zero) ob.transform.localRotation *= Quaternion.Euler(evt.rotation);
+        if (evt.scale != Vector3.zero && evt.scale != Vector3.one) ob.transform.localScale = Vector3.Scale(ob.transform.localScale, evt.scale);
+        // кламп X после применения scale
+        Vector3 p = ob.transform.position;
+        p.x = Mathf.Clamp(p.x, trackMinX, trackMaxX);
+        ob.transform.position = p;
+
         ob.gameObject.SetActive(true);
-        ob.Init(this, dirNormalized, obstacleSpeed, despawnPoint, evt.time);
+        float spd = evt.speed > 0.01f ? evt.speed : (ob.baseSpeed > 0.01f ? ob.baseSpeed : defaultObstacleSpeed);
+        ob.Init(this, dirNormalized, spd, despawnPoint, evt.time);
         active.Add(ob);
     }
 
@@ -258,18 +368,46 @@ public class RhythmParkourManager : MonoBehaviour
         if (levelData == null) return;
         var evt = ObstacleEvent.Create(beat, prefabIndex, Vector3.zero);
         evt.time = levelData.BeatToTime(beat);
+        // скорость по умолчанию из префаба
+        var prefab = levelData.GetPrefab(prefabIndex);
+        if (prefab != null)
+        {
+            var obc = prefab.GetComponent<Obstacle>();
+            if (obc != null) evt.speed = obc.baseSpeed;
+        }
+        if (evt.speed < 0.1f) evt.speed = defaultObstacleSpeed;
         Spawn(evt);
     }
 
 #if UNITY_EDITOR
     void OnDrawGizmos()
     {
+        UpdateTrackBounds();
+        // дорожка
+        if (trackFloor != null)
+        {
+            Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.15f);
+            Vector3 center = trackFloor.position;
+            Vector3 size = new Vector3(Mathf.Abs(trackMaxX - trackMinX) + 0.1f, 0.2f, trackFloor.localScale.z);
+            Gizmos.DrawCube(center, size);
+            Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.6f);
+            Gizmos.DrawWireCube(center, size);
+        }
+        else
+        {
+            Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.15f);
+            float w = Mathf.Abs(trackMaxX - trackMinX);
+            Gizmos.DrawCube(new Vector3((trackMinX + trackMaxX) * 0.5f, 0f, 25f), new Vector3(w, 0.2f, 60f));
+        }
         if (spawnPoint != null)
         {
             Gizmos.color = Color.green;
             Gizmos.DrawWireCube(spawnPoint.position, Vector3.one * 1.2f);
             Gizmos.DrawLine(spawnPoint.position, spawnPoint.position + dirNormalized * 3f);
             UnityEditor.Handles.Label(spawnPoint.position + Vector3.up * 1.5f, "SPAWN");
+            // ширина спавна
+            Gizmos.color = new Color(0, 1, 0, 0.25f);
+            Gizmos.DrawLine(new Vector3(trackMinX, spawnPoint.position.y, spawnPoint.position.z), new Vector3(trackMaxX, spawnPoint.position.y, spawnPoint.position.z));
         }
         if (despawnPoint != null)
         {
@@ -279,7 +417,7 @@ public class RhythmParkourManager : MonoBehaviour
         }
         if (spawnPoint != null && despawnPoint != null)
         {
-            Gizmos.color = new Color(0, 1, 0.6f, 0.3f);
+            Gizmos.color = new Color(0, 1, 0.6f, 0.35f);
             Gizmos.DrawLine(spawnPoint.position, despawnPoint.position);
         }
     }
