@@ -4,8 +4,22 @@ using System.Collections.Generic;
 
 public static class RhythmAutoGenerator
 {
-    // Музыкальная автогенерация: сетка BPM + мульти-онсет (flux) + пер-препятствие скорость
-    // Сбалансированная плотность — 0.85/0.18 давало переспам
+    public struct FlexibleSettings
+    {
+        public float density;        // 0.2-1.0 шанс оставить пик
+        public float threshold;      // 0.05-0.6 базовый порог
+        public float minGapBeats;    // 0.5-2.0 минимум между нотами
+        public float quantStep;      // 0.25 / 0.5 / 1.0
+        public int maxIn4Beats;      // 2-5 максимум в окне 4 бита
+        public float minSpeed, maxSpeed;
+        public bool strictSnap;      // true = жёстко к сетке, false = лёгкий свинг к реальному пику
+        public static FlexibleSettings Default => new FlexibleSettings { density=0.72f, threshold=0.24f, minGapBeats=1.0f, quantStep=0.5f, maxIn4Beats=3, minSpeed=9f, maxSpeed=20f, strictSnap=true };
+        public static FlexibleSettings Few => new FlexibleSettings { density=0.45f, threshold=0.32f, minGapBeats=1.5f, quantStep=1f, maxIn4Beats=2, minSpeed=9f, maxSpeed=18f, strictSnap=true };
+        public static FlexibleSettings Many => new FlexibleSettings { density=0.88f, threshold=0.14f, minGapBeats=0.7f, quantStep=0.5f, maxIn4Beats=4, minSpeed=10f, maxSpeed=22f, strictSnap=true };
+        public static FlexibleSettings Extreme => new FlexibleSettings { density=0.95f, threshold=0.08f, minGapBeats=0.5f, quantStep=0.25f, maxIn4Beats=5, minSpeed=11f, maxSpeed=26f, strictSnap=false };
+    }
+
+    // Совместимость — старый вызов
     public static void Generate(RhythmLevelData level, int seed = 0, float density = 0.72f, float threshold = 0.24f)
     {
         Generate(level, seed, density, threshold, 9f, 20f);
@@ -13,7 +27,23 @@ public static class RhythmAutoGenerator
 
     public static void Generate(RhythmLevelData level, int seed, float density, float threshold, float minSpeed, float maxSpeed)
     {
+        var s = FlexibleSettings.Default;
+        s.density = density; s.threshold = threshold; s.minSpeed = minSpeed; s.maxSpeed = maxSpeed;
+        Generate(level, seed, s);
+    }
+
+    // Гибкий вызов — передай любые настройки
+    public static void Generate(RhythmLevelData level, int seed, FlexibleSettings cfg)
+    {
         if (level == null || level.music == null) { Debug.LogWarning("[Auto] Нет music"); return; }
+        float density = cfg.density;
+        float threshold = cfg.threshold;
+        float minSpeed = cfg.minSpeed;
+        float maxSpeed = cfg.maxSpeed;
+        float minGap = Mathf.Clamp(cfg.minGapBeats, 0.4f, 2f);
+        float quantStep = cfg.quantStep <= 0.01f ? 0.5f : cfg.quantStep;
+        int maxIn4 = Mathf.Clamp(cfg.maxIn4Beats, 1, 6);
+        bool strictSnap = cfg.strictSnap;
         var clip = level.music;
         int channels = clip.channels;
         int samples = clip.samples;
@@ -87,8 +117,8 @@ public static class RhythmAutoGenerator
 
         float totalSec = (float)samples / freq;
         float totalBeats = level.TimeToBeat(totalSec);
-        // идём строго по сетке битов 0.5 — это гарантирует квантизацию под музыку
-        float stepBeat = 0.5f;
+        // сетка квантизации — гибкая: 0.25/0.5/1.0
+        float stepBeat = quantStep;
         // адаптивное окно для порога — 2 секунды
         int adaptBeats = Mathf.RoundToInt(2f / secPerBeat / stepBeat);
 
@@ -123,24 +153,40 @@ public static class RhythmAutoGenerator
             for (int k = a0; k <= a1; k++) var += (beatOnset[k] - avg) * (beatOnset[k] - avg);
             float std = Mathf.Sqrt(var / (a1 - a0 + 1) + 1e-6f);
 
-            float adaptThr = avg + std * 0.82f + threshold * 0.38f;
-            // RMS-коррекция: в тихих местах порог выше, в громких — ниже
+            // гибкий порог: при высокой density порог ниже
+            float densFactorThr = Mathf.Clamp01((density - 0.2f) / 0.8f);
+            float stdMul = Mathf.Lerp(0.90f, 0.62f, densFactorThr);
+            float thrMul = Mathf.Lerp(0.45f, 0.28f, densFactorThr);
+            float adaptThr = avg + std * stdMul + threshold * thrMul;
             float rmsAt = rmsLong[Mathf.Clamp(Mathf.RoundToInt(beatTimes[i] * freq / hop), 0, rmsLong.Count - 1)];
-            adaptThr = Mathf.Lerp(adaptThr, adaptThr * 0.78f, rmsAt); // громче → легче спавн
+            adaptThr = Mathf.Lerp(adaptThr, adaptThr * 0.76f, rmsAt);
 
-            bool isPeak = beatOnset[i] > adaptThr && beatOnset[i] > 0.07f;
-            // локальный максимум по трём точкам сетки
+            float peakMin = Mathf.Lerp(0.07f, 0.035f, densFactorThr);
+            bool isPeak = beatOnset[i] > adaptThr && beatOnset[i] > peakMin;
+            // локальный максимум — для экстрима ослабляем (разрешаем 95% от соседей)
             if (i > 0 && i + 1 < beatOnset.Count)
-                isPeak = isPeak && beatOnset[i] >= beatOnset[i - 1] && beatOnset[i] >= beatOnset[i + 1];
+            {
+                if (density > 0.85f)
+                    isPeak = isPeak && beatOnset[i] >= beatOnset[i - 1] * 0.95f && beatOnset[i] >= beatOnset[i + 1] * 0.95f;
+                else
+                    isPeak = isPeak && beatOnset[i] >= beatOnset[i - 1] && beatOnset[i] >= beatOnset[i + 1];
+            }
             if (!isPeak) continue;
             if (rng.NextDouble() > density) continue;
 
             float beat = beats[i];
             float time = beatTimes[i];
+            if (!strictSnap)
+            {
+                // лёгкий свинг к реальному пику (до 35% шага) — лучше попадает в музыку, но остаётся perto сетки
+                int pIdx = Mathf.Clamp(Mathf.RoundToInt(time * freq / hop), 0, onset.Count - 1);
+                float rawBeat = level.TimeToBeat((float)pIdx * hop / freq);
+                float delta = Mathf.Clamp(rawBeat - beat, -quantStep*0.45f, quantStep*0.45f);
+                beat += delta * 0.35f;
+                beat = Mathf.Round(beat / (quantStep*0.5f)) * (quantStep*0.5f);
+                time = level.BeatToTime(beat);
+            }
 
-            // ── защита от частых нот: нужен отдых ──
-            // минимум 1.0 бита между нотами (≈0.5-0.7с при BPM 120-82) — иначе не успеваешь прыгнуть/проскользить
-            const float minGap = 1.0f;
             if (level.events.Count > 0)
             {
                 float lastGap = beat - level.events[level.events.Count - 1].beat;
@@ -160,8 +206,8 @@ public static class RhythmAutoGenerator
                         continue;
                     }
                 }
-                // также не более 3 нот в окне 4 бита (скользящее окно)
-                if (level.events.Count >= 3)
+                // также не более maxIn4 нот в окне 4 бита
+                if (level.events.Count >= maxIn4)
                 {
                     int cntInWindow = 0;
                     for (int k = level.events.Count - 1; k >= 0; k--)
@@ -169,7 +215,7 @@ public static class RhythmAutoGenerator
                         if (beat - level.events[k].beat <= 4.0f) cntInWindow++;
                         else break;
                     }
-                    if (cntInWindow >= 3) continue;
+                    if (cntInWindow >= maxIn4) continue;
                 }
             }
 
@@ -226,7 +272,7 @@ public static class RhythmAutoGenerator
             float shift = Mathf.Floor(level.events[0].beat - 2f);
             for (int i = 0; i < level.events.Count; i++) { var e = level.events[i]; e.beat -= shift; e.time = level.BeatToTime(e.beat); level.events[i] = e; }
         }
-        // второй проход: заполняем только очень большие паузы (> 5 бит) — чтобы не было пустых кусков, но без переспама и с отдыхом
+        // второй проход: заполняем только очень большие паузы — чтобы не было пустых кусков, но без переспама и с отдыхом
         if (level.events.Count > 1)
         {
             var sorted = new List<ObstacleEvent>(level.events);
@@ -236,12 +282,13 @@ public static class RhythmAutoGenerator
             for (int i = 0; i < sorted.Count - 1; i++)
             {
                 float gap = sorted[i + 1].beat - sorted[i].beat;
-                if (gap > 5.0f)
+                if (gap > 4f + minGap)
                 {
                     // одна нота в середине большой паузы
                     float beat = sorted[i].beat + gap * 0.5f;
-                    beat = Mathf.Round(beat * 2f) / 2f;
-                    if (beat >= sorted[i + 1].beat - 0.9f) continue;
+                    beat = Mathf.Round(beat / quantStep) * quantStep;
+                    if (!strictSnap) beat = Mathf.Clamp(beat + (float)(rng.NextDouble()-0.5)*0.18f, sorted[i].beat + minGap*0.8f, sorted[i+1].beat - minGap*0.8f);
+                    if (beat >= sorted[i + 1].beat - minGap*0.9f) continue;
                     // проверяем что не создаём серию из 3 в 4 бита
                     int cntNear = 0;
                     foreach (var ex in filled) if (Mathf.Abs(ex.beat - beat) <= 2.0f) cntNear++;
@@ -258,37 +305,46 @@ public static class RhythmAutoGenerator
             level.events = filled;
         }
 
-        // страховка минимального наполнения — умеренно, с учётом отдыха
-        // цель: ~0.32 ноты/бит (1 нота на ~3.1 бита) — чтобы не было стены подряд
-        int targetMin = Mathf.RoundToInt(totalBeats * 0.32f);
-        targetMin = Mathf.Clamp(targetMin, 16, 160);
+        // страховка минимального наполнения — гибко от density и кванта
+        float densFactor = Mathf.Clamp01((density - 0.2f) / 0.8f);
+        float targetRate = Mathf.Lerp(0.18f, 0.55f, Mathf.Pow(densFactor, 0.85f));
+        if (quantStep < 0.4f) targetRate *= 1.28f; // 0.25 шаг даёт больше позиций
+        targetRate = Mathf.Clamp(targetRate, 0.12f, 0.70f);
+        int targetMin = Mathf.RoundToInt(totalBeats * targetRate);
+        targetMin = Mathf.Clamp(targetMin, 12, 220);
         if (level.events.Count < targetMin)
         {
             float avgSpd = (minSpeed + maxSpeed) * 0.5f;
             int need = targetMin - level.events.Count;
-            // добавляем по сетке 1.5 бита, пропуская занятые и соблюдая minGap
-            for (float b = 2f; b < totalBeats && need > 0; b += 1.5f)
+            // шаг = квант * 2-3, чтобы уважать quantStep
+            float fillStep = quantStep * 3f;
+            if (fillStep < minGap) fillStep = minGap;
+            for (float b = 2f; b < totalBeats && need > 0; b += fillStep)
             {
-                if (level.events.Exists(x => Mathf.Abs(x.beat - b) < 0.9f)) continue;
+                if (level.events.Exists(x => Mathf.Abs(x.beat - b) < minGap*0.9f)) continue;
                 // проверка окна 4 бита
                 int cntInWin = 0;
                 foreach (var ex in level.events) if (Mathf.Abs(ex.beat - b) <= 4f) cntInWin++;
-                if (cntInWin >= 3) continue;
+                if (cntInWin >= maxIn4) continue;
                 int bIdx = Mathf.Clamp(Mathf.RoundToInt((b - beats[0]) / stepBeat), 0, beatOnset.Count - 1);
-                if (bIdx >= 0 && bIdx < beatOnset.Count && beatOnset[bIdx] < 0.06f) continue;
-                if (rng.NextDouble() > 0.30) continue;
+                if (bIdx >= 0 && bIdx < beatOnset.Count && beatOnset[bIdx] < 0.05f) continue;
+                if (rng.NextDouble() > 0.35f) continue;
+                float fb = Mathf.Round(b / quantStep) * quantStep;
+                if (!strictSnap) fb += (float)(rng.NextDouble()-0.5)*quantStep*0.35f;
+                fb = Mathf.Round(fb / quantStep) * quantStep;
                 int p = rng.Next(0, Mathf.Max(1, level.obstaclePrefabs.Count));
-                var ev = ObstacleEvent.Create(b, p, Vector3.zero, avgSpd * (float)(0.92 + rng.NextDouble()*0.18));
-                ev.time = level.BeatToTime(b);
+                var ev = ObstacleEvent.Create(fb, p, Vector3.zero, avgSpd * (float)(0.92 + rng.NextDouble()*0.18));
+                ev.time = level.BeatToTime(fb);
                 level.events.Add(ev);
                 need--;
             }
-            // если всё ещё не хватает — равномерные 3 бита (с отдыхом)
+            // если всё ещё не хватает — равномерные с шагом minGap*2
             for (int i = 0; level.events.Count < targetMin && i < 500; i++)
             {
-                float beat = 4f + i * 3f;
+                float beat = 4f + i * Mathf.Max(2f, minGap*2f);
+                beat = Mathf.Round(beat / quantStep) * quantStep;
                 if (beat >= totalBeats) break;
-                if (level.events.Exists(x => Mathf.Abs(x.beat - beat) < 0.9f)) continue;
+                if (level.events.Exists(x => Mathf.Abs(x.beat - beat) < minGap*0.9f)) continue;
                 int p = i % Mathf.Max(1, level.obstaclePrefabs.Count);
                 var ev = ObstacleEvent.Create(beat, p, Vector3.zero, avgSpd);
                 ev.time = level.BeatToTime(beat);

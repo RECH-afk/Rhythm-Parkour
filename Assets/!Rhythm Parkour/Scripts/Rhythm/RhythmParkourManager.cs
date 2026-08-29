@@ -32,6 +32,8 @@ public class RhythmParkourManager : MonoBehaviour
     public Transform spawnPoint;
     [Tooltip("Где удаляются (за экраном)")]
     public Transform despawnPoint;
+    [Tooltip("Триггер перед игроком — в момент бита (ХИТ) препятствие будет ровно на нём")]
+    public Transform hitTrigger;
     [Tooltip("Куда двигаются — от spawn к despawn. Если despawn пусто — вперёд по -Z")]
     public Vector3 moveDirection = Vector3.forward;
     [Tooltip("Родитель для спавна (для порядка в иерархии)")]
@@ -72,6 +74,7 @@ public class RhythmParkourManager : MonoBehaviour
         if (spawnParent == null) spawnParent = transform;
         UpdateTrackBounds();
         UpdateDirection();
+        EnsureHitTrigger();
     }
 
     void OnValidate()
@@ -121,6 +124,58 @@ public class RhythmParkourManager : MonoBehaviour
         dirNormalized = dir.normalized;
     }
 
+    void EnsureHitTrigger()
+    {
+        if (hitTrigger != null) return;
+        // ищем по имени/тегу/IsTrigger
+        var go = GameObject.Find("HitTrigger");
+        if (go == null) go = GameObject.Find("Trigger");
+        if (go == null) go = GameObject.Find("PlayerTrigger");
+        if (go != null) { hitTrigger = go.transform; return; }
+        // первый триггер в сцене
+        var triggers = FindObjectsOfType<Collider>();
+        foreach (var c in triggers) if (c.isTrigger && c.CompareTag("Untagged")==false) { /* пропускаем */ }
+        foreach (var c in triggers) if (c.isTrigger && c.gameObject.name.ToLower().Contains("trigger")) { hitTrigger = c.transform; return; }
+        // фолбэк — точка перед игроком (если есть FirstPersonController)
+        var fpc = FindObjectOfType<EasyPeasyFirstPersonController.FirstPersonController>();
+        if (fpc != null)
+        {
+            var t = new GameObject("HitTrigger (Auto)").transform;
+            t.position = fpc.transform.position + fpc.transform.forward * 4f;
+            t.position = new Vector3(Mathf.Clamp(t.position.x, trackMinX, trackMaxX), 0, t.position.z);
+            hitTrigger = t;
+        }
+    }
+
+    public float GetSpawnToHitDistance()
+    {
+        if (spawnPoint == null) return 52f;
+        Vector3 targetPos;
+        if (hitTrigger != null) targetPos = hitTrigger.position;
+        else if (despawnPoint != null) targetPos = Vector3.Lerp(spawnPoint.position, despawnPoint.position, 0.88f);
+        else targetPos = spawnPoint.position + dirNormalized * 52f;
+        Vector3 toHit = targetPos - spawnPoint.position;
+        toHit.y = 0f;
+        float d = Mathf.Abs(Vector3.Dot(toHit, dirNormalized));
+        if (d < 1f) d = 52f;
+        return d;
+    }
+    public float GetTravelTime(float speed)
+    {
+        if (speed < 0.1f) speed = defaultObstacleSpeed;
+        return GetSpawnToHitDistance() / Mathf.Max(1f, speed);
+    }
+    public float GetTravelTime(ObstacleEvent ev)
+    {
+        float s = ev.speed;
+        if (s < 0.1f && levelData != null)
+        {
+            var pf = levelData.GetPrefab(ev.prefabIndex);
+            if (pf) { var ob = pf.GetComponent<Obstacle>(); if (ob) s = ob.baseSpeed; }
+        }
+        return GetTravelTime(s);
+    }
+
     void Start()
     {
         // Авто-фикс битых ссылок из сцены (если spawn указывает на Obstacle/Colider)
@@ -130,12 +185,29 @@ public class RhythmParkourManager : MonoBehaviour
             despawnPoint = null;
 
         UpdateTrackBounds();
-        // Спавн/деспавн строго по центру дорожки X=0, Y на уровне земли
+        EnsureHitTrigger();
+        // Спавн/деспавн/хит строго по центру дорожки X=0, Y на уровне земли
         if (spawnPoint == null) spawnPoint = EnsurePoint("SpawnPoint", new Vector3(0f, 0f, 52f));
         if (despawnPoint == null) despawnPoint = EnsurePoint("DespawnPoint", new Vector3(0f, 0f, -8f));
+        if (hitTrigger == null)
+        {
+            // создаём триггер перед игроком если его нет — в 6м от спавна по дорожке
+            Vector3 hp = spawnPoint.position + dirNormalized * (GetSpawnToHitDistance() > 1f ? GetSpawnToHitDistance() : 38f);
+            // если дистанция ещё не известна — ставим на 10м перед центром дорожки
+            if (Vector3.Distance(hp, spawnPoint.position) < 5f) hp = new Vector3(0, 0, 8f);
+            hitTrigger = EnsurePoint("HitTrigger", hp);
+            hitTrigger.gameObject.tag = "Untagged";
+            var col = hitTrigger.GetComponent<BoxCollider>();
+            if (col == null) col = hitTrigger.gameObject.AddComponent<BoxCollider>();
+            col.isTrigger = true;
+            col.size = new Vector3(6f, 3f, 1f);
+            col.center = new Vector3(0, 1f, 0);
+        }
         // выравниваем по дорожке
         AlignPointToTrack(spawnPoint);
         AlignPointToTrack(despawnPoint);
+        AlignPointToTrack(hitTrigger);
+        hitTrigger.rotation = Quaternion.LookRotation(dirNormalized, Vector3.up);
         if (spawnParent == null) spawnParent = spawnPoint;
 
         if (musicSource == null) musicSource = GetComponent<AudioSource>();
@@ -415,10 +487,24 @@ public class RhythmParkourManager : MonoBehaviour
             Gizmos.DrawWireCube(despawnPoint.position, Vector3.one * 1.2f);
             UnityEditor.Handles.Label(despawnPoint.position + Vector3.up * 1.5f, "DESPAWN");
         }
+        if (hitTrigger != null)
+        {
+            Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.9f);
+            Gizmos.DrawWireCube(hitTrigger.position, new Vector3(6f, 2f, 1f));
+            UnityEditor.Handles.Label(hitTrigger.position + Vector3.up * 2.2f, "HIT TRIGGER — тут нота в момент бита");
+            Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.25f);
+            Gizmos.DrawLine(hitTrigger.position + Vector3.left * 3f, hitTrigger.position + Vector3.right * 3f);
+        }
         if (spawnPoint != null && despawnPoint != null)
         {
             Gizmos.color = new Color(0, 1, 0.6f, 0.35f);
             Gizmos.DrawLine(spawnPoint.position, despawnPoint.position);
+            if (hitTrigger != null)
+            {
+                Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.5f);
+                Gizmos.DrawLine(spawnPoint.position, hitTrigger.position);
+                UnityEditor.Handles.Label(Vector3.Lerp(spawnPoint.position, hitTrigger.position, 0.5f) + Vector3.up * 0.5f, $"{GetSpawnToHitDistance():0.0}м");
+            }
         }
     }
 #endif
