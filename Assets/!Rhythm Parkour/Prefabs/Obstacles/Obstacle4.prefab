@@ -718,7 +718,7 @@ MonoBehaviour:
   baseSpeed: 14.5
   speedRandomRange: {x: 0.92, y: 1.08}
   damage: 25
-  destroyOnHit: false
+  destroyOnHit: 0
   damageCooldown: 0.6
   spawnAnimDuration: 0.28
   spawnCurve:

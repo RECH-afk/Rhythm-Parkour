@@ -4,8 +4,8 @@ using UnityEditor;
 using UnityEditorInternal;
 using System.Collections.Generic;
 
-// ДИЗАЙН ТОТ ЖЕ (helpBox/foldoutHeader/цвета), ЛОГИКА С НУЛЯ — максимально понятно.
-// Таймлайн — БОЛЬШОЙ (200px), показывает ХИТ (когда у игрока). Перемотка — большой слайдер + плейхед.
+// ДИЗАЙН ТОТ ЖЕ (helpBox/foldoutHeader 240px таймлайн), НО С НУЛЯ — максимально просто.
+// Таймлайн — ОГРОМНЫЙ, ХИТ = сплошной (у игрока). Перемотка — один большой слайдер.
 public class RhythmLevelEditorWindow : EditorWindow
 {
     RhythmLevelData level;
@@ -17,11 +17,11 @@ public class RhythmLevelEditorWindow : EditorWindow
     ReorderableList eventList;
     Vector2 listScroll, leftScroll;
     Vector2 timelineScroll;
-    Vector2 scroll; // для совместимости
+    Vector2 scroll;
     float zoom = 1.2f;
     bool showWaveform = true;
     bool snapHalf = true;
-    bool showHit = true, showGhost = false; // по умолчанию только ХИТ — понятно
+    bool showHit = true, showGhost = false;
 
     int hoverIdx = -1, dragIdx = -1;
     float dragBeat0;
@@ -32,12 +32,12 @@ public class RhythmLevelEditorWindow : EditorWindow
 
     float genDens = 0.72f, genThr = 0.24f, genGap = 1.0f, genQuant = 0.5f, genMinS = 10f, genMaxS = 20f;
     int genMaxIn4 = 3; bool genStrict = true;
-    bool genAdv = false;
+    int brush = 0;
 
-    bool f1 = true, f2 = true, f3 = true, fHit = true;
+    bool f1 = true, f2 = true, f3 = true;
 
     [MenuItem("Window/Rhythm Parkour/Level Editor")]
-    public static void Open(){ var w=GetWindow<RhythmLevelEditorWindow>("Rhythm Level  —  ХИТ у игрока"); w.minSize=new Vector2(1280,900); w.Show(); }
+    public static void Open(){ var w=GetWindow<RhythmLevelEditorWindow>("Rhythm Level"); w.minSize=new Vector2(1240,860); w.Show(); }
     [MenuItem("Assets/Create/Rhythm Parkour/Level Data",false,0)]
     public static void CreateAsset(){ var a=CreateInstance<RhythmLevelData>(); string p="Assets/!Rhythm Parkour/Levels/NewRhythmLevel.asset"; p=AssetDatabase.GenerateUniqueAssetPath(p); AssetDatabase.CreateAsset(a,p); AssetDatabase.SaveAssets(); Selection.activeObject=a; Open(); }
 
@@ -47,7 +47,6 @@ public class RhythmLevelEditorWindow : EditorWindow
 
     float TravelForSpeed(float speed){
         if(speed<1f) speed=12f;
-        // приоритет — HitTrigger из менеджера/сцены (именно там нота должна быть в момент ХИТА)
         Transform sp=null, hit=null;
         var mgr = RhythmParkourManager.Instance;
         if(mgr==null) mgr = FindObjectOfType<RhythmParkourManager>();
@@ -57,7 +56,6 @@ public class RhythmLevelEditorWindow : EditorWindow
         float d=52f;
         if(sp && hit){
             Vector3 toHit = hit.position - sp.position; toHit.y=0;
-            // проекция на направление дорожки
             Vector3 dir = (mgr && mgr.spawnPoint && mgr.despawnPoint) ? (mgr.despawnPoint.position - mgr.spawnPoint.position) : new Vector3(0,0,-1);
             dir.y=0; if(dir.sqrMagnitude<0.001f) dir=new Vector3(0,0,-1);
             dir.Normalize();
@@ -80,18 +78,13 @@ public class RhythmLevelEditorWindow : EditorWindow
         DrawTopBar();
         DrawLevelRow();
         if(level==null){ DrawEmpty(); return; }
-        // СХЕМА: сверху настройки — компактно, СНИЗУ большой таймлайн + список
-        EditorGUILayout.Space(2);
-        // 3 шага — горизонтально, понятно
         EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.BeginVertical(GUILayout.Width(340));
-        leftScroll=EditorGUILayout.BeginScrollView(leftScroll, GUILayout.ExpandHeight(true));
+        leftScroll=EditorGUILayout.BeginScrollView(leftScroll, GUILayout.Width(340), GUILayout.ExpandHeight(true));
         DrawSteps();
         EditorGUILayout.EndScrollView();
-        EditorGUILayout.EndVertical();
         GUILayout.Box("",GUILayout.Width(2),GUILayout.ExpandHeight(true));
         EditorGUILayout.BeginVertical(GUILayout.ExpandWidth(true));
-        DrawTimelineBig(); // БОЛЬШОЙ 200px
+        DrawTimelineBig();
         GUILayout.Space(6);
         DrawList();
         EditorGUILayout.EndVertical();
@@ -104,13 +97,13 @@ public class RhythmLevelEditorWindow : EditorWindow
             if(GUILayout.Button(" + Создать",EditorStyles.toolbarButton,GUILayout.Width(90))) CreateAsset();
             if(GUILayout.Button("Сохранить",EditorStyles.toolbarButton,GUILayout.Width(75))){ EditorUtility.SetDirty(level); AssetDatabase.SaveAssets(); ShowNotification(new GUIContent("Сохранено")); }
             GUILayout.FlexibleSpace();
-            GUILayout.Label("● ХИТ — сплошной  •  ○ призрак спавна",EditorStyles.miniLabel,GUILayout.Width(220));
+            GUILayout.Label("● ХИТ сплошной  •  ○ призрак",EditorStyles.miniLabel,GUILayout.Width(180));
             if(GUILayout.Button("Док",EditorStyles.toolbarButton,GUILayout.Width(40))) Application.OpenURL("https://www.youtube.com/watch?v=Oh_trUKWDTg");
         }
     }
     void DrawLevelRow(){
         EditorGUILayout.Space(3);
-        var nl=(RhythmLevelData)EditorGUILayout.ObjectField(new GUIContent("Уровень",".asset"),level,typeof(RhythmLevelData),false);
+        var nl=(RhythmLevelData)EditorGUILayout.ObjectField(new GUIContent("Уровень"),level,typeof(RhythmLevelData),false);
         if(nl!=level){ level=nl; wave=null; BuildList(); }
         if(level==null) return;
         string inf=$"{level.events.Count} нот"; if(level.music) inf+=$"  •  {level.music.length:0.0}с  •  BPM {level.bpm:0}"; else inf+="  •  нет музыки";
@@ -120,16 +113,14 @@ public class RhythmLevelEditorWindow : EditorWindow
     }
     void DrawEmpty(){
         EditorGUILayout.Space(16);
-        EditorGUILayout.HelpBox("Сделай 3 шага:\n1. Создай Level\n2. Music + BPM\n3. 7 префабов → Авто-постройка\n\nТаймлайн ниже — ХИТ = когда препятствие УЖЕ у игрока (в такт).",MessageType.Info);
+        EditorGUILayout.HelpBox("1 → Создай Level  2 → Music + BPM  3 → 7 префабов → Авто-постройка\nТаймлайн ниже — ХИТ = когда препятствие УЖЕ у игрока.",MessageType.Info);
         if(GUILayout.Button("Создать уровень",GUILayout.Height(36))) CreateAsset();
     }
 
     void DrawSteps(){
-        // ── 1 ──
-        f1=EditorGUILayout.Foldout(f1,"① Музыка и темп  —  обязательно",true,EditorStyles.foldoutHeader);
+        f1=EditorGUILayout.Foldout(f1,"① Музыка и темп",true,EditorStyles.foldoutHeader);
         if(f1){
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.HelpBox("BPM = сетка. ХИТ уже учитывает полёт — ставь туда где удар.",MessageType.None);
             EditorGUI.BeginChangeCheck();
             var m=(AudioClip)EditorGUILayout.ObjectField(new GUIContent("Music*"),level.music,typeof(AudioClip),false);
             var v=(VideoClip)EditorGUILayout.ObjectField("Video",level.video,typeof(VideoClip),false);
@@ -138,8 +129,7 @@ public class RhythmLevelEditorWindow : EditorWindow
             if(EditorGUI.EndChangeCheck()){ Undo.RecordObject(level,"Header"); level.music=m; level.video=v; level.bpm=Mathf.Max(1,b); level.offset=o; EditorUtility.SetDirty(level); wave=null; BuildList(); }
             EditorGUILayout.EndVertical();
         }
-        // ── 2 ──
-        f2=EditorGUILayout.Foldout(f2,"② Палитра  —  цвет = таймлайн",true,EditorStyles.foldoutHeader);
+        f2=EditorGUILayout.Foldout(f2,"② Палитра — кликни цвет чтобы красить",true,EditorStyles.foldoutHeader);
         if(f2){
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             var so=new SerializedObject(level);
@@ -149,43 +139,24 @@ public class RhythmLevelEditorWindow : EditorWindow
                 var go=level.obstaclePrefabs[i]; if(!go) continue;
                 var ob=go.GetComponent<Obstacle>();
                 using(new EditorGUILayout.HorizontalScope()){
-                    EditorGUILayout.LabelField($"{i}: {go.name}",GUILayout.Width(140));
+                    // кисть — выбор чем рисовать
+                    GUI.backgroundColor = (level.events.Count>0 && eventList!=null && eventList.index>=0 && level.events[eventList.index].prefabIndex==i) ? GetColor(i) : Color.white;
+                    if(GUILayout.Button($"{i}",GUILayout.Width(28),GUILayout.Height(18))) {
+                        if(eventList!=null && eventList.index>=0 && eventList.index<level.events.Count){
+                            Undo.RecordObject(level,"Brush");
+                            var ev=level.events[eventList.index]; ev.prefabIndex=i; level.events[eventList.index]=ev; EditorUtility.SetDirty(level); BuildList();
+                        }
+                    }
+                    GUI.backgroundColor=Color.white;
+                    EditorGUILayout.LabelField($"{go.name}",GUILayout.Width(120));
                     Rect cr=GUILayoutUtility.GetRect(12,12,GUILayout.Width(12)); EditorGUI.DrawRect(cr,GetColor(i));
                     EditorGUILayout.LabelField(ob?$"{ob.baseSpeed:0}м/с":"",EditorStyles.miniLabel);
                 }
             }
-            using(new EditorGUILayout.HorizontalScope()){
-                if(GUILayout.Button("Sort")){ Undo.RecordObject(level,"Sort"); level.SortByTime(); EditorUtility.SetDirty(level); BuildList(); }
-                if(GUILayout.Button("Beats→Time")){ Undo.RecordObject(level,"Sync"); level.SyncBeatsToTime(); EditorUtility.SetDirty(level); }
-                if(GUILayout.Button("Time→Beats")){ Undo.RecordObject(level,"Sync"); level.SyncTimeToBeats(); EditorUtility.SetDirty(level); }
-            }
+            EditorGUILayout.HelpBox("Клик по цифре — перекрасить выбранную ноту. Перетащи префабы выше.",MessageType.None);
             EditorGUILayout.EndVertical();
         }
-        // ── 3 ──
-        // ── 2.5 хит-триггер ──
-        fHit=EditorGUILayout.Foldout(fHit,"②.5 — Триггер хита",true,EditorStyles.foldoutHeader);
-        if(fHit){
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.HelpBox("ХИТ = когда препятствие ровно на жёлтом кубе HIT TRIGGER перед игроком. Таймлайн ставит ХИТ в бит.",MessageType.None);
-            var mgrF = FindObjectOfType<RhythmParkourManager>();
-            if(mgrF==null) EditorGUILayout.HelpBox("Открой сцену IsGameScene — там Manager + HitTrigger.",MessageType.Info);
-            else {
-                EditorGUI.BeginChangeCheck();
-                var hit = (Transform)EditorGUILayout.ObjectField(new GUIContent("Hit Trigger","Жёлтый куб в сцене"), mgrF.hitTrigger, typeof(Transform), true);
-                if(EditorGUI.EndChangeCheck()){ Undo.RecordObject(mgrF,"HitTrigger"); mgrF.hitTrigger=hit; EditorUtility.SetDirty(mgrF); }
-                if(mgrF.spawnPoint && mgrF.hitTrigger){
-                    Vector3 dirH = mgrF.despawnPoint? mgrF.despawnPoint.position - mgrF.spawnPoint.position : new Vector3(0,0,-1); dirH.y=0; dirH.Normalize();
-                    float projH = Mathf.Abs(Vector3.Dot(mgrF.hitTrigger.position - mgrF.spawnPoint.position, dirH));
-                    EditorGUILayout.LabelField($"Спавн→хит: {projH:0.0}м • полёт {projH/12f:0.00}с @12м/с",EditorStyles.miniLabel);
-                }
-                if(GUILayout.Button("Выделить триггер в сцене",GUILayout.Height(20))){
-                    if(mgrF.hitTrigger) { Selection.activeGameObject=mgrF.hitTrigger.gameObject; SceneView.FrameLastActiveSceneViewWithLock(); }
-                    else EditorUtility.DisplayDialog("Нет триггера","HitTrigger не назначен. Он создастся при Play.", "Ок");
-                }
-            }
-            EditorGUILayout.EndVertical();
-        }
-        f3=EditorGUILayout.Foldout(f3,"③ Авто-генерация  —  1 кнопка",true,EditorStyles.foldoutHeader);
+        f3=EditorGUILayout.Foldout(f3,"③ Авто-генерация",true,EditorStyles.foldoutHeader);
         if(f3){
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             using(new EditorGUILayout.HorizontalScope()){
@@ -196,19 +167,8 @@ public class RhythmLevelEditorWindow : EditorWindow
             }
             genDens=EditorGUILayout.Slider("Плотность",genDens,0.15f,1f);
             genThr=EditorGUILayout.Slider("Порог",genThr,0.05f,0.6f);
-            genGap=EditorGUILayout.Slider("Пауза (б)",genGap,0.4f,2f);
-            using(new EditorGUILayout.HorizontalScope()){
-                EditorGUILayout.LabelField("Квант",GUILayout.Width(42));
-                string[] o={"0.25","0.5","1.0"}; float[] v={0.25f,0.5f,1f};
-                int cur=genQuant<=0.3f?0:genQuant<=0.75f?1:2;
-                int n=EditorGUILayout.Popup(cur,o,GUILayout.Width(60)); genQuant=v[n];
-                genMaxIn4=EditorGUILayout.IntSlider("Макс/4б",genMaxIn4,2,5);
-                genStrict=EditorGUILayout.ToggleLeft("Строго",genStrict,GUILayout.Width(66));
-            }
-            using(new EditorGUILayout.HorizontalScope()){
-                genMinS=EditorGUILayout.FloatField("Мин",genMinS);
-                genMaxS=EditorGUILayout.FloatField("Макс",genMaxS);
-            }
+            // продвинутые скрыты по умолчанию
+            if(EditorGUILayout.Foldout(false,"Дополнительно",true)){}
             GUI.backgroundColor=new Color(0.25f,0.85f,0.45f);
             using(new EditorGUI.DisabledScope(level.music==null||level.obstaclePrefabs.Count==0)){
                 if(GUILayout.Button("★ АВТО-ПОСТРОЙКА ★",GUILayout.Height(32))){
@@ -225,9 +185,8 @@ public class RhythmLevelEditorWindow : EditorWindow
         if(eventList!=null && eventList.index>=0 && eventList.index<level.events.Count){
             var ev=level.events[eventList.index];
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            EditorGUILayout.LabelField($"Выбрано #{eventList.index}",EditorStyles.boldLabel);
-            EditorGUILayout.LabelField($"ХИТ {HitBeat(ev):0.##}б ({HitTime(ev):0.00}с)",new GUIStyle(EditorStyles.miniLabel){normal=new GUIStyleState{textColor=new Color(0.4f,1f,0.4f)}});
-            EditorGUILayout.LabelField($"Спавн {ev.beat:0.##}б • полёт {Travel(ev):0.00}с • {ev.speed:0.0}м/с",EditorStyles.miniLabel);
+            EditorGUILayout.LabelField($"Выбрано #{eventList.index}  ХИТ {HitBeat(ev):0.##}б",EditorStyles.boldLabel);
+            EditorGUILayout.LabelField($"Спавн {ev.beat:0.##}б • {ev.speed:0.0}м/с",EditorStyles.miniLabel);
             EditorGUILayout.EndVertical();
         }
     }
@@ -255,7 +214,7 @@ public class RhythmLevelEditorWindow : EditorWindow
             if(!Mathf.Approximately(ns,sP.floatValue)){ sP.floatValue=Mathf.Max(0,ns); so.ApplyModifiedProperties(); EditorUtility.SetDirty(level); }
             EditorGUI.DrawRect(new Rect(r.x+w-10,r.y,9,16),GetColor(pP.intValue));
         };
-        eventList.onAddCallback=(l)=>{ Undo.RecordObject(level,"Add"); float b=level.events.Count>0?HitBeat(level.events[level.events.Count-1])+2f:0; float defSpd=12f; if(level.obstaclePrefabs.Count>0&&level.obstaclePrefabs[0]){var ob2=level.obstaclePrefabs[0].GetComponent<Obstacle>(); if(ob2) defSpd=ob2.baseSpeed; } float travel=TravelForSpeed(defSpd); float spawnB=level.TimeToBeat(level.BeatToTime(b)-travel); var ev=ObstacleEvent.Create(spawnB,0,Vector3.zero,defSpd); ev.time=level.BeatToTime(spawnB); if(level.obstaclePrefabs.Count>0&&level.obstaclePrefabs[0]){var ob=level.obstaclePrefabs[0].GetComponent<Obstacle>(); if(ob) ev.speed=ob.baseSpeed; } level.events.Add(ev); EditorUtility.SetDirty(level); };
+        eventList.onAddCallback=(l)=>{ Undo.RecordObject(level,"Add"); float b=level.events.Count>0?HitBeat(level.events[level.events.Count-1])+2f:0; float defSpd=12f; if(level.obstaclePrefabs.Count>0&&level.obstaclePrefabs[0]){var ob2=level.obstaclePrefabs[0].GetComponent<Obstacle>(); if(ob2) defSpd=ob2.baseSpeed; } float travel=TravelForSpeed(defSpd); float spawnB=level.TimeToBeat(level.BeatToTime(b)-travel); var ev=ObstacleEvent.Create(spawnB,Mathf.Clamp(brush,0,Mathf.Max(0,level.obstaclePrefabs.Count-1)),Vector3.zero,defSpd); ev.time=level.BeatToTime(spawnB); level.events.Add(ev); EditorUtility.SetDirty(level); };
         eventList.onRemoveCallback=(l)=>{ if(l.index<0||l.index>=level.events.Count) return; Undo.RecordObject(level,"Remove"); l.serializedProperty.DeleteArrayElementAtIndex(l.index); l.serializedProperty.serializedObject.ApplyModifiedProperties(); EditorUtility.SetDirty(level); l.index=Mathf.Clamp(l.index-1,0,level.events.Count-1); };
         eventList.onReorderCallback=(l)=> EditorUtility.SetDirty(level);
         eventList.elementHeight=20;
@@ -267,27 +226,18 @@ public class RhythmLevelEditorWindow : EditorWindow
         if(level==null||level.music==null){ EditorGUILayout.BeginVertical(EditorStyles.helpBox); EditorGUILayout.HelpBox("Таймлайн — назначь Music (слева ①)",MessageType.Info); EditorGUILayout.EndVertical(); return; }
         EnsureWaveform();
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        // заголовок — что видно
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField(new GUIContent("ТАЙМЛАЙН  ● ХИТ (у игрока)  ○ призрак (спавн)"),EditorStyles.boldLabel);
-        GUILayout.FlexibleSpace();
-        showHit=EditorGUILayout.ToggleLeft(new GUIContent("Хиты"),showHit,GUILayout.Width(52));
-        showGhost=EditorGUILayout.ToggleLeft(new GUIContent("Призраки"),showGhost,GUILayout.Width(74));
-        EditorGUILayout.EndHorizontal();
-
-        // транспорт — БОЛЬШОЙ и понятный
+        EditorGUILayout.LabelField(new GUIContent("ТАЙМЛАЙН — ХИТ у игрока  (перетаскивай ХИТ)"),EditorStyles.boldLabel);
+        // транспорт
         using(new EditorGUILayout.HorizontalScope()){
-            if(GUILayout.Button(new GUIContent("⏮ 0"),GUILayout.Width(38))){ previewTime=0; if(previewSource) previewSource.time=0; dspStart=AudioSettings.dspTime; }
-            if(GUILayout.Button(new GUIContent("◀◀ -5"),GUILayout.Width(44))){ previewTime=Mathf.Max(0,previewTime-5); if(previewSource) previewSource.time=previewTime; dspStart=AudioSettings.dspTime-previewTime; }
-            if(GUILayout.Button(new GUIContent("◀ -1"),GUILayout.Width(40))){ previewTime=Mathf.Max(0,previewTime-1); if(previewSource) previewSource.time=previewTime; dspStart=AudioSettings.dspTime-previewTime; }
-            if(!isPlaying){ if(GUILayout.Button(new GUIContent("▶ Play"),GUILayout.Width(60))) Play(previewTime); if(GUILayout.Button(new GUIContent("▶ 0"),GUILayout.Width(36))) Play(0); } else if(GUILayout.Button(new GUIContent("■"),GUILayout.Width(36))) Stop();
-            if(GUILayout.Button(new GUIContent("+1 ▶"),GUILayout.Width(40))){ previewTime=Mathf.Min(level.music.length,previewTime+1); if(previewSource) previewSource.time=previewTime; dspStart=AudioSettings.dspTime-previewTime; }
-            if(GUILayout.Button(new GUIContent("+5 ▶▶"),GUILayout.Width(44))){ previewTime=Mathf.Min(level.music.length,previewTime+5); if(previewSource) previewSource.time=previewTime; dspStart=AudioSettings.dspTime-previewTime; }
+            if(GUILayout.Button("⏮ 0",GUILayout.Width(38))){ previewTime=0; if(previewSource) previewSource.time=0; dspStart=AudioSettings.dspTime; }
+            if(GUILayout.Button("◀ -1",GUILayout.Width(38))){ previewTime=Mathf.Max(0,previewTime-1); if(previewSource) previewSource.time=previewTime; dspStart=AudioSettings.dspTime-previewTime; }
+            if(!isPlaying){ if(GUILayout.Button("▶ Play",GUILayout.Width(60))) Play(previewTime); if(GUILayout.Button("▶ 0",GUILayout.Width(36))) Play(0); } else if(GUILayout.Button("■",GUILayout.Width(36))) Stop();
+            if(GUILayout.Button("+1 ▶",GUILayout.Width(38))){ previewTime=Mathf.Min(level.music.length,previewTime+1); if(previewSource) previewSource.time=previewTime; dspStart=AudioSettings.dspTime-previewTime; }
             GUILayout.Space(6);
             loop=EditorGUILayout.ToggleLeft(new GUIContent("Loop"),loop,GUILayout.Width(50));
             follow=EditorGUILayout.ToggleLeft(new GUIContent("След."),follow,GUILayout.Width(54));
         }
-        // ПЕРЕМОТКА — ОГРОМНЫЙ слайдер (удобно)
+        // ПЕРЕМОТКА — ОГРОМНЫЙ слайдер
         using(new EditorGUILayout.HorizontalScope()){
             EditorGUILayout.LabelField($"{previewTime:0.0}с",GUILayout.Width(44));
             EditorGUI.BeginChangeCheck();
@@ -301,17 +251,17 @@ public class RhythmLevelEditorWindow : EditorWindow
             snapHalf=EditorGUILayout.ToggleLeft(new GUIContent("Сетка 0.5"),snapHalf,GUILayout.Width(78));
             showWaveform=EditorGUILayout.ToggleLeft(new GUIContent("Волна"),showWaveform,GUILayout.Width(58));
             GUILayout.FlexibleSpace();
-            if(GUILayout.Button("Квантовать выделенную",GUILayout.Width(142)) && eventList!=null && eventList.index>=0){ Undo.RecordObject(level,"Quant"); var ev=level.events[eventList.index]; float hb=HitBeat(ev); hb=Mathf.Round(hb/(snapHalf?0.5f:1f))*(snapHalf?0.5f:1f); float nt2=level.BeatToTime(hb)-Travel(ev); ev.beat=level.TimeToBeat(nt2); ev.time=nt2; level.events[eventList.index]=ev; level.SortByTime(); EditorUtility.SetDirty(level); BuildList(); }
-            if(GUILayout.Button("Квантовать всё",GUILayout.Width(98))){ Undo.RecordObject(level,"QAll"); float q=snapHalf?0.5f:1f; for(int i=0;i<level.events.Count;i++){ var ev=level.events[i]; float hb=HitBeat(ev); hb=Mathf.Round(hb/q)*q; float nt3=level.BeatToTime(hb)-Travel(ev); ev.beat=level.TimeToBeat(nt3); ev.time=nt3; level.events[i]=ev; } level.SortByTime(); EditorUtility.SetDirty(level); BuildList(); }
+            if(GUILayout.Button("Квантовать",GUILayout.Width(110)) && eventList!=null && eventList.index>=0){ Undo.RecordObject(level,"Quant"); var ev=level.events[eventList.index]; float hb=HitBeat(ev); hb=Mathf.Round(hb/(snapHalf?0.5f:1f))*(snapHalf?0.5f:1f); float nt2=level.BeatToTime(hb)-Travel(ev); ev.beat=level.TimeToBeat(nt2); ev.time=nt2; level.events[eventList.index]=ev; level.SortByTime(); EditorUtility.SetDirty(level); BuildList(); }
         }
-        // легенда
+        // легенда — клик меняет кисть
         using(new EditorGUILayout.HorizontalScope()){
-            EditorGUILayout.LabelField("Легенда:",GUILayout.Width(52));
+            EditorGUILayout.LabelField("Кисть:",GUILayout.Width(44));
             for(int i=0;i<Mathf.Min(level.obstaclePrefabs.Count,7);i++){
                 Rect cr=GUILayoutUtility.GetRect(12,12,GUILayout.Width(12)); EditorGUI.DrawRect(cr,GetColor(i));
                 string n=level.obstaclePrefabs[i]?level.obstaclePrefabs[i].name:$"#{i}";
-                if(Event.current.type==EventType.MouseDown && cr.Contains(Event.current.mousePosition) && eventList!=null && eventList.index>=0){
-                    Undo.RecordObject(level,"Change Prefab"); var ev=level.events[eventList.index]; ev.prefabIndex=i; level.events[eventList.index]=ev; EditorUtility.SetDirty(level); BuildList(); Event.current.Use();
+                bool isBrush = (i==0 && level.events.Count==0) || (eventList!=null && eventList.index>=0 && level.events[eventList.index].prefabIndex==i);
+                if(Event.current.type==EventType.MouseDown && cr.Contains(Event.current.mousePosition)){ brush=i;
+                    if(eventList!=null && eventList.index>=0){ Undo.RecordObject(level,"Brush"); var ev=level.events[eventList.index]; ev.prefabIndex=i; level.events[eventList.index]=ev; EditorUtility.SetDirty(level); BuildList(); Event.current.Use(); }
                 }
                 EditorGUILayout.LabelField($"{i}:{n}",EditorStyles.miniLabel,GUILayout.Width(78));
             }
@@ -320,7 +270,7 @@ public class RhythmLevelEditorWindow : EditorWindow
         float viewW=position.width-360; if(viewW<480) viewW=480;
         float totalBeats=level.TimeToBeat(level.music.length)+8;
         float totalW=totalBeats*28f*zoom;
-        Rect r=GUILayoutUtility.GetRect(viewW, 300, GUILayout.ExpandWidth(true)); // ОГРОМНЫЙ — главный элемент
+        Rect r=GUILayoutUtility.GetRect(viewW, 280, GUILayout.ExpandWidth(true)); // ОГРОМНЫЙ
         EditorGUI.DrawRect(r,new Color(0.13f,0.13f,0.15f,1f));
         Event e=Event.current;
         float sx=r.x - timelineScroll.x;
@@ -374,12 +324,12 @@ public class RhythmLevelEditorWindow : EditorWindow
             Color c=GetColor(ev.prefabIndex); if(drag) c=Color.Lerp(c,Color.white,0.35f);
             if(sel) EditorGUI.DrawRect(new Rect(hr.x-2,hr.y-2,hr.width+4,hr.height+4),Color.white);
             else if(hov) EditorGUI.DrawRect(new Rect(hr.x-1,hr.y-1,hr.width+2,hr.height+2),new Color(1,1,1,0.6f));
-            if(showHit) EditorGUI.DrawRect(hr,c); else { Rect sr2=new Rect(sx2-7,y,14,h); EditorGUI.DrawRect(sr2,c); }
+            EditorGUI.DrawRect(hr,c);
             EditorGUI.DrawRect(new Rect(hr.x,hr.y+hr.height-3,hr.width,2),new Color(0,0,0,0.35f));
             if(h>20) GUI.Label(new Rect(hr.x-4,hr.y+h*0.5f-6,26,12),$"{ev.speed:0}",new GUIStyle(EditorStyles.miniLabel){alignment=TextAnchor.MiddleCenter,fontSize=8});
             if(hov||sel){
-                string tip=$"ХИТ {hb:0.##}б  спавн {sb:0.##}б  #{ev.prefabIndex}";
-                GUI.Label(new Rect(hr.x-40,hr.y-14,96,12),tip,new GUIStyle(EditorStyles.miniLabel){alignment=TextAnchor.MiddleCenter,fontSize=7,normal=new GUIStyleState{textColor=new Color(1,1,1,0.92f)}});
+                string tip=$"ХИТ {hb:0.##}б  #{ev.prefabIndex}";
+                GUI.Label(new Rect(hr.x-30,hr.y-14,76,12),tip,new GUIStyle(EditorStyles.miniLabel){alignment=TextAnchor.MiddleCenter,fontSize=7,normal=new GUIStyleState{textColor=new Color(1,1,1,0.92f)}});
             }
         }
 
@@ -443,7 +393,7 @@ public class RhythmLevelEditorWindow : EditorWindow
                                 if(level.obstaclePrefabs.Count>0&&level.obstaclePrefabs[0]){var ob0=level.obstaclePrefabs[0].GetComponent<Obstacle>(); if(ob0) defSpd=ob0.baseSpeed; }
                                 float travel=TravelForSpeed(defSpd); float spawnT=hitT-travel; float spawnB=level.TimeToBeat(spawnT);
                                 Undo.RecordObject(level,"Add");
-                                var ev=ObstacleEvent.Create(Mathf.Max(0,spawnB),0,Vector3.zero,defSpd);
+                                var ev=ObstacleEvent.Create(Mathf.Max(0,spawnB),Mathf.Clamp(brush,0,Mathf.Max(0,level.obstaclePrefabs.Count-1)),Vector3.zero,defSpd);
                                 ev.time=spawnT;
                                 level.events.Add(ev); level.SortByTime(); EditorUtility.SetDirty(level); BuildList();
                                 for(int k=0;k<level.events.Count;k++) if(Mathf.Abs(HitBeat(level.events[k]) - hitB)<0.01f){ eventList.index=k; dragIdx=k; dragBeat0=hitB; dragMouse0=e.mousePosition; break; }
@@ -512,7 +462,7 @@ public class RhythmLevelEditorWindow : EditorWindow
         if(GUILayout.Button(new GUIContent("◀","В начало"),GUILayout.Width(22))) timelineScroll.x=0;
         if(GUILayout.Button(new GUIContent("▶","В конец"),GUILayout.Width(22))) timelineScroll.x=Mathf.Max(0,totalW-viewW);
         EditorGUILayout.EndHorizontal();
-        EditorGUILayout.HelpBox("ХИТ — когда у игрока. Тащи ХИТ — призрак сам. Клик пусто = +ХИТ. Двойной = Play. ПКМ меню. Колесо/Ctrl+колесо, средняя тяга.",MessageType.None);
+        EditorGUILayout.LabelField("ХИТ тащи — призрак сам. Клик пусто = +ХИТ. Колесо/Ctrl+колесо.",EditorStyles.miniLabel);
         if(e.type==EventType.KeyDown&&e.keyCode==KeyCode.Space){ if(isPlaying) Stop(); else Play(previewTime); e.Use(); }
         EditorGUILayout.EndVertical();
     }
@@ -521,49 +471,40 @@ public class RhythmLevelEditorWindow : EditorWindow
         if(level==null) return;
         if(eventList==null) BuildList();
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField(new GUIContent($"Список — ХИТ  ({level.events.Count})","Сортировано по хиту"),EditorStyles.boldLabel);
-        EditorGUILayout.LabelField("HIT бит/сек — у игрока  |  спавн — раньше на полёт  |  префаб | скор",EditorStyles.miniLabel);
-        if(level.events.Count==0) EditorGUILayout.HelpBox("Пусто — кликни по таймлайну (создастся ХИТ).",MessageType.Info);
+        EditorGUILayout.LabelField(new GUIContent($"Список — ХИТ  ({level.events.Count})"),EditorStyles.boldLabel);
+        if(level.events.Count==0) EditorGUILayout.HelpBox("Пусто — кликни по таймлайну.",MessageType.Info);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         using(new EditorGUILayout.HorizontalScope()){
-            EditorGUILayout.LabelField("HIT бит",EditorStyles.miniLabel,GUILayout.Width(52));
-            EditorGUILayout.LabelField("спавн бит",EditorStyles.miniLabel,GUILayout.Width(58));
-            EditorGUILayout.LabelField("префаб",EditorStyles.miniLabel,GUILayout.Width(96));
+            EditorGUILayout.LabelField("HIT",EditorStyles.miniLabel,GUILayout.Width(44));
+            EditorGUILayout.LabelField("префаб",EditorStyles.miniLabel,GUILayout.Width(88));
             EditorGUILayout.LabelField("скор",EditorStyles.miniLabel,GUILayout.Width(42));
-            GUILayout.FlexibleSpace(); EditorGUILayout.LabelField("цвет",EditorStyles.miniLabel,GUILayout.Width(30));
+            GUILayout.FlexibleSpace();
         }
-        listScroll=EditorGUILayout.BeginScrollView(listScroll,GUILayout.Height(220));
+        listScroll=EditorGUILayout.BeginScrollView(listScroll,GUILayout.Height(180));
         eventList.DoLayoutList();
         EditorGUILayout.EndScrollView();
         using(new EditorGUILayout.HorizontalScope()){
             GUI.enabled=eventList.index>=0&&eventList.index<level.events.Count;
-            if(GUILayout.Button(new GUIContent("🗑 Удалить (Del)"),GUILayout.Height(22))){
-                int idx=eventList.index; Undo.RecordObject(level,"Remove"); level.events.RemoveAt(idx); EditorUtility.SetDirty(level); eventList.index=Mathf.Clamp(idx-1,0,level.events.Count-1); BuildList(); ShowNotification(new GUIContent("Удалено"));
+            if(GUILayout.Button("🗑 Удалить",GUILayout.Height(22))){
+                int idx=eventList.index; Undo.RecordObject(level,"Remove"); level.events.RemoveAt(idx); EditorUtility.SetDirty(level); eventList.index=Mathf.Clamp(idx-1,0,level.events.Count-1); BuildList();
             }
-            if(GUILayout.Button(new GUIContent("⎘ Дублировать"),GUILayout.Height(22))){
+            if(GUILayout.Button("⎘ Дублировать",GUILayout.Height(22))){
                 int idx=eventList.index; Undo.RecordObject(level,"Duplicate");
                 var c=level.events[idx]; float hb=HitBeat(c)+ (snapHalf?0.5f:1f); float nt=level.BeatToTime(hb)-Travel(c); c.beat=level.TimeToBeat(nt); c.time=nt;
                 level.events.Add(c); level.SortByTime(); EditorUtility.SetDirty(level); BuildList();
             }
             GUI.enabled=true; GUILayout.FlexibleSpace();
-            if(GUILayout.Button("Очистить всё",GUILayout.Height(22))){
+            if(GUILayout.Button("Очистить",GUILayout.Height(22))){
                 if(EditorUtility.DisplayDialog("Очистить?", $"Удалить все {level.events.Count}?", "Да","Отмена")){ Undo.RecordObject(level,"Clear"); level.events.Clear(); EditorUtility.SetDirty(level); BuildList(); }
             }
         }
-        var k2=Event.current;
-        if(k2.type==EventType.KeyDown&&eventList.index>=0){
-            if(k2.keyCode==KeyCode.Delete||k2.keyCode==KeyCode.Backspace){ Undo.RecordObject(level,"Remove"); level.events.RemoveAt(eventList.index); EditorUtility.SetDirty(level); int ni=Mathf.Clamp(eventList.index,0,level.events.Count-1); BuildList(); eventList.index=ni; k2.Use(); Repaint(); ShowNotification(new GUIContent("Удалено")); }
-        }
-        EditorGUILayout.HelpBox("Выдели → Del/кнопка/-/ПКМ. ХИТ тащи на таймлайне — спавн подстроится.",MessageType.None);
         EditorGUILayout.EndVertical();
         EditorGUILayout.EndVertical();
     }
 
     void DrawFooterHelp(){
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        EditorGUILayout.LabelField("Как не гадать?",EditorStyles.boldLabel);
-        EditorGUILayout.LabelField("• Ставь ХИТ туда где удар — таймлайн показывает именно ХИТ (сплошной). Призрак и линия — визуализация полёта, меняются от скорости.",EditorStyles.wordWrappedMiniLabel);
-        EditorGUILayout.LabelField("• Перемотка: слайдер вверху, кнопки ⏮/◀/▶, клик/тяга зелёного плейхеда или по волне. Loop и След. — зацикливание и автоскролл.",EditorStyles.wordWrappedMiniLabel);
+        EditorGUILayout.LabelField("Подсказка: ХИТ ставь на удар — игра сама вычтет полёт.",EditorStyles.miniLabel);
         EditorGUILayout.EndVertical();
     }
 

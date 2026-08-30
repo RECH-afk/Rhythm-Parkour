@@ -35,8 +35,8 @@ Material:
     - _RimPower: 2.2
     - _RimStep: 0.273
     - _RimStepSmooth: 0
-    - _ShadowStep: 0.6
-    - _ShadowStepSmooth: 0.358
+    - _ShadowStep: 0.5
+    - _ShadowStepSmooth: 0
     - _SpecularStep: 0
     - _SpecularStepSmooth: 0.03
     - _Step: 0.432
@@ -51,3 +51,4 @@ Material:
     - _RimColor: {r: 0.016161919, g: 0, b: 1, a: 1}
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

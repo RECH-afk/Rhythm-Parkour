@@ -103,6 +103,7 @@ GameObject:
   - component: {fileID: 9156347144040445546}
   - component: {fileID: 9156347144040445545}
   - component: {fileID: 9156347144040445544}
+  - component: {fileID: 9156347144040445550}
   m_Layer: 2
   m_Name: FirstPersonController
   m_TagString: Untagged
@@ -353,3 +354,5 @@ Transform:
   - {fileID: 9156347143994207885}
   m_Father: {fileID: 9156347144040445546}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+
+

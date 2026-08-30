@@ -1,5 +1,7 @@
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using System.Collections.Generic;
 
 public static class RhythmAutoGenerator
@@ -356,8 +358,10 @@ public static class RhythmAutoGenerator
         // и так уже редкие, пропустим
 
         level.SortByTime();
+#if UNITY_EDITOR
         EditorUtility.SetDirty(level);
         AssetDatabase.SaveAssets();
+#endif
         Debug.Log($"[Auto★] Сгенерировано {level.events.Count} нот (thr {threshold:0.00} dens {density:0.00} bpm {level.bpm} spd {minSpeed:0}-{maxSpeed:0})", level);
     }
 }

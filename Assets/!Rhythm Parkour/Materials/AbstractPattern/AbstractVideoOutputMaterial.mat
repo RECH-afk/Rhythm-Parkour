@@ -35,30 +35,30 @@ Material:
     - _Contrast: 2.95
     - _Cull: 2
     - _DstBlend: 0
-    - _EmissionStrength: 0.3
-    - _Pattern: 1
-    - _Scale: 45.1
+    - _EmissionStrength: 0.85
+    - _Pattern: 0
+    - _Scale: 50
     - _Smoothness: 0.129
-    - _Speed: 1
+    - _Speed: 3
     - _SpeedX: 0
     - _SpeedY: 0.5
     - _SrcBlend: 1
     - _Surface: 0
-    - _Thickness: 0.851
+    - _Thickness: 1
     - _TriplanarBlend: 2
     - _UVMode: 4
     - _VideoColorMode: 1
     - _VideoContrast: 1
-    - _VideoInfluence: 0.85
+    - _VideoInfluence: 0.5
     - _VideoLumReactivity: 0.947
     - _VideoSaturation: 1.5
     - _VideoScaleReactivity: 0.415
     - _VideoWarpReactivity: 0
-    - _WarpAmount: 0.05
+    - _WarpAmount: 0.2
     - _WarpScale: 3
-    - _WarpSpeed: 0.5
+    - _WarpSpeed: 2
     - _WaveAmp: 0.3
-    - _WaveFreq: 3
+    - _WaveFreq: 9.2
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 0.03, g: 0.03, b: 0.03, a: 1}
@@ -67,3 +67,4 @@ Material:
     - _ColorC: {r: 0, g: 0, b: 0, a: 1}
     - _ColorD: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

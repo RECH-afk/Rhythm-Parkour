@@ -32,8 +32,7 @@ public class RhythmParkourManager : MonoBehaviour
     public Transform spawnPoint;
     [Tooltip("Где удаляются (за экраном)")]
     public Transform despawnPoint;
-    [Tooltip("Триггер перед игроком — в момент бита (ХИТ) препятствие будет ровно на нём")]
-    public Transform hitTrigger;
+    [HideInInspector] public Transform hitTrigger; // авто — игра сама считает дистанцию спавн→хит
     [Tooltip("Куда двигаются — от spawn к despawn. Если despawn пусто — вперёд по -Z")]
     public Vector3 moveDirection = Vector3.forward;
     [Tooltip("Родитель для спавна (для порядка в иерархии)")]
@@ -277,8 +276,8 @@ public class RhythmParkourManager : MonoBehaviour
             for (int k = 0; k < poolSizePerPrefab; k++)
             {
                 var go = Instantiate(prefab, spawnParent, false);
-                go.transform.localPosition = Vector3.zero;
-                go.transform.localRotation = Quaternion.identity;
+                go.transform.localPosition = prefab.transform.localPosition;
+                go.transform.localRotation = prefab.transform.localRotation;
                 go.transform.localScale = prefab.transform.localScale;
                 go.SetActive(false);
                 var ob = go.GetComponent<Obstacle>();
@@ -365,29 +364,42 @@ public class RhythmParkourManager : MonoBehaviour
         Obstacle ob = GetFromPool(evt.prefabIndex, prefab);
         if (ob == null) return;
 
-        // Строго как перетаскивание префаба на объект спавна — ровно по дорожке, без выхода за пределы
         Transform sp = spawnPoint != null ? spawnPoint : transform;
-        // ставим в мир позицию спавна, клампим X
-        Vector3 worldPos = sp.position;
-        worldPos.x = Mathf.Clamp(worldPos.x, trackMinX, trackMaxX);
-        worldPos.y = sp.position.y; // 0 — высота учтена в меше (+0.5)
-        // если префаб имел смещение по X для лейна (уже запечено в меше), оно сохранится т.к. мешь центрирована
+        float centerX = (trackMinX + trackMaxX) * 0.5f;
+
+        // всегда посередине дорожки — не сохраняем оффсет префаба по X
         ob.transform.SetParent(sp, false);
         ob.transform.localPosition = Vector3.zero;
         ob.transform.localRotation = Quaternion.identity;
         ob.transform.localScale = prefab.transform.localScale;
-        // мировую позицию уточняем (на случай если sp имеет поворот)
-        ob.transform.position = worldPos;
+
         // поворот вдоль дорожки
         if (dirNormalized.sqrMagnitude > 0.001f)
             ob.transform.rotation = Quaternion.LookRotation(dirNormalized, Vector3.up);
-        // Если в событии указан поворот/масштаб — применяем как множитель
+
+        // множители из ивента
         if (evt.rotation != Vector3.zero) ob.transform.localRotation *= Quaternion.Euler(evt.rotation);
         if (evt.scale != Vector3.zero && evt.scale != Vector3.one) ob.transform.localScale = Vector3.Scale(ob.transform.localScale, evt.scale);
-        // кламп X после применения scale
-        Vector3 p = ob.transform.position;
-        p.x = Mathf.Clamp(p.x, trackMinX, trackMaxX);
-        ob.transform.position = p;
+
+        // строго посередине по X, Y на дорожке
+        Vector3 wpos = sp.position;
+        wpos.x = centerX;
+        wpos.y = sp.position.y;
+        ob.transform.position = wpos;
+
+        // страховка — если коллайдер шире дорожки, центрируем (уже в центре)
+        Collider col = ob.GetComponent<Collider>();
+        if (col != null)
+        {
+            Physics.SyncTransforms();
+            Bounds wb = col.bounds;
+            float half = wb.extents.x;
+            // если шире — уже в центре, иначе тоже в центре
+            if (half > (trackMaxX - trackMinX) * 0.5f + 0.01f)
+            {
+                ob.transform.position = new Vector3(centerX, wpos.y, wpos.z);
+            }
+        }
 
         ob.gameObject.SetActive(true);
         float spd = evt.speed > 0.01f ? evt.speed : (ob.baseSpeed > 0.01f ? ob.baseSpeed : defaultObstacleSpeed);
@@ -409,8 +421,8 @@ public class RhythmParkourManager : MonoBehaviour
     Obstacle CreateNew(GameObject prefab)
     {
         var go = Instantiate(prefab, spawnParent, false);
-        go.transform.localPosition = Vector3.zero;
-        go.transform.localRotation = Quaternion.identity;
+        go.transform.localPosition = prefab.transform.localPosition;
+        go.transform.localRotation = prefab.transform.localRotation;
         go.transform.localScale = prefab.transform.localScale;
         var ob = go.GetComponent<Obstacle>();
         if (ob == null) ob = go.AddComponent<Obstacle>();
