@@ -11,7 +11,7 @@ using TMPro;
 using UnityEditor;
 #endif
 
-public enum FileType { Audio, Video, Photo }
+public enum FileType { Audio, Video, Photo, Rksl }
 
 [Flags]
 public enum AllowedFileTypes
@@ -19,11 +19,13 @@ public enum AllowedFileTypes
     None = 0,
     Audio = 1,
     Video = 2,
-    Photo = 4
+    Photo = 4,
+    Rksl = 8
 }
 
 [Serializable]
 public class FileLoadedEvent : UnityEvent<string, AudioClip> { }
+[Serializable] public class RkslLoadedEvent : UnityEvent<string> { }
 
 [RequireComponent(typeof(Button))]
 public class FileLoader : MonoBehaviour
@@ -42,16 +44,19 @@ public class FileLoader : MonoBehaviour
 
     [Header("Events")]
     public FileLoadedEvent onFileLoaded;
+    public RkslLoadedEvent onRkslLoaded;
 
     private Button selectFileButton;
     private string currentFilePath;
+    public string CurrentPath => currentFilePath;
 
     private static readonly Dictionary<string, FileType> extensionMap = new()
     {
         { ".mp3", FileType.Audio }, { ".wav", FileType.Audio }, { ".ogg", FileType.Audio },
         { ".mp4", FileType.Video },
         { ".png", FileType.Photo }, { ".jpg", FileType.Photo },
-        { ".jpeg", FileType.Photo }, { ".webp", FileType.Photo }
+        { ".jpeg", FileType.Photo }, { ".webp", FileType.Photo },
+        { ".rksl", FileType.Rksl }
     };
 
     private void Awake()
@@ -68,7 +73,8 @@ public class FileLoader : MonoBehaviour
     private void OpenFileSelectionDialog()
     {
 #if UNITY_EDITOR
-        string path = EditorUtility.OpenFilePanel("Выберите файл", "", "");
+        string ext = GetFilterForAllowedTypes();
+        string path = EditorUtility.OpenFilePanel("Выберите файл", "", ext);
         if (!string.IsNullOrEmpty(path))
         {
             ProcessSelectedFile(path);
@@ -77,6 +83,15 @@ public class FileLoader : MonoBehaviour
         UpdateStatus("Для выбора файлов в билде подключите плагин StandaloneFileBrowser");
         Debug.LogWarning("Runtime file dialog requires a plugin.");
 #endif
+    }
+
+    string GetFilterForAllowedTypes()
+    {
+        if ((allowedTypes & AllowedFileTypes.Rksl) != 0) return "rksl";
+        if ((allowedTypes & AllowedFileTypes.Audio) != 0) return "mp3,wav,ogg";
+        if ((allowedTypes & AllowedFileTypes.Video) != 0) return "mp4";
+        if ((allowedTypes & AllowedFileTypes.Photo) != 0) return "png,jpg,jpeg,webp";
+        return "";
     }
 
     public void ProcessSelectedFile(string path)
@@ -115,6 +130,7 @@ public class FileLoader : MonoBehaviour
             FileType.Audio => (allowedTypes & AllowedFileTypes.Audio) != 0,
             FileType.Video => (allowedTypes & AllowedFileTypes.Video) != 0,
             FileType.Photo => (allowedTypes & AllowedFileTypes.Photo) != 0,
+            FileType.Rksl => (allowedTypes & AllowedFileTypes.Rksl) != 0,
             _ => false
         };
     }
@@ -147,6 +163,7 @@ public class FileLoader : MonoBehaviour
             case FileType.Video:
                 Flash(successColor);
                 UpdateStatus($"Видео готово: {fileName}");
+                onFileLoaded?.Invoke(path, null);
                 break;
 
             case FileType.Photo:
@@ -157,6 +174,7 @@ public class FileLoader : MonoBehaviour
                     {
                         Flash(successColor);
                         UpdateStatus($"Изображение загружено: {fileName}");
+                        onFileLoaded?.Invoke(path, null);
                     }
                     else
                     {
@@ -164,6 +182,12 @@ public class FileLoader : MonoBehaviour
                         UpdateStatus($"Ошибка загрузки: {www.error}");
                     }
                 }
+                break;
+            case FileType.Rksl:
+                Flash(successColor);
+                UpdateStatus($"Уровень: {fileName}");
+                onRkslLoaded?.Invoke(path);
+                onFileLoaded?.Invoke(path, null);
                 break;
         }
     }

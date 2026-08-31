@@ -3,6 +3,8 @@ using UnityEngine.Video;
 using UnityEditor;
 using UnityEditorInternal;
 using System.Collections.Generic;
+#if false // старый редактор на ScriptableObject — отключён, теперь используется .rksl + TimelineUI
+
 
 // ДИЗАЙН ТОТ ЖЕ (helpBox/foldoutHeader 240px таймлайн), НО С НУЛЯ — максимально просто.
 // Таймлайн — ОГРОМНЫЙ, ХИТ = сплошной (у игрока). Перемотка — один большой слайдер.
@@ -39,7 +41,7 @@ public class RhythmLevelEditorWindow : EditorWindow
     [MenuItem("Window/Rhythm Parkour/Level Editor")]
     public static void Open(){ var w=GetWindow<RhythmLevelEditorWindow>("Rhythm Level"); w.minSize=new Vector2(1240,860); w.Show(); }
     [MenuItem("Assets/Create/Rhythm Parkour/Level Data",false,0)]
-    public static void CreateAsset(){ var a=CreateInstance<RhythmLevelData>(); string p="Assets/!Rhythm Parkour/Levels/NewRhythmLevel.asset"; p=AssetDatabase.GenerateUniqueAssetPath(p); AssetDatabase.CreateAsset(a,p); AssetDatabase.SaveAssets(); Selection.activeObject=a; Open(); }
+    public static void CreateAsset(){ var a=new RhythmLevelData(); string p="Assets/!Rhythm Parkour/Levels/NewRhythmLevel.rksl"; p=AssetDatabase.GenerateUniqueAssetPath(p); var m=new RkslManifest{ title="New Level", bpm=128, offset=0, events=new System.Collections.Generic.List<ObstacleEvent>()}; string dir=Path.GetDirectoryName(p); if(!string.IsNullOrEmpty(dir)) System.IO.Directory.CreateDirectory(dir); RkslFile.Save(p,m,null,null,null,null); AssetDatabase.Refresh(); Selection.activeObject=AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(p); Open(); }
 
     void OnEnable(){ previewGO=new GameObject("~RhythmPreview"); previewGO.hideFlags=HideFlags.HideAndDontSave; previewSource=previewGO.AddComponent<AudioSource>(); EditorApplication.update+=Tick; }
     void OnDisable(){ EditorApplication.update-=Tick; if(previewSource) previewSource.Stop(); if(previewGO) DestroyImmediate(previewGO); }
@@ -514,3 +516,4 @@ public class RhythmLevelEditorWindow : EditorWindow
     void Play(float t){ if(level.music==null||previewSource==null) return; previewSource.clip=level.music; previewSource.time=Mathf.Clamp(t,0,level.music.length-0.1f); dspStart=AudioSettings.dspTime-previewSource.time; previewSource.Play(); isPlaying=true; previewTime=previewSource.time; }
     void Stop(){ isPlaying=false; if(previewSource) previewSource.Stop(); }
 }
+#endif

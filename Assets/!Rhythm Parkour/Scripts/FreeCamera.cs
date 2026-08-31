@@ -41,8 +41,12 @@ public class FreeCamera : MonoBehaviour
             transform.eulerAngles = new Vector3(pitch, yaw, 0f);
         }
 
-        // движение
-        Vector3 input = new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical"));
+        // движение — только WASD + Q/E, стрелочки отключены
+        Vector3 input = Vector3.zero;
+        if (Input.GetKey(KeyCode.A)) input.x -= 1f;
+        if (Input.GetKey(KeyCode.D)) input.x += 1f;
+        if (Input.GetKey(KeyCode.W)) input.z += 1f;
+        if (Input.GetKey(KeyCode.S)) input.z -= 1f;
         if (Input.GetKey(KeyCode.Q)) input.y -= 1f;
         if (Input.GetKey(KeyCode.E)) input.y += 1f;
         float speed = moveSpeed * (Input.GetKey(KeyCode.LeftShift) ? fastMultiplier : 1f);
@@ -53,10 +57,10 @@ public class FreeCamera : MonoBehaviour
 
         transform.position += velocity * Time.deltaTime;
 
-        // колесо — вперёд/назад
-        float scroll = Input.mouseScrollDelta.y;
-        if (Mathf.Abs(scroll) > 0.01f)
-            transform.position += transform.forward * scroll * scrollSpeed;
+        // колесо — ОТКЛЮЧЕНО (зум удалён по запросу)
+        // float scroll = Input.mouseScrollDelta.y;
+        // if (Mathf.Abs(scroll) > 0.01f)
+        //     transform.position += transform.forward * scroll * scrollSpeed;
 
         // средняя кнопка — панорама
         if (Input.GetMouseButton(2))

@@ -114,7 +114,7 @@ public static class RhythmAutoGenerator
         for (int i = 0; i < flux.Count; i++)
             onset.Add(Mathf.Clamp01(flux[i] * 0.75f + fluxHigh[i] * 0.35f + rmsLong[i] * 0.12f));
 
-        System.Random rng = new System.Random(seed == 0 ? level.name.GetHashCode() : seed);
+        System.Random rng = new System.Random(seed == 0 ? level.fullTitle.GetHashCode() : seed);
         level.events.Clear();
 
         float totalSec = (float)samples / freq;
@@ -221,33 +221,34 @@ public static class RhythmAutoGenerator
                 }
             }
 
-            // выбор префаба по силе онсета + немного музыкальной логики: сильные — полные стены, средние — боковые
+            // выбор префаба по силе онсета — берём из ГЛОБАЛЬНОГО каталога (как в GD)
             int prefab = 0;
-            if (level.obstaclePrefabs.Count > 0)
+            int prefabCount = GlobalObstacleCatalog.Count;
+            if (prefabCount == 0) prefabCount = level.PrefabCount; // fallback старые уровни
+            if (prefabCount > 0)
             {
                 float strength = beatOnset[i];
-                // нормализуем с учётом rms
                 strength = Mathf.Clamp01(strength * (0.85f + rmsAt * 0.3f));
-                if (level.obstaclePrefabs.Count >= 7)
+                if (prefabCount >= 7)
                 {
-                    if (strength > 0.68f) prefab = 0; // полная низкая — частая
-                    else if (strength > 0.52f) prefab = rng.NextDouble() < 0.6 ? 1 : 2; // боковые
-                    else if (strength > 0.38f) prefab = rng.Next(3, 5); // с проёмом
+                    if (strength > 0.68f) prefab = 0;
+                    else if (strength > 0.52f) prefab = rng.NextDouble() < 0.6 ? 1 : 2;
+                    else if (strength > 0.38f) prefab = rng.Next(3, 5);
                     else prefab = rng.Next(5, 7);
                 }
-                else if (level.obstaclePrefabs.Count > 1)
+                else if (prefabCount > 1)
                 {
-                    if (strength > 0.6f && level.obstaclePrefabs.Count > 2) prefab = 2;
+                    if (strength > 0.6f && prefabCount > 2) prefab = 2;
                     else if (strength > 0.35f) prefab = 1;
                     else prefab = 0;
-                    if (rng.NextDouble() < 0.10) prefab = rng.Next(0, level.obstaclePrefabs.Count);
+                    if (rng.NextDouble() < 0.10) prefab = rng.Next(0, prefabCount);
                 }
-                // избегаем повтора одного префаба >2 раза подряд
+                prefab = Mathf.Clamp(prefab, 0, prefabCount - 1);
                 if (level.events.Count >= 2)
                 {
                     int p1 = level.events[level.events.Count - 1].prefabIndex;
                     int p2 = level.events[level.events.Count - 2].prefabIndex;
-                    if (p1 == prefab && p2 == prefab) prefab = (prefab + 1 + rng.Next(0, level.obstaclePrefabs.Count - 1)) % level.obstaclePrefabs.Count;
+                    if (p1 == prefab && p2 == prefab) prefab = (prefab + 1 + rng.Next(0, prefabCount - 1)) % prefabCount;
                 }
             }
 
@@ -298,7 +299,8 @@ public static class RhythmAutoGenerator
                     int bIdx = beats.IndexOf(beat);
                     if (bIdx < 0) bIdx = Mathf.Clamp(Mathf.RoundToInt(level.TimeToBeat(level.BeatToTime(beat)) * 2f), 0, beatOnset.Count - 1);
                     if (bIdx >= 0 && bIdx < beatOnset.Count && beatOnset[bIdx] < 0.05f) continue;
-                    int p = rng.Next(0, Mathf.Max(1, level.obstaclePrefabs.Count));
+                    int pCount2 = GlobalObstacleCatalog.Count; if (pCount2 == 0) pCount2 = level.PrefabCount; if (pCount2 == 0) pCount2 = 1;
+                    int p = rng.Next(0, Mathf.Max(1, pCount2));
                     var ev = ObstacleEvent.Create(beat, p, Vector3.zero, avgSpd * (float)(0.92 + rng.NextDouble()*0.16));
                     ev.time = level.BeatToTime(beat);
                     filled.Add(ev);
@@ -334,7 +336,8 @@ public static class RhythmAutoGenerator
                 float fb = Mathf.Round(b / quantStep) * quantStep;
                 if (!strictSnap) fb += (float)(rng.NextDouble()-0.5)*quantStep*0.35f;
                 fb = Mathf.Round(fb / quantStep) * quantStep;
-                int p = rng.Next(0, Mathf.Max(1, level.obstaclePrefabs.Count));
+                int pCount3 = GlobalObstacleCatalog.Count; if (pCount3 == 0) pCount3 = level.PrefabCount; if (pCount3 == 0) pCount3 = 1;
+                int p = rng.Next(0, Mathf.Max(1, pCount3));
                 var ev = ObstacleEvent.Create(fb, p, Vector3.zero, avgSpd * (float)(0.92 + rng.NextDouble()*0.18));
                 ev.time = level.BeatToTime(fb);
                 level.events.Add(ev);
@@ -347,7 +350,8 @@ public static class RhythmAutoGenerator
                 beat = Mathf.Round(beat / quantStep) * quantStep;
                 if (beat >= totalBeats) break;
                 if (level.events.Exists(x => Mathf.Abs(x.beat - beat) < minGap*0.9f)) continue;
-                int p = i % Mathf.Max(1, level.obstaclePrefabs.Count);
+                int pCount4 = GlobalObstacleCatalog.Count; if (pCount4 == 0) pCount4 = level.PrefabCount; if (pCount4 == 0) pCount4 = 1;
+                int p = i % Mathf.Max(1, pCount4);
                 var ev = ObstacleEvent.Create(beat, p, Vector3.zero, avgSpd);
                 ev.time = level.BeatToTime(beat);
                 level.events.Add(ev);
@@ -359,9 +363,8 @@ public static class RhythmAutoGenerator
 
         level.SortByTime();
 #if UNITY_EDITOR
-        EditorUtility.SetDirty(level);
         AssetDatabase.SaveAssets();
 #endif
-        Debug.Log($"[Auto★] Сгенерировано {level.events.Count} нот (thr {threshold:0.00} dens {density:0.00} bpm {level.bpm} spd {minSpeed:0}-{maxSpeed:0})", level);
+        Debug.Log($"[Auto★] Сгенерировано {level.events.Count} нот (thr {threshold:0.00} dens {density:0.00} bpm {level.bpm} spd {minSpeed:0}-{maxSpeed:0})");
     }
 }

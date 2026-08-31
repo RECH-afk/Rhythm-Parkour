@@ -66,12 +66,14 @@ public class MusicInfoUI : MonoBehaviour
 
         if (manager == null) manager = FindObjectOfType<RhythmParkourManager>();
         if (levelData == null && manager) levelData = manager.levelData;
+        if (levelData == null && LevelTransfer.hasLevel) levelData = LevelTransfer.levelData;
     }
 
     void Start()
     {
         if (manager == null) manager = FindObjectOfType<RhythmParkourManager>();
         if (levelData == null && manager) levelData = manager.levelData;
+        if (levelData == null && LevelTransfer.hasLevel) levelData = LevelTransfer.levelData;
         Invoke(nameof(TriggerShow), showDelay);
     }
 
@@ -155,11 +157,11 @@ public class MusicInfoUI : MonoBehaviour
         if (panelRect) panelRect.anchoredPosition = new Vector2(panelRect.anchoredPosition.x, topY);
     }
 
-    public void Refresh(){ if(manager) levelData=manager.levelData; if(levelData) Show(levelData); }
+    public void Refresh(){ if(manager) levelData=manager.levelData; if (levelData != null) Show(levelData); }
 
 #if UNITY_EDITOR
     [ContextMenu("Preview DOTween")]
-    void PreviewShow(){ if(levelData==null && manager) levelData=manager.levelData; if(levelData) Show(levelData); }
+    void PreviewShow(){ if(levelData==null && manager) levelData=manager.levelData; if (levelData != null) Show(levelData); }
 #endif
 
     void OnDestroy(){ activeTween?.Kill(); }

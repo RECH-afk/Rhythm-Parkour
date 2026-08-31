@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7d87be329e61407796add0db793c8074, type: 3}
+  m_Name: GlobalObstacleCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::GlobalObstacleCatalog
+  prefabs:
+  - {fileID: 1618702742073132132, guid: 9cbd4a25fbf6d8d42a28d5f3d4f6b99a, type: 3}
+  - {fileID: 9211062225846140061, guid: 4b64278fece01cc4a8493308d91b10da, type: 3}
+  - {fileID: 9061343902686913011, guid: 304add070bf3f9f4584212b5213c2451, type: 3}
+  - {fileID: 8226235211069270399, guid: 5dfa243e61d4aa540b9d594bc06df40b, type: 3}
+  - {fileID: 5555170931705320691, guid: bdcf1322bb89217489ee452ef0c7bd81, type: 3}
+  - {fileID: 450351668688628145, guid: 76afb4ebdbae06c46b2f21e11ed1fe7f, type: 3}
+  - {fileID: 6403843449976154025, guid: 6366f0c8ece97374b840b2be22b9d468, type: 3}

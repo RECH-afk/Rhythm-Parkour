@@ -1,6 +1,8 @@
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Video;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Спавнит префабы строго по дорожке и двигает к despawn под музыку.
@@ -215,16 +217,20 @@ public class RhythmParkourManager : MonoBehaviour
         musicSource.spatialBlend = 0f;
         conductor.musicSource = musicSource;
 
+        // трансфер из редактора — приоритет, чтобы не терять прогресс
+        if (LevelTransfer.hasLevel && LevelTransfer.levelData != null)
+        {
+            if (LevelTransfer.fromEditor || levelData == null)
+            {
+                levelData = LevelTransfer.levelData;
+                Debug.Log($"[Transfer] IsGameScene взял уровень '{levelData.fullTitle}' из редактора ({LevelTransfer.sourceScene})");
+            }
+        }
+
         if (levelData == null)
         {
 #if UNITY_EDITOR
-            var guids = UnityEditor.AssetDatabase.FindAssets("t:RhythmLevelData");
-            if (guids.Length > 0)
-            {
-                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guids[0]);
-                levelData = UnityEditor.AssetDatabase.LoadAssetAtPath<RhythmLevelData>(path);
-                Debug.Log($"[Rhythm] Авто-найден LevelData: {path}", this);
-            }
+            // assets removed, levels are now .rksl only
 #endif
         }
 
@@ -268,23 +274,33 @@ public class RhythmParkourManager : MonoBehaviour
         UpdateTrackBounds();
         UpdateDirection();
 
-        for (int i = 0; i < data.obstaclePrefabs.Count; i++)
+        // ── ГЛОБАЛЬНЫЕ префабы (как в GD) ──
+        int prefabCount = GlobalObstacleCatalog.Count;
+        List<GameObject> sourcePrefabs = null;
+        if (prefabCount > 0) sourcePrefabs = GlobalObstacleCatalog.GetAll();
+        else if (data.obstaclePrefabs != null && data.obstaclePrefabs.Count > 0) { sourcePrefabs = data.obstaclePrefabs; prefabCount = sourcePrefabs.Count; }
+
+        if (sourcePrefabs != null)
         {
-            var prefab = data.obstaclePrefabs[i];
-            if (prefab == null) continue;
-            var q = new Queue<Obstacle>();
-            for (int k = 0; k < poolSizePerPrefab; k++)
+            for (int i = 0; i < prefabCount; i++)
             {
-                var go = Instantiate(prefab, spawnParent, false);
-                go.transform.localPosition = prefab.transform.localPosition;
-                go.transform.localRotation = prefab.transform.localRotation;
-                go.transform.localScale = prefab.transform.localScale;
-                go.SetActive(false);
-                var ob = go.GetComponent<Obstacle>();
-                if (ob == null) ob = go.AddComponent<Obstacle>();
-                q.Enqueue(ob);
+                var prefab = i < sourcePrefabs.Count ? sourcePrefabs[i] : null;
+                if (prefab == null) prefab = data.GetPrefab(i); // fallback через GetPrefab (глобальный+локальный)
+                if (prefab == null) continue;
+                var q = new Queue<Obstacle>();
+                for (int k = 0; k < poolSizePerPrefab; k++)
+                {
+                    var go = Instantiate(prefab, spawnParent, false);
+                    go.transform.localPosition = prefab.transform.localPosition;
+                    go.transform.localRotation = prefab.transform.localRotation;
+                    go.transform.localScale = prefab.transform.localScale;
+                    go.SetActive(false);
+                    var ob = go.GetComponent<Obstacle>();
+                    if (ob == null) ob = go.AddComponent<Obstacle>();
+                    q.Enqueue(ob);
+                }
+                pools[i] = q;
             }
-            pools[i] = q;
         }
 
         if (videoPlayer != null && data.video != null) videoPlayer.clip = data.video;
@@ -311,9 +327,7 @@ public class RhythmParkourManager : MonoBehaviour
                 dirty = true;
             }
         }
-#if UNITY_EDITOR
-        if (dirty) UnityEditor.EditorUtility.SetDirty(data);
-#endif
+
     }
 
     public void Play()
@@ -341,6 +355,37 @@ public class RhythmParkourManager : MonoBehaviour
 
     void Update()
     {
+        // Esc — возврат в редактор без потери прогресса (когда пришли из редактора)
+        if (Input.GetKeyDown(KeyCode.Escape) && LevelTransfer.fromEditor && LevelTransfer.hasLevel)
+        {
+            string cur = SceneManager.GetActiveScene().name;
+            if (cur == "IsGameScene")
+            {
+                Time.timeScale = 1f;
+                Cursor.lockState = CursorLockMode.None;
+                Cursor.visible = true;
+                string target = LevelTransfer.sourceScene;
+                if (string.IsNullOrEmpty(target)) target = "IsLevelEditorScene";
+                // ищем сцену в build settings
+                bool canLoad = false;
+                string found = target;
+                for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
+                {
+                    string p = SceneUtility.GetScenePathByBuildIndex(i);
+                    string n = Path.GetFileNameWithoutExtension(p);
+                    if (n == target || n == "IsLevelEditorScene" || n == "LevelEditor")
+                    { found = n; canLoad = true; break; }
+                }
+                if (canLoad) SceneManager.LoadScene(found);
+                else
+                {
+                    // фолбэк — пробуем по имени напрямую (может быть не в билде но загрузится в эдиторе)
+                    try { SceneManager.LoadScene(target); } catch { SceneManager.LoadScene("IsLevelEditorScene"); }
+                }
+                return;
+            }
+        }
+
         if (!isPlaying || levelData == null || conductor == null || !conductor.isPlaying) return;
         currentTime = conductor.songPosition;
 
@@ -381,23 +426,62 @@ public class RhythmParkourManager : MonoBehaviour
         if (evt.rotation != Vector3.zero) ob.transform.localRotation *= Quaternion.Euler(evt.rotation);
         if (evt.scale != Vector3.zero && evt.scale != Vector3.one) ob.transform.localScale = Vector3.Scale(ob.transform.localScale, evt.scale);
 
-        // строго посередине по X, Y на дорожке
+        // X: центр + lane offset из ивента (pos.x), Y на дорожке
         Vector3 wpos = sp.position;
-        wpos.x = centerX;
+        float lane = evt.position.x; // 0 = центр, -3..3 внутри дорожки
+        wpos.x = Mathf.Clamp(centerX + lane, trackMinX, trackMaxX);
         wpos.y = sp.position.y;
         ob.transform.position = wpos;
 
-        // страховка — если коллайдер шире дорожки, центрируем (уже в центре)
+        // страховка — если коллайдер шире дорожки, центрируем с учётом lane но клампим
         Collider col = ob.GetComponent<Collider>();
         if (col != null)
         {
             Physics.SyncTransforms();
             Bounds wb = col.bounds;
             float half = wb.extents.x;
-            // если шире — уже в центре, иначе тоже в центре
             if (half > (trackMaxX - trackMinX) * 0.5f + 0.01f)
             {
                 ob.transform.position = new Vector3(centerX, wpos.y, wpos.z);
+            }
+            else
+            {
+                // кламп чтобы не выйти за стены даже с lane
+                wb = col.bounds;
+                float left = wb.min.x, right = wb.max.x;
+                if (left < trackMinX - 0.02f) wpos.x += (trackMinX - left);
+                else if (right > trackMaxX + 0.02f) wpos.x -= (right - trackMaxX);
+                ob.transform.position = wpos;
+            }
+        }
+
+        // пер-нотный цвет (если задан — перекрашиваем все рендеры), иначе возвращаем к глобальному/белому
+        {
+            Color toApply = Color.clear;
+            if (evt.HasCustomColor) toApply = evt.color;
+            else if (levelData != null && levelData.obstacleColor != Color.white) toApply = levelData.obstacleColor;
+            else if (levelData != null && levelData.obstacleColor == Color.white) toApply = Color.white; // сброс к белому чтобы не остался старый кастом
+            // если toApply прозрачный — не трогаем (оставляем как у префаба)
+            if (toApply != Color.clear)
+            {
+                foreach (var r in ob.GetComponentsInChildren<Renderer>())
+                {
+                    var mats = r.materials;
+                    for (int i=0;i<mats.Length;i++)
+                    {
+                        if (mats[i].HasProperty("_Color"))
+                        {
+                            mats[i] = new Material(mats[i]);
+                            mats[i].color = toApply;
+                        }
+                        else if (mats[i].HasProperty("_BaseColor"))
+                        {
+                            mats[i] = new Material(mats[i]);
+                            mats[i].SetColor("_BaseColor", toApply);
+                        }
+                    }
+                    r.materials = mats;
+                }
             }
         }
 
@@ -437,7 +521,15 @@ public class RhythmParkourManager : MonoBehaviour
         ob.transform.SetParent(spawnParent != null ? spawnParent : transform);
 
         int idx = 0;
-        if (levelData != null)
+        // ищем индекс по имени в глобальном каталоге (а не в levelData)
+        int gCount = GlobalObstacleCatalog.Count;
+        if (gCount > 0)
+        {
+            var all = GlobalObstacleCatalog.GetAll();
+            for (int i = 0; i < all.Count; i++)
+                if (all[i] != null && ob.name.Contains(all[i].name)) { idx = i; break; }
+        }
+        else if (levelData != null && levelData.obstaclePrefabs != null)
         {
             for (int i = 0; i < levelData.obstaclePrefabs.Count; i++)
                 if (levelData.obstaclePrefabs[i] != null && ob.name.Contains(levelData.obstaclePrefabs[i].name)) { idx = i; break; }

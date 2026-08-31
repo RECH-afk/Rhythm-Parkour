@@ -44,6 +44,9 @@ public class InGameLevelEditor : MonoBehaviour
     Vector2 listScroll;
     string status = "";
     float statusTimer;
+    [Header("BPM вывод (только текст)")]
+    public string bpmOutput = "";
+    float detectedBpmVal = 0f;
 
     // кэш волны для таймлайна
     float[] waveCache;
@@ -53,13 +56,35 @@ public class InGameLevelEditor : MonoBehaviour
 
     void Awake()
     {
+        // возврат из IsGameScene — не теряем прогресс
+        if (LevelTransfer.hasLevel && LevelTransfer.levelData != null)
+        {
+            string cur = SceneManager.GetActiveScene().name;
+            if (cur == "LevelEditor" || cur == "IsLevelEditorScene")
+            {
+                levelData = LevelTransfer.levelData;
+                Debug.Log($"[Transfer] Восстановлен '{levelData.fullTitle}' в редакторе (Esc из игры)");
+                // сразу пробрасываем в TimelineUI и Manager чтобы не рассинхронить
+                var tl0 = FindObjectOfType<TimelineUI>();
+                if (tl0 != null) tl0.levelData = levelData;
+                if (manager != null) manager.levelData = levelData;
+            }
+        }
         if (!manager) manager = FindObjectOfType<RhythmParkourManager>();
         if (!conductor) conductor = FindObjectOfType<Conductor>();
-        if (!levelData && manager) levelData = manager.levelData;
-        if (levelData) editingData = Instantiate(levelData);
+        if (levelData == null && manager) levelData = manager.levelData;
+        // если TimelineUI уже имеет уровень с нотами, а levelData пустой — берем оттуда
+        var tlCheck = FindObjectOfType<TimelineUI>();
+        if ((levelData == null || levelData.events.Count == 0) && tlCheck != null && tlCheck.levelData != null && tlCheck.levelData.events.Count > 0)
+            levelData = tlCheck.levelData;
+        if (levelData != null) editingData = levelData.CloneDeep();
         else editingData = levelData;
+        // синхронизируем обратно
+        var tlSync = FindObjectOfType<TimelineUI>();
+        if (tlSync != null && levelData != null) tlSync.levelData = levelData;
+        if (manager != null && levelData != null) manager.levelData = levelData;
 
-        if (levelData)
+        if (levelData != null)
         {
             songTitle = levelData.fullTitle;
             songAuthor = levelData.songAuthor;
@@ -86,14 +111,22 @@ public class InGameLevelEditor : MonoBehaviour
 
     void Start()
     {
-        // в LevelEditor сцене — сразу свободная камера, игрок выключен
         var fpc = FindObjectOfType<EasyPeasyFirstPersonController.FirstPersonController>();
         if (fpc) fpc.gameObject.SetActive(false);
         if (freeCamera) freeCamera.enabled = true;
         if (editorCamera) editorCamera.gameObject.SetActive(true);
 
-        // примени визуал из editingData
         ApplyMapVisual();
+        // синхронизация с TimelineUI после загрузки уровня из меню
+        var tl = FindObjectOfType<TimelineUI>();
+        if (tl != null && tl.levelData != null && (editingData == null || tl.levelData.events.Count != editingData.events.Count))
+        {
+            // если таймлайн имеет больше нот — берем оттуда
+            if (editingData == null || tl.levelData.events.Count > editingData.events.Count)
+                editingData = tl.levelData.CloneDeep();
+        }
+        if (tl != null && editingData != null) tl.levelData = editingData;
+        if (manager != null && editingData != null) manager.levelData = editingData;
     }
 
     void Update()
@@ -101,7 +134,7 @@ public class InGameLevelEditor : MonoBehaviour
         if (Input.GetKeyDown(toggleKey)) showUI = !showUI;
 
         // превью тайм
-        if (isPreviewPlaying && editingData && editingData.music)
+        if (isPreviewPlaying && editingData != null && editingData.music)
         {
             previewTime = (float)(AudioSettings.dspTime - previewDspStart);
             if (previewTime >= editingData.music.length)
@@ -134,7 +167,7 @@ public class InGameLevelEditor : MonoBehaviour
         }
         return d / Mathf.Max(1f, speed);
     }
-    float GetHitBeat(ObstacleEvent ev) => editingData ? editingData.TimeToBeat(ev.time + TravelForSpeed(ev.speed)) : ev.beat;
+    float GetHitBeat(ObstacleEvent ev) => editingData != null ? editingData.TimeToBeat(ev.time + TravelForSpeed(ev.speed)) : ev.beat;
 
     // ── UI ──
     void OnGUI()
@@ -163,38 +196,29 @@ public class InGameLevelEditor : MonoBehaviour
         songTitle = LabeledTextField("Название*", songTitle);
         songAuthor = LabeledTextField("Автор песни", songAuthor);
         mapAuthor = LabeledTextField("Автор карты", mapAuthor);
-        if (editingData) { editingData.fullTitle = songTitle; editingData.songAuthor = songAuthor; editingData.mapAuthor = mapAuthor; }
+        if (editingData != null) { editingData.fullTitle = songTitle; editingData.songAuthor = songAuthor; editingData.mapAuthor = mapAuthor; }
 
         GUILayout.Space(4);
         if (GUILayout.Button("Выбрать аудио файл (mp3/wav/ogg) с диска", GUILayout.Height(26)))
             PickAudio();
-        if (editingData && editingData.music) GUILayout.Label($"Аудио: {editingData.music.name}  {editingData.music.length:0.0}с", new GUIStyle(GUI.skin.label){fontSize=10, normal=new GUIStyleState{textColor=new Color(0.7f,1f,0.7f)}});
+        if (editingData != null && editingData.music) GUILayout.Label($"Аудио: {editingData.music.name}  {editingData.music.length:0.0}с", new GUIStyle(GUI.skin.label){fontSize=10, normal=new GUIStyleState{textColor=new Color(0.7f,1f,0.7f)}});
         else if (!string.IsNullOrEmpty(editingData?.audioPath)) GUILayout.Label($"Путь: {editingData.audioPath}", new GUIStyle(GUI.skin.label){fontSize=9, normal=new GUIStyleState{textColor=new Color(1,1,0.7f,1f)}});
+        if (!string.IsNullOrEmpty(bpmOutput))
+            GUILayout.Label(bpmOutput, new GUIStyle(GUI.skin.label){fontSize=12, fontStyle=FontStyle.Bold, normal=new GUIStyleState{textColor=new Color(0.4f,1f,0.6f)}});
 
         if (GUILayout.Button("Выбрать видео файл (mp4) с диска", GUILayout.Height(22)))
             PickVideo();
-        if (editingData && editingData.video) GUILayout.Label($"Видео: {editingData.video.name}", new GUIStyle(GUI.skin.label){fontSize=10, normal=new GUIStyleState{textColor=new Color(0.7f,1f,0.7f)}});
+        if (editingData != null && editingData.video) GUILayout.Label($"Видео: {editingData.video.name}", new GUIStyle(GUI.skin.label){fontSize=10, normal=new GUIStyleState{textColor=new Color(0.7f,1f,0.7f)}});
 
-        if (editingData && editingData.cover) GUILayout.Label($"Обложка: {editingData.cover.name}", new GUIStyle(GUI.skin.label){fontSize=10, normal=new GUIStyleState{textColor=new Color(0.7f,1f,0.7f)}});
+        if (editingData != null && editingData.cover) GUILayout.Label($"Обложка: {editingData.cover.name}", new GUIStyle(GUI.skin.label){fontSize=10, normal=new GUIStyleState{textColor=new Color(0.7f,1f,0.7f)}});
         if (GUILayout.Button("Выбрать обложку (png/jpg)", GUILayout.Height(22))) PickCover();
 
         GUILayout.Space(4);
-        if (editingData)
-        {
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("BPM", GUILayout.Width(40));
-            float.TryParse(GUILayout.TextField(editingData.bpm.ToString("0.##"), GUILayout.Width(70)), out float nbpm);
-            if (nbpm >= 1) editingData.bpm = nbpm;
-            GUILayout.Label("Offset", GUILayout.Width(50));
-            float.TryParse(GUILayout.TextField(editingData.offset.ToString("0.00"), GUILayout.Width(60)), out float noff);
-            editingData.offset = noff;
-            GUILayout.EndHorizontal();
-        }
 
         GUILayout.Space(8);
         // 2. Визуал карты
         GUILayout.Box("  Визуал карты  ", GUILayout.Height(20));
-        if (editingData)
+        if (editingData != null)
         {
             bool pe = editingData.particlesEnabled;
             bool np = GUILayout.Toggle(pe, " Партиклы на сцене");
@@ -209,22 +233,51 @@ public class InGameLevelEditor : MonoBehaviour
         }
 
         GUILayout.Space(8);
-        // кисть
-        GUILayout.Box("  Кисть — чем ставить  ", GUILayout.Height(20));
-        if (editingData && editingData.obstaclePrefabs.Count > 0)
+        // кисть — ГЛОБАЛЬНАЯ (как в GD, одна на все уровни)
+        GUILayout.Box("  Кисть — чем ставить (глобально)  ", GUILayout.Height(20));
         {
-            GUILayout.BeginHorizontal();
-            for (int i = 0; i < Mathf.Min(7, editingData.obstaclePrefabs.Count); i++)
+            int gCount = GlobalObstacleCatalog.Count;
+            if (gCount == 0 && editingData != null) gCount = editingData.PrefabCount; // fallback старые
+            if (gCount > 0)
             {
-                var go = editingData.obstaclePrefabs[i];
-                if (!go) continue;
-                GUI.backgroundColor = brushIndex == i ? Color.green : Color.white;
-                if (GUILayout.Button($"{i}", GUILayout.Width(32), GUILayout.Height(26))) brushIndex = i;
+                GUILayout.BeginHorizontal();
+                for (int i = 0; i < Mathf.Min(12, gCount); i++)
+                {
+                    var go = GlobalObstacleCatalog.GetPrefab(i);
+                    if (!go && editingData != null) go = editingData.GetPrefab(i);
+                    if (!go) continue;
+                    GUI.backgroundColor = brushIndex == i ? Color.green : Color.white;
+                    if (GUILayout.Button($"{i}", GUILayout.Width(28), GUILayout.Height(26))) brushIndex = i;
+                }
+                GUI.backgroundColor = Color.white;
+                GUILayout.EndHorizontal();
+                var curGo = GlobalObstacleCatalog.GetPrefab(brushIndex);
+                if (!curGo && editingData != null) curGo = editingData.GetPrefab(brushIndex);
+                if (curGo)
+                    GUILayout.Label($"→ {brushIndex}: {curGo.name}", new GUIStyle(GUI.skin.label){fontSize=11, normal=new GUIStyleState{textColor=Color.cyan}});
+                brushIndex = Mathf.Clamp(brushIndex, 0, Mathf.Max(0, gCount - 1));
+                if (GUILayout.Button("Открыть Global Catalog", GUILayout.Height(18)))
+                {
+#if UNITY_EDITOR
+                    UnityEditor.Selection.activeObject = GlobalObstacleCatalog.Instance;
+                    UnityEditor.EditorGUIUtility.PingObject(GlobalObstacleCatalog.Instance);
+#endif
+                }
             }
-            GUI.backgroundColor = Color.white;
-            GUILayout.EndHorizontal();
-            if (editingData.obstaclePrefabs.Count > brushIndex && editingData.obstaclePrefabs[brushIndex])
-                GUILayout.Label($"→ {brushIndex}: {editingData.obstaclePrefabs[brushIndex].name}", new GUIStyle(GUI.skin.label){fontSize=11, normal=new GUIStyleState{textColor=Color.cyan}});
+            else
+            {
+                GUI.color = new Color(1, 0.5f, 0.5f, 1);
+                GUILayout.Label("Нет префабов! Заполни GlobalObstacleCatalog", new GUIStyle(GUI.skin.label){fontSize=11, normal=new GUIStyleState{textColor=new Color(1,0.4f,0.4f)}});
+                GUI.color = Color.white;
+                if (GUILayout.Button("Создать/Открыть каталог"))
+                {
+#if UNITY_EDITOR
+                    var cat = GlobalObstacleCatalog.Instance;
+                    if (cat != null) { UnityEditor.Selection.activeObject = cat; UnityEditor.EditorGUIUtility.PingObject(cat); }
+#endif
+                }
+                GUILayout.Label("Путь: Assets/Resources/GlobalObstacleCatalog", new GUIStyle(GUI.skin.label){fontSize=9, normal=new GUIStyleState{textColor=new Color(1,1,1,0.4f)}});
+            }
         }
 
         GUILayout.Space(8);
@@ -236,17 +289,29 @@ public class InGameLevelEditor : MonoBehaviour
         GUILayout.EndHorizontal();
         if (GUILayout.Button("★ Авто-постройка по музыке ★", GUILayout.Height(28)))
         {
-            if (editingData && editingData.music) { var cfg = RhythmAutoGenerator.FlexibleSettings.Default; RhythmAutoGenerator.Generate(editingData, 0, cfg); status = $"Сгенерировано {editingData.events.Count} нот"; statusTimer = 3f; }
+            if (editingData != null && editingData.music) { var cfg = RhythmAutoGenerator.FlexibleSettings.Default; RhythmAutoGenerator.Generate(editingData, 0, cfg); status = $"Сгенерировано {editingData.events.Count} нот"; statusTimer = 3f; }
             else status = "Нет музыки!";
         }
 
         GUILayout.Space(8);
         // сохранение/запуск
         GUI.backgroundColor = new Color(0.25f, 0.85f, 0.45f);
-        if (GUILayout.Button("💾 Экспорт в файл (JSON) + Запуск", GUILayout.Height(34)))
+        if (GUILayout.Button("💾 Сохранить .rksl + Запуск", GUILayout.Height(34)))
         {
             string path = ExportToFile();
-            if (!string.IsNullOrEmpty(path)) { status = $"Экспортировано: {path}"; statusTimer = 4f; LaunchLevel(path); }
+            if (!string.IsNullOrEmpty(path)) { status = $"Сохранено: {Path.GetFileName(path)}"; statusTimer = 4f; LaunchLevel(path); }
+        }
+        GUI.backgroundColor = new Color(0.2f, 0.6f, 1f);
+        if (GUILayout.Button("▶ Играть в IsGameScene (Esc — назад в редактор)", GUILayout.Height(30)))
+        {
+            PlayInGameScene();
+        }
+        GUI.backgroundColor = new Color(0.35f, 0.35f, 0.45f);
+        if (GUILayout.Button("☰ Меню уровней", GUILayout.Height(26)))
+        {
+            var menu = FindObjectOfType<MenuController>();
+            if (menu == null) { var go = new GameObject("MenuController (Auto)"); menu = go.AddComponent<MenuController>(); }
+            menu.ShowMenu();
         }
         GUI.backgroundColor = Color.white;
         if (!string.IsNullOrEmpty(status) && statusTimer > 0) { GUILayout.Label(status, new GUIStyle(GUI.skin.label){fontSize=11, normal=new GUIStyleState{textColor=Color.yellow}}); statusTimer -= Time.deltaTime; }
@@ -292,7 +357,7 @@ public class InGameLevelEditor : MonoBehaviour
 
     void ApplyPreset(int idx)
     {
-        if (!editingData) return;
+        if (editingData == null) return;
         RhythmAutoGenerator.FlexibleSettings s = idx == 0 ? RhythmAutoGenerator.FlexibleSettings.Few : idx == 2 ? RhythmAutoGenerator.FlexibleSettings.Many : RhythmAutoGenerator.FlexibleSettings.Default;
         RhythmAutoGenerator.Generate(editingData, Random.Range(0, 9999), s);
         status = $"Пресет {(idx==0?"Мало":idx==1?"Норма":"Много")}: {editingData.events.Count} нот";
@@ -371,7 +436,22 @@ public class InGameLevelEditor : MonoBehaviour
                 editingData.music = clip;
                 editingData.fullTitle = clip.name;
                 wave = null;
-                status = $"Аудио загружено: {clip.name} {clip.length:0.0}с";
+                // ——— вывод BPM после загрузки + сохранение ———
+                try
+                {
+                    var det = BpmDetector.Detect(clip);
+                    detectedBpmVal = det.bpm;
+                    editingData.bpm = Mathf.Clamp(det.bpm, 40f, 300f);
+                    bpmOutput = $"BPM: {editingData.bpm:0}  (детект {det.confidence*100:0}%)";
+                    status = $"Аудио загружено: {clip.name} {clip.length:0.0}с • {bpmOutput}";
+                    Debug.Log($"[BPM] {clip.name} -> {det.bpm:0.##} conf {det.confidence:0.##} (сохранен {editingData.bpm:0})", this);
+                }
+                catch (System.Exception e)
+                {
+                    bpmOutput = "";
+                    status = $"Аудио загружено: {clip.name} {clip.length:0.0}с";
+                    Debug.LogWarning($"[BPM] detect failed: {e.Message}");
+                }
             }
             else status = $"Ошибка аудио: {uwr.error}";
             statusTimer = 3f;
@@ -380,7 +460,7 @@ public class InGameLevelEditor : MonoBehaviour
 
     void ApplyMapVisual()
     {
-        if (!editingData) return;
+        if (editingData == null) return;
         // дорожка
         var ground = GameObject.Find("Ground");
         if (ground)
@@ -406,7 +486,7 @@ public class InGameLevelEditor : MonoBehaviour
     // ── таймлайн в игре ──
     void DrawTimelineInGame(float width)
     {
-        if (!editingData || !editingData.music)
+        if (editingData == null || editingData.music == null)
         {
             GUILayout.Box("Таймлайн — нет музыки", GUILayout.Height(180));
             return;
@@ -498,10 +578,10 @@ public class InGameLevelEditor : MonoBehaviour
             float spawnB = editingData.TimeToBeat(spawnT);
             var ev = ObstacleEvent.Create(spawnB, brushIndex, Vector3.zero, 12f);
             ev.time = spawnT;
-            if (editingData.obstaclePrefabs.Count > brushIndex && editingData.obstaclePrefabs[brushIndex])
             {
-                var ob = editingData.obstaclePrefabs[brushIndex].GetComponent<Obstacle>();
-                if (ob) ev.speed = ob.baseSpeed;
+                var pf = GlobalObstacleCatalog.GetPrefab(brushIndex);
+                if (!pf && editingData != null) pf = editingData.GetPrefab(brushIndex);
+                if (pf) { var ob = pf.GetComponent<Obstacle>(); if (ob) ev.speed = ob.baseSpeed; }
             }
             editingData.events.Add(ev);
             editingData.SortByTime();
@@ -518,10 +598,10 @@ public class InGameLevelEditor : MonoBehaviour
             float spawnB = editingData.TimeToBeat(spawnT);
             var ev = ObstacleEvent.Create(spawnB, brushIndex, Vector3.zero, 12f);
             ev.time = spawnT;
-            if (editingData.obstaclePrefabs.Count > brushIndex && editingData.obstaclePrefabs[brushIndex])
             {
-                var ob = editingData.obstaclePrefabs[brushIndex].GetComponent<Obstacle>();
-                if (ob) ev.speed = ob.baseSpeed;
+                var pf = GlobalObstacleCatalog.GetPrefab(brushIndex);
+                if (!pf && editingData != null) pf = editingData.GetPrefab(brushIndex);
+                if (pf) { var ob = pf.GetComponent<Obstacle>(); if (ob) ev.speed = ob.baseSpeed; }
             }
             editingData.events.Add(ev);
             editingData.SortByTime();
@@ -546,7 +626,7 @@ public class InGameLevelEditor : MonoBehaviour
 
     void EnsureWaveInGame()
     {
-        if (!editingData || !editingData.music) return;
+        if (editingData == null || editingData.music == null) return;
         var clip = editingData.music;
         int ch = clip.channels;
         int samples = clip.samples;
@@ -587,52 +667,57 @@ public class InGameLevelEditor : MonoBehaviour
     }
 
     // экспорт
-    [System.Serializable]
-    class LevelSave
-    {
-        public string fullTitle, songAuthor, mapAuthor, audioPath, videoPath;
-        public float bpm, offset;
-        public bool particlesEnabled;
-        public Color particleColor, obstacleColor, trackColor;
-        public bool sphereRotates;
-        public List<ObstacleEvent> events;
-        public string coverBase64;
-    }
-
     string ExportToFile()
     {
-        if (!editingData) return "";
-        var save = new LevelSave
+        // синхронизация с TimelineUI — там могут быть ноты добавленные на таймлайне
+        var tlSync = FindObjectOfType<TimelineUI>();
+        if (tlSync != null && tlSync.levelData != null)
         {
-            fullTitle = editingData.fullTitle,
-            songAuthor = editingData.songAuthor,
-            mapAuthor = editingData.mapAuthor,
-            audioPath = editingData.audioPath,
-            videoPath = editingData.videoPath,
+            if (editingData == null) editingData = tlSync.levelData.CloneDeep();
+            else if (tlSync.levelData.events.Count > editingData.events.Count)
+            {
+                editingData.events = new List<ObstacleEvent>(tlSync.levelData.events);
+                editingData.bpm = tlSync.levelData.bpm;
+                editingData.offset = tlSync.levelData.offset;
+                if (tlSync.levelData.music != null) editingData.music = tlSync.levelData.music;
+                editingData.audioPath = tlSync.levelData.audioPath;
+            }
+            // также обновим editingData из UI полей (название и т.д. уже в editingData)
+        }
+        if (editingData == null) return "";
+        string safeName = string.IsNullOrEmpty(editingData.fullTitle) ? "NewLevel" : string.Join("_", editingData.fullTitle.Split(Path.GetInvalidFileNameChars()));
+#if UNITY_EDITOR
+        string path = EditorUtility.SaveFilePanel("Сохранить уровень .rksl", "", safeName + ".rksl", "rksl");
+        if (string.IsNullOrEmpty(path)) return "";
+#else
+        string dir = Path.Combine(Application.persistentDataPath, "Levels");
+        Directory.CreateDirectory(dir);
+        string path = Path.Combine(dir, safeName + ".rksl");
+#endif
+        var manifest = new RkslManifest
+        {
+            title = editingData.fullTitle,
+            artist = editingData.songAuthor,
+            creator = editingData.mapAuthor,
             bpm = editingData.bpm,
             offset = editingData.offset,
+            events = new List<ObstacleEvent>(editingData.events),
             particlesEnabled = editingData.particlesEnabled,
             particleColor = editingData.particleColor,
             obstacleColor = editingData.obstacleColor,
             trackColor = editingData.trackColor,
             sphereRotates = editingData.sphereRotates,
-            events = new List<ObstacleEvent>(editingData.events),
-            coverBase64 = editingData.cover ? System.Convert.ToBase64String(editingData.cover.texture.EncodeToPNG()) : ""
         };
-        string json = JsonUtility.ToJson(save, true);
-        string dir = Path.Combine(Application.persistentDataPath, "Levels");
-        Directory.CreateDirectory(dir);
-        string safeName = string.IsNullOrEmpty(save.fullTitle) ? "NewLevel" : string.Join("_", save.fullTitle.Split(Path.GetInvalidFileNameChars()));
-        string path = Path.Combine(dir, safeName + ".json");
-#if UNITY_EDITOR
-        string assetPath = "Assets/!Rhythm Parkour/Levels/" + safeName + ".json";
-        File.WriteAllText(assetPath, json);
-        AssetDatabase.Refresh();
-        return assetPath;
-#else
-        File.WriteAllText(path, json);
+        // audio/video/cover пути — берём из editingData
+        string audioSrc = editingData.audioPath;
+        string videoSrc = editingData.videoPath;
+        // cover — через Sprite
+        bool ok = RkslFile.Save(path, manifest, audioSrc, videoSrc, null, editingData.cover);
+        if (!ok) { status = "Ошибка сохранения .rksl"; statusTimer = 3f; return ""; }
+        // сохраняем путь для игры
+        PlayerPrefs.SetString("LastRkslPath", path);
+        PlayerPrefs.Save();
         return path;
-#endif
     }
 
     void LaunchLevel(string path)
@@ -651,6 +736,57 @@ public class InGameLevelEditor : MonoBehaviour
         else if (conductor) conductor.Play(editingData, FindObjectOfType<AudioSource>());
     }
 
+    void PlayInGameScene()
+    {
+        // синхронизация с TimelineUI перед игрой
+        var tlPlay = FindObjectOfType<TimelineUI>();
+        if (tlPlay != null && tlPlay.levelData != null && tlPlay.levelData.events.Count > 0)
+        {
+            if (editingData == null) editingData = tlPlay.levelData.CloneDeep();
+            else if (tlPlay.levelData.events.Count != editingData.events.Count || tlPlay.levelData.bpm != editingData.bpm)
+            {
+                editingData.events = new List<ObstacleEvent>(tlPlay.levelData.events);
+                editingData.bpm = tlPlay.levelData.bpm;
+                editingData.offset = tlPlay.levelData.offset;
+                editingData.music = tlPlay.levelData.music;
+                editingData.audioPath = tlPlay.levelData.audioPath;
+            }
+        }
+        if (editingData == null) { status = "Нет данных уровня"; statusTimer = 3f; return; }
+        editingData.fullTitle = songTitle;
+        editingData.songAuthor = songAuthor;
+        editingData.mapAuthor = mapAuthor;
+        // не теряем прогресс — кладём в статический трансфер
+        LevelTransfer.SetLevel(editingData, SceneManager.GetActiveScene().name);
+        // бэкап в файл на случай домен-релоада
+        try
+        {
+            string tmpDir = Path.Combine(Application.temporaryCachePath, "LevelTransfer");
+            Directory.CreateDirectory(tmpDir);
+            string tmpPath = Path.Combine(tmpDir, "transfer.rksl");
+            var man = RkslFile.FromRuntimeData(editingData);
+            string audioSrc = editingData.audioPath;
+            // если audioSrc пустой но есть clip — всё равно трансфер держит clip
+            RkslFile.Save(tmpPath, man, string.IsNullOrEmpty(audioSrc) ? null : audioSrc, editingData.videoPath, null, editingData.cover);
+            PlayerPrefs.SetString("TransferRkslPath", tmpPath);
+            PlayerPrefs.Save();
+        } catch (System.Exception e) { Debug.LogWarning($"[Transfer] tmp save failed: {e.Message}"); }
+
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        string target = "IsGameScene";
+        // проверяем есть ли сцена в билде
+        bool canLoad = false;
+        for (int i=0;i<SceneManager.sceneCountInBuildSettings;i++)
+        {
+            string p = SceneUtility.GetScenePathByBuildIndex(i);
+            if (p.Contains(target)) { canLoad = true; break; }
+        }
+        if (canLoad) SceneManager.LoadScene(target);
+        else { Debug.LogWarning($"[Transfer] {target} не в Build Settings — Play в редакторе"); LaunchLevel(""); }
+    }
+
     void PlayPreview(float t)
     {
         previewTime = t;
@@ -658,7 +794,7 @@ public class InGameLevelEditor : MonoBehaviour
         previewDspStart = AudioSettings.dspTime - previewTime;
         // найти AudioSource превью (если есть) или взять manager.musicSource
         AudioSource src = manager ? manager.musicSource : FindObjectOfType<AudioSource>();
-        if (src && editingData && editingData.music)
+        if (src && editingData != null && editingData.music)
         {
             src.clip = editingData.music;
             src.time = Mathf.Clamp(t, 0, editingData.music.length - 0.01f);
