@@ -297,13 +297,13 @@ public class RkslEditorController : MonoBehaviour
         AudioClip clip = null;
         if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
         {
-            string url = "file://" + audioPath;
-            AudioType type = GetAudioType(audioPath);
+            string url = RkslFile.GetFileUri(audioPath);
+            AudioType type = RkslFile.GetAudioType(audioPath);
             using (var uwr = UnityWebRequestMultimedia.GetAudioClip(url, type))
             {
                 yield return uwr.SendWebRequest();
                 if (uwr.result == UnityWebRequest.Result.Success) clip = DownloadHandlerAudioClip.GetContent(uwr);
-                else UpdateStatus($"Ошибка аудио: {uwr.error}");
+                else UpdateStatus($"Ошибка аудио: {uwr.error} url={url}");
             }
         }
         // cover
@@ -348,11 +348,7 @@ public class RkslEditorController : MonoBehaviour
         PlayerPrefs.Save();
     }
 
-    AudioType GetAudioType(string path)
-    {
-        string ext = Path.GetExtension(path).ToLower();
-        switch (ext) { case ".mp3": return AudioType.MPEG; case ".wav": return AudioType.WAV; case ".ogg": return AudioType.OGGVORBIS; default: return AudioType.UNKNOWN; }
-    }
+    AudioType GetAudioType(string path) => RkslFile.GetAudioType(path);
 
     void UpdateStatus(string msg) { if (statusText != null) statusText.text = msg; Debug.Log($"[RkslEditor] {msg}"); }
 }

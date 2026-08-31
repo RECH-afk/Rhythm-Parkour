@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using UnityEngine;
+using UnityEngine.Networking;
 
 /// <summary>
 /// Формат .rksl — zip архив с level.json + media файлами
@@ -38,114 +39,102 @@ public static class RkslFile
     const string ManifestName = "level.json";
 
     public static bool Save(string rkslPath, RkslManifest manifest, string audioSourcePath, string videoSourcePath, string coverSourcePath, Sprite coverSprite = null)
-    {
-        try
         {
-            // подготовка временных данных
-            if (string.IsNullOrEmpty(manifest.audioFile) && !string.IsNullOrEmpty(audioSourcePath))
-                manifest.audioFile = Path.GetFileName(audioSourcePath);
-            if (string.IsNullOrEmpty(manifest.videoFile) && !string.IsNullOrEmpty(videoSourcePath))
-                manifest.videoFile = Path.GetFileName(videoSourcePath);
-
-            // cover: если есть Sprite — кодируем его, иначе копируем файл
-            byte[] coverBytes = null;
-            string coverFileName = manifest.coverFile;
-            if (coverSprite != null && coverSprite.texture != null)
+            try
             {
-                try
-                {
-                    Texture2D tex = coverSprite.texture;
-                    // если текстура нечитаемая — делаем копию через RenderTexture
-                    if (!tex.isReadable)
-                    {
-                        RenderTexture rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32);
-                        Graphics.Blit(tex, rt);
-                        RenderTexture prev = RenderTexture.active;
-                        RenderTexture.active = rt;
-                        Texture2D copy = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, false);
-                        copy.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
-                        copy.Apply();
-                        RenderTexture.active = prev;
-                        RenderTexture.ReleaseTemporary(rt);
-                        coverBytes = copy.EncodeToPNG();
-                        UnityEngine.Object.Destroy(copy);
-                    }
-                    else coverBytes = tex.EncodeToPNG();
-                    if (coverBytes != null && coverBytes.Length > 0)
-                    {
-                        if (string.IsNullOrEmpty(coverFileName)) coverFileName = "cover.png";
-                        manifest.coverFile = coverFileName;
-                    }
-                }
-                catch (Exception e) { Debug.LogWarning($"[Rksl] cover encode failed: {e.Message}"); }
-            }
-            else if (!string.IsNullOrEmpty(coverSourcePath) && File.Exists(coverSourcePath))
-            {
-                if (string.IsNullOrEmpty(coverFileName)) coverFileName = Path.GetFileName(coverSourcePath);
-                manifest.coverFile = coverFileName;
-            }
-
-            string json = JsonUtility.ToJson(manifest, true);
-            string dir = Path.GetDirectoryName(rkslPath);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            if (File.Exists(rkslPath)) File.Delete(rkslPath);
-
-            using (var zip = ZipFile.Open(rkslPath, ZipArchiveMode.Create))
-            {
-                var entry = zip.CreateEntry(ManifestName, System.IO.Compression.CompressionLevel.Optimal);
-                using (var s = entry.Open())
-                using (var w = new StreamWriter(s)) w.Write(json);
-
+                // Подготовка имён файлов до сериализации — один проход без перезаписи zip
                 if (!string.IsNullOrEmpty(audioSourcePath) && File.Exists(audioSourcePath))
-                {
-                    string name = Path.GetFileName(audioSourcePath);
-                    zip.CreateEntryFromFile(audioSourcePath, name, System.IO.Compression.CompressionLevel.Optimal);
-                    manifest.audioFile = name;
-                }
+                    manifest.audioFile = Path.GetFileName(audioSourcePath);
+                else if (string.IsNullOrEmpty(manifest.audioFile) && !string.IsNullOrEmpty(audioSourcePath))
+                    manifest.audioFile = Path.GetFileName(audioSourcePath);
                 if (!string.IsNullOrEmpty(videoSourcePath) && File.Exists(videoSourcePath))
+                    manifest.videoFile = Path.GetFileName(videoSourcePath);
+                else if (string.IsNullOrEmpty(manifest.videoFile) && !string.IsNullOrEmpty(videoSourcePath))
+                    manifest.videoFile = Path.GetFileName(videoSourcePath);
+
+                byte[] coverBytes = null;
+                string coverFileName = manifest.coverFile;
+                if (coverSprite != null && coverSprite.texture != null)
                 {
-                    string name = Path.GetFileName(videoSourcePath);
-                    zip.CreateEntryFromFile(videoSourcePath, name, System.IO.Compression.CompressionLevel.Optimal);
-                    manifest.videoFile = name;
-                }
-                if (coverBytes != null && coverBytes.Length > 0)
-                {
-                    var ce = zip.CreateEntry(coverFileName, System.IO.Compression.CompressionLevel.Optimal);
-                    using (var cs = ce.Open()) cs.Write(coverBytes, 0, coverBytes.Length);
+                    try
+                    {
+                        Texture2D tex = coverSprite.texture;
+                        if (!tex.isReadable)
+                        {
+                            RenderTexture rt = RenderTexture.GetTemporary(tex.width, tex.height, 0, RenderTextureFormat.ARGB32);
+                            Graphics.Blit(tex, rt);
+                            RenderTexture prev = RenderTexture.active;
+                            RenderTexture.active = rt;
+                            Texture2D copy = new Texture2D(tex.width, tex.height, TextureFormat.RGBA32, false);
+                            copy.ReadPixels(new Rect(0, 0, tex.width, tex.height), 0, 0);
+                            copy.Apply();
+                            RenderTexture.active = prev;
+                            RenderTexture.ReleaseTemporary(rt);
+                            coverBytes = copy.EncodeToPNG();
+                            UnityEngine.Object.Destroy(copy);
+                        }
+                        else coverBytes = tex.EncodeToPNG();
+                        if (coverBytes != null && coverBytes.Length > 0)
+                        {
+                            if (string.IsNullOrEmpty(coverFileName)) coverFileName = "cover.png";
+                            manifest.coverFile = coverFileName;
+                        }
+                    }
+                    catch (Exception e) { Debug.LogWarning($"[Rksl] cover encode failed: {e.Message}"); }
                 }
                 else if (!string.IsNullOrEmpty(coverSourcePath) && File.Exists(coverSourcePath))
                 {
-                    string name = Path.GetFileName(coverSourcePath);
-                    zip.CreateEntryFromFile(coverSourcePath, name, System.IO.Compression.CompressionLevel.Optimal);
-                    manifest.coverFile = name;
+                    if (string.IsNullOrEmpty(coverFileName)) coverFileName = Path.GetFileName(coverSourcePath);
+                    manifest.coverFile = coverFileName;
+                    coverFileName = manifest.coverFile;
                 }
-                // перезаписываем манифест с финальными именами файлов (если они изменились)
-                // удаляем старый и создаём новый — проще пересоздать
-                // Но ZipFile не позволяет легко перезаписать — поэтому сначала создавали манифест с предварительными именами,
-                // а теперь файлы уже добавлены, манифест уже финальный — если имя изменилось, перезапишем через временный поток
-                // Для простоты: если имя изменилось, обновим json и перезапишем entry (удалим и создадим заново)
-                // Но в нашем коде имена уже финальные до создания, так что ок
-            }
-            // переоткроем и обновим манифест если имена файлов изменились после добавления (на случай если audioFile был пустой)
-            // перезапишем манифест окончательно
-            using (var zip = ZipFile.Open(rkslPath, ZipArchiveMode.Update))
-            {
-                var old = zip.GetEntry(ManifestName);
-                if (old != null) old.Delete();
-                var entry = zip.CreateEntry(ManifestName, System.IO.Compression.CompressionLevel.Optimal);
-                using (var s = entry.Open())
-                using (var w = new StreamWriter(s)) w.Write(JsonUtility.ToJson(manifest, true));
-            }
+                else if (!string.IsNullOrEmpty(coverFileName) && coverBytes == null)
+                {
+                    coverFileName = manifest.coverFile;
+                }
 
-            Debug.Log($"[Rksl] Saved {rkslPath} ({manifest.events.Count} нот)");
-            return true;
+                string json = JsonUtility.ToJson(manifest, true);
+                string dir = Path.GetDirectoryName(rkslPath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                if (File.Exists(rkslPath)) File.Delete(rkslPath);
+
+                using (var zip = ZipFile.Open(rkslPath, ZipArchiveMode.Create))
+                {
+                    var entry = zip.CreateEntry(ManifestName, System.IO.Compression.CompressionLevel.Optimal);
+                    using (var s = entry.Open())
+                    using (var w = new StreamWriter(s)) w.Write(json);
+
+                    if (!string.IsNullOrEmpty(audioSourcePath) && File.Exists(audioSourcePath))
+                    {
+                        string name = Path.GetFileName(audioSourcePath);
+                        zip.CreateEntryFromFile(audioSourcePath, name, System.IO.Compression.CompressionLevel.Optimal);
+                    }
+                    if (!string.IsNullOrEmpty(videoSourcePath) && File.Exists(videoSourcePath))
+                    {
+                        string name = Path.GetFileName(videoSourcePath);
+                        zip.CreateEntryFromFile(videoSourcePath, name, System.IO.Compression.CompressionLevel.Optimal);
+                    }
+                    if (coverBytes != null && coverBytes.Length > 0)
+                    {
+                        var ce = zip.CreateEntry(coverFileName, System.IO.Compression.CompressionLevel.Optimal);
+                        using (var cs = ce.Open()) cs.Write(coverBytes, 0, coverBytes.Length);
+                    }
+                    else if (!string.IsNullOrEmpty(coverSourcePath) && File.Exists(coverSourcePath))
+                    {
+                        string name = Path.GetFileName(coverSourcePath);
+                        zip.CreateEntryFromFile(coverSourcePath, name, System.IO.Compression.CompressionLevel.Optimal);
+                    }
+                }
+
+                Debug.Log($"[Rksl] Saved {rkslPath} ({manifest.events.Count} нот)");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Rksl] Save failed {rkslPath}: {e}");
+                return false;
+            }
         }
-        catch (Exception e)
-        {
-            Debug.LogError($"[Rksl] Save failed {rkslPath}: {e}");
-            return false;
-        }
-    }
 
     public static bool LoadManifestOnly(string rkslPath, out RkslManifest manifest)
     {
@@ -168,6 +157,66 @@ public static class RkslFile
         catch (Exception e) { Debug.LogError($"[Rksl] LoadManifest {rkslPath}: {e}"); return false; }
     }
 
+    // === Централизованные хелперы для загрузки ===
+    public static string GetFileUri(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return null;
+        // Корректный file:// URI для UnityWebRequest (требует 3 слеша + прямые слеши)
+        string full = Path.GetFullPath(path).Replace("\\", "/");
+        // На Windows уже будет C:/..., добавляем file:///
+        if (!full.StartsWith("/")) full = "/" + full;
+        return "file://" + full;
+    }
+
+    public static AudioType GetAudioType(string path)
+    {
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        switch (ext)
+        {
+            case ".mp3": return AudioType.MPEG;
+            case ".wav": return AudioType.WAV;
+            case ".ogg": return AudioType.OGGVORBIS;
+            case ".aiff": return AudioType.AIFF;
+            case ".m4a": return AudioType.MPEG;
+            default: return AudioType.UNKNOWN;
+        }
+    }
+
+    public static List<string> FindAllRkslFiles()
+    {
+        var result = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var dirs = new string[]
+        {
+            Path.Combine(UnityEngine.Application.persistentDataPath, "Levels"),
+            Path.Combine(UnityEngine.Application.persistentDataPath, "LevelTransfer"),
+            Path.Combine(UnityEngine.Application.temporaryCachePath, "LevelTransfer"),
+            Path.Combine(UnityEngine.Application.streamingAssetsPath, "GameLevels"),
+            Path.Combine(UnityEngine.Application.dataPath, "!Rhythm Parkour/Levels"),
+            Path.Combine(UnityEngine.Application.dataPath, "Levels"),
+        };
+        foreach (var d in dirs)
+        {
+            if (string.IsNullOrEmpty(d) || !Directory.Exists(d)) continue;
+            try
+            {
+                foreach (var f in Directory.GetFiles(d, "*.rksl"))
+                {
+                    if (seen.Add(f)) result.Add(f);
+                }
+            }
+            catch {}
+        }
+        // также файлы из PlayerPrefs (пользователь сохранил в произвольное место)
+        string last = UnityEngine.PlayerPrefs.GetString("LastRkslPath", "");
+        if (!string.IsNullOrEmpty(last) && File.Exists(last) && seen.Add(last)) result.Add(last);
+        string sel = UnityEngine.PlayerPrefs.GetString("SelectedLevelPath", "");
+        if (!string.IsNullOrEmpty(sel) && File.Exists(sel) && seen.Add(sel)) result.Add(sel);
+        string trans = UnityEngine.PlayerPrefs.GetString("TransferRkslPath", "");
+        if (!string.IsNullOrEmpty(trans) && File.Exists(trans) && seen.Add(trans)) result.Add(trans);
+        return result;
+    }
+
     /// <summary>
     /// Распаковывает .rksl во временную папку и возвращает пути к медиа + манифест
     /// </summary>
@@ -177,14 +226,14 @@ public static class RkslFile
         try
         {
             if (!File.Exists(rkslPath)) return false;
-            Directory.CreateDirectory(extractDir);
-            // чистим старую распаковку
+            // Чистим старую распаковку если есть, иначе создаём
             if (Directory.Exists(extractDir))
             {
                 foreach (var f in Directory.GetFiles(extractDir)) try { File.Delete(f); } catch {}
                 foreach (var d in Directory.GetDirectories(extractDir)) try { Directory.Delete(d, true); } catch {}
             }
             else Directory.CreateDirectory(extractDir);
+            Directory.CreateDirectory(extractDir);
             ZipFile.ExtractToDirectory(rkslPath, extractDir);
             string manifestPath = Path.Combine(extractDir, ManifestName);
             if (!File.Exists(manifestPath)) return false;

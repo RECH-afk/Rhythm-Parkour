@@ -910,6 +910,7 @@ GameObject:
   - component: {fileID: 820601935}
   - component: {fileID: 820601937}
   - component: {fileID: 820601936}
+  - component: {fileID: 820601938}
   m_Layer: 0
   m_Name: RhythmManager
   m_TagString: Untagged
@@ -945,7 +946,24 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   musicSource: {fileID: 966405}
-  levelData: {fileID: 0}
+  levelData:
+    music: {fileID: 0}
+    video: {fileID: 0}
+    cover: {fileID: 0}
+    fullTitle: 
+    songAuthor: 
+    mapAuthor: 
+    bpm: 128
+    offset: 0
+    audioPath: 
+    videoPath: 
+    particlesEnabled: 1
+    particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    obstacleColor: {r: 1, g: 1, b: 1, a: 1}
+    trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+    sphereRotates: 1
+    obstaclePrefabs: []
+    events: []
   dspSongStartTime: 0
   songPosition: 0
   songPositionBeats: 0
@@ -962,7 +980,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7576e2336bb0ce94abe79aa1db18f920, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  levelData: {fileID: 11400000, guid: 6d774a269b825fa4ca8b9d3deb013850, type: 2}
+  levelData:
+    music: {fileID: 0}
+    video: {fileID: 0}
+    cover: {fileID: 0}
+    fullTitle: 
+    songAuthor: 
+    mapAuthor: 
+    bpm: 128
+    offset: 0
+    audioPath: 
+    videoPath: 
+    particlesEnabled: 1
+    particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    obstacleColor: {r: 1, g: 1, b: 1, a: 1}
+    trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+    sphereRotates: 1
+    obstaclePrefabs: []
+    events: []
   conductor: {fileID: 820601936}
   musicSource: {fileID: 966405}
   videoPlayer: {fileID: 865792068}
@@ -984,6 +1019,19 @@ MonoBehaviour:
   nextEventIndex: 0
   isPlaying: 0
   currentTime: 0
+--- !u!114 &820601938
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 820601934}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c64e37d6155c7a64f9b87e1e25ba2fa1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::IsGameSceneLoader
+  manager: {fileID: 820601937}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -2146,7 +2194,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a3821955544a4084293945f7e1086513, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MusicInfoUI
-  levelData: {fileID: 0}
+  levelData:
+    music: {fileID: 0}
+    video: {fileID: 0}
+    cover: {fileID: 0}
+    fullTitle: 
+    songAuthor: 
+    mapAuthor: 
+    bpm: 128
+    offset: 0
+    audioPath: 
+    videoPath: 
+    particlesEnabled: 1
+    particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    obstacleColor: {r: 1, g: 1, b: 1, a: 1}
+    trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+    sphereRotates: 1
+    obstaclePrefabs: []
+    events: []
   manager: {fileID: 0}
   canvasGroup: {fileID: 1443846316}
   panelRect: {fileID: 1443846313}

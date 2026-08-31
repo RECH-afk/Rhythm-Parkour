@@ -142,7 +142,7 @@ public class FileLoader : MonoBehaviour
         switch (type)
         {
             case FileType.Audio:
-                using (var www = UnityWebRequestMultimedia.GetAudioClip($"file://{path}", GetAudioType(path)))
+                using (var www = UnityWebRequestMultimedia.GetAudioClip(RkslFile.GetFileUri(path), GetAudioType(path)))
                 {
                     yield return www.SendWebRequest();
                     if (www.result == UnityWebRequest.Result.Success)
@@ -167,7 +167,7 @@ public class FileLoader : MonoBehaviour
                 break;
 
             case FileType.Photo:
-                using (var www = UnityWebRequestTexture.GetTexture($"file://{path}"))
+                using (var www = UnityWebRequestTexture.GetTexture(RkslFile.GetFileUri(path)))
                 {
                     yield return www.SendWebRequest();
                     if (www.result == UnityWebRequest.Result.Success)
@@ -192,16 +192,7 @@ public class FileLoader : MonoBehaviour
         }
     }
 
-    private AudioType GetAudioType(string path)
-    {
-        return Path.GetExtension(path).ToLower() switch
-        {
-            ".mp3" => AudioType.MPEG,
-            ".wav" => AudioType.WAV,
-            ".ogg" => AudioType.OGGVORBIS,
-            _ => AudioType.UNKNOWN
-        };
-    }
+    private AudioType GetAudioType(string path) => RkslFile.GetAudioType(path);
 
     private void Flash(Color color)
     {

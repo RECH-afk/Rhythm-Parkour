@@ -237,46 +237,28 @@ public class MenuController : MonoBehaviour
         if (levelListContainer == null) return;
         for (int i=levelListContainer.childCount-1;i>=0;i--) Destroy(levelListContainer.GetChild(i).gameObject);
         foundPaths.Clear();
-        var dirs = new List<string>();
-        dirs.Add(Path.Combine(Application.persistentDataPath, "Levels"));
-        dirs.Add(Path.Combine(Application.persistentDataPath, "LevelTransfer"));
-        dirs.Add(Path.Combine(Application.temporaryCachePath, "LevelTransfer"));
-        // StreamingAssets
-        string sa = Path.Combine(Application.streamingAssetsPath, "GameLevels");
-        dirs.Add(sa);
-        // также папка Levels в проекте (для эдитора)
-        dirs.Add(Path.Combine(Application.dataPath, "!Rhythm Parkour/Levels"));
-        dirs.Add(Path.Combine(Application.dataPath, "Levels"));
-
-        HashSet<string> seen = new HashSet<string>();
-        foreach (var d in dirs)
+        // Централизованный скан — один источник правды
+        var files = RkslFile.FindAllRkslFiles();
+        foreach (var f in files)
         {
-            if (string.IsNullOrEmpty(d) || !Directory.Exists(d)) continue;
-            var files = Directory.GetFiles(d, "*.rksl");
-            foreach (var f in files)
-            {
-                if (seen.Contains(f)) continue;
-                seen.Add(f);
-                foundPaths.Add(f);
-                AddLevelButton(f);
-            }
-        }
-        // также файлы сохраненные через SaveFilePanel вне сканируемых папок (PlayerPrefs)
-        string lastPath = PlayerPrefs.GetString("LastRkslPath", "");
-        if (!string.IsNullOrEmpty(lastPath) && File.Exists(lastPath) && !seen.Contains(lastPath))
-        {
-            seen.Add(lastPath); foundPaths.Add(lastPath); AddLevelButton(lastPath);
-        }
-        string transPath = PlayerPrefs.GetString("TransferRkslPath", "");
-        if (!string.IsNullOrEmpty(transPath) && File.Exists(transPath) && !seen.Contains(transPath))
-        {
-            seen.Add(transPath); foundPaths.Add(transPath); AddLevelButton(transPath);
+            foundPaths.Add(f);
+            AddLevelButton(f);
         }
         // если есть трансфер-уровень — показать первым
-        if (LevelTransfer.hasLevel)
+        if (LevelTransfer.hasLevel && LevelTransfer.levelData != null)
         {
             string name = string.IsNullOrEmpty(LevelTransfer.levelName) ? "Текущий (не сохранен)" : LevelTransfer.levelName;
             AddTransferButton(name);
+        }
+        else if (LevelTransfer.hasLevel && !string.IsNullOrEmpty(LevelTransfer.GetEffectivePath()))
+        {
+            // есть только путь без in-memory
+            string p = LevelTransfer.GetEffectivePath();
+            if (!foundPaths.Contains(p))
+            {
+                string n = Path.GetFileNameWithoutExtension(p);
+                AddTransferButton(n);
+            }
         }
         if (foundPaths.Count==0 && !LevelTransfer.hasLevel)
         {
@@ -286,6 +268,7 @@ public class MenuController : MonoBehaviour
             var le = go.AddComponent<LayoutElement>(); le.minHeight=60;
         }
         if (statusLabel != null) statusLabel.text = $"{foundPaths.Count} уровней • Esc закрыть";
+        Debug.Log($"[Menu] RefreshList нашел {foundPaths.Count} уровней hasLevel={LevelTransfer.hasLevel}", this);
     }
 
     void AddLevelButton(string path)
@@ -418,25 +401,33 @@ public class MenuController : MonoBehaviour
         AudioClip clip = null;
         if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
         {
-            string url = "file://" + audioPath;
-            AudioType type = GetAudioType(audioPath);
+            string url = RkslFile.GetFileUri(audioPath);
+            AudioType type = RkslFile.GetAudioType(audioPath);
             using (var uwr = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(url, type))
             {
                 yield return uwr.SendWebRequest();
                 if (uwr.result == UnityEngine.Networking.UnityWebRequest.Result.Success) clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(uwr);
+                else Debug.LogError($"[Menu] LoadAndEdit audio failed {uwr.error} url={url}");
             }
         }
         Sprite cover=null;
         if (!string.IsNullOrEmpty(coverPath) && File.Exists(coverPath))
         {
-            byte[] bytes = File.ReadAllBytes(coverPath);
-            Texture2D tex=new Texture2D(2,2);
-            if (tex.LoadImage(bytes)) cover=Sprite.Create(tex,new Rect(0,0,tex.width,tex.height),Vector2.one*0.5f);
+            try
+            {
+                byte[] bytes = File.ReadAllBytes(coverPath);
+                Texture2D tex=new Texture2D(2,2);
+                if (tex.LoadImage(bytes)) cover=Sprite.Create(tex,new Rect(0,0,tex.width,tex.height),Vector2.one*0.5f);
+            }
+            catch (System.Exception e) { Debug.LogWarning($"[Menu] cover load {e.Message}"); }
         }
         var data = RkslFile.ToRuntimeData(man, clip, null, cover);
         data.audioPath = audioPath; data.videoPath = videoPath;
         LevelTransfer.SetLevel(data, "Menu");
         LevelTransfer.fromEditor = true;
+        // также сохраним путь для надёжности
+        PlayerPrefs.SetString("SelectedLevelPath", path);
+        PlayerPrefs.Save();
         Time.timeScale = 1f;
         if (menuPanel != null) menuPanel.SetActive(false);
         SceneManager.LoadScene(editorSceneName);
@@ -458,11 +449,7 @@ public class MenuController : MonoBehaviour
         SceneManager.LoadScene(editorSceneName);
     }
 
-    AudioType GetAudioType(string path)
-    {
-        string ext = Path.GetExtension(path).ToLower();
-        switch(ext){ case ".mp3": return AudioType.MPEG; case ".wav": return AudioType.WAV; case ".ogg": return AudioType.OGGVORBIS; default: return AudioType.UNKNOWN; }
-    }
+    AudioType GetAudioType(string path) => RkslFile.GetAudioType(path);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void AutoCreate()

@@ -217,8 +217,16 @@ public class RhythmParkourManager : MonoBehaviour
         musicSource.spatialBlend = 0f;
         conductor.musicSource = musicSource;
 
+        // Если есть IsGameSceneLoader — он главный, не мешаем ему
+        if (FindObjectOfType<IsGameSceneLoader>() != null)
+        {
+            Debug.Log("[Rhythm] IsGameSceneLoader обнаружен — менеджер откладывает Prepare до загрузки", this);
+            // всё равно инициализируем дорожку, но не готовим уровень
+            if (levelData == null && LevelTransfer.levelData != null) levelData = LevelTransfer.levelData;
+            return;
+        }
         // трансфер из редактора — приоритет, чтобы не терять прогресс
-        if (LevelTransfer.hasLevel && LevelTransfer.levelData != null)
+        if (LevelTransfer.levelData != null)
         {
             if (LevelTransfer.fromEditor || levelData == null)
             {
@@ -227,15 +235,8 @@ public class RhythmParkourManager : MonoBehaviour
             }
         }
 
-        if (levelData == null)
-        {
-#if UNITY_EDITOR
-            // assets removed, levels are now .rksl only
-#endif
-        }
-
         if (levelData != null) PrepareLevel(levelData);
-        else Debug.LogWarning("[Rhythm] Нет LevelData! Создай через Create → Rhythm Parkour → Level Data и назначь в Manager", this);
+        else Debug.LogWarning("[Rhythm] Нет LevelData — ждём IsGameSceneLoader или создайте .rksl", this);
 
         if (autoPlayOnStart && levelData != null && levelData.music != null)
             Invoke(nameof(Play), autoPlayDelay);
@@ -262,6 +263,19 @@ public class RhythmParkourManager : MonoBehaviour
 
     public void PrepareLevel(RhythmLevelData data)
     {
+        // Уничтожаем старый пул чтобы не течь
+        foreach (var kv in pools)
+        {
+            while (kv.Value.Count > 0)
+            {
+                var ob = kv.Value.Dequeue();
+                if (ob != null) Destroy(ob.gameObject);
+            }
+        }
+        foreach (var o in active) if (o != null) Destroy(o.gameObject);
+        active.Clear();
+        pools.Clear();
+
         levelData = data;
         if (data == null) return;
         data.SortByTime();
@@ -269,8 +283,6 @@ public class RhythmParkourManager : MonoBehaviour
         MigrateSpeeds(data);
         sortedEvents = new List<ObstacleEvent>(data.events);
         nextEventIndex = 0;
-        active.Clear();
-        pools.Clear();
         UpdateTrackBounds();
         UpdateDirection();
 
