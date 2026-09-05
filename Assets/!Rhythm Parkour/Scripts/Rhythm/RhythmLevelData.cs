@@ -51,6 +51,10 @@ public class RhythmLevelData
     public Color obstacleColor = Color.white;
     public Color trackColor = new Color(0.2f, 0.6f, 1f, 1f);
     public bool sphereRotates = true;
+    [Tooltip("Имя материала для препятствий по умолчанию (пусто = материал префаба). Сохраняется в .rksl")]
+    public string defaultObstacleMaterialName = "";
+    [Tooltip("Опционально прямой референс для редактора (не сериализуется в .rksl, синхронизируется по имени)")]
+    public Material defaultObstacleMaterial;
 
     [Header("Префабы (DEPRECATED — теперь глобально)")]
     [Tooltip("Устарело: теперь префабы берутся из GlobalObstacleCatalog (Resources/GlobalObstacleCatalog). Оставлено для совместимости старых уровней.")]

@@ -32,10 +32,12 @@ public class TimelineUI : MonoBehaviour
     [HideInInspector] public TextMeshProUGUI beatLabel;
     public GameObject notePrefab;
     public Vector2 noteSize = new Vector2(36f, 48f);
-    [Tooltip("Если true — размер нот масштабируется вместе с зумом таймлайна")]
+    [Tooltip("Если true — ширина нот масштабируется вместе с зумом таймлайна")]
     public bool scaleNotesWithZoom = true;
-    [Range(0.5f, 2f)] public float noteZoomScaleMin = 0.85f;
-    [Range(1f, 3f)] public float noteZoomScaleMax = 1.8f;
+    [Tooltip("Только ширина растягивается, высота почти не меняется")]
+    public bool scaleNotesWidthOnly = true;
+    [Range(0.5f, 2f)] public float noteZoomScaleMin = 0.7f;
+    [Range(1f, 4f)] public float noteZoomScaleMax = 3f;
     public bool notePrefabUseCustomView = true;
     public float quantStep = 0.5f;
     public bool autoQuantize = true;
@@ -54,6 +56,8 @@ public class TimelineUI : MonoBehaviour
     public Color gridBarColor = new Color(1f, 1f, 1f, 0.38f);
     public Color gridBeatColor = new Color(1f, 1f, 1f, 0.28f);
     public Color gridHalfColor = new Color(1f, 1f, 1f, 0.18f);
+    [Header("Waveform")]
+    public bool showWaveform = true;
     public int waveformTexWidth = 8192;
     public int waveformTexHeight = 140;
     // waveform статичен — без пульсации
@@ -72,7 +76,7 @@ public class TimelineUI : MonoBehaviour
     public TextMeshProUGUI autoscrollToggleLabel;
 
     [Header("Preview 3D")]
-    public TimelineObstaclePreview preview;
+    public TimelinePreview preview;
     public Button previewToggleButton;
     public TextMeshProUGUI previewToggleLabel;
 
@@ -127,6 +131,12 @@ public class TimelineUI : MonoBehaviour
     float lastGridStepSec = -1f;
     float lastGridClipLen = -1f;
     float currentTime;
+    // Оптимизация: пулы и троттлинг
+    List<GameObject> gridLinePool = new List<GameObject>();
+    List<GameObject> gridLabelPool = new List<GameObject>();
+    float lastGridRefreshTime;
+    int lastGridLabelEvery = -1;
+    List<GameObject> notePool = new List<GameObject>();
     bool isScrubbingWaveform;
     bool wasPlayingBeforeScrub;
     float scrubSavedVolume = 1f;
@@ -181,7 +191,7 @@ public class TimelineUI : MonoBehaviour
         }
         if (autoscrollToggleButton != null && autoscrollToggleLabel == null) autoscrollToggleLabel = autoscrollToggleButton.GetComponentInChildren<TextMeshProUGUI>();
         // preview
-        if (preview == null) preview = FindObjectOfType<TimelineObstaclePreview>();
+        if (preview == null) preview = FindObjectOfType<TimelinePreview>();
         if (previewToggleButton == null)
         {
             var go = GameObject.Find("ButtonPreview");
@@ -207,12 +217,41 @@ public class TimelineUI : MonoBehaviour
         if (previewToggleButton != null && previewToggleLabel == null) previewToggleLabel = previewToggleButton.GetComponentInChildren<TextMeshProUGUI>();
     }
 
+    void OptimizeTimelineLayout()
+    {
+        // Отключаем тяжёлые Layout компоненты которые вызывают rebuild каждый кадр при зуме
+        if (timelineContent != null)
+        {
+            var fitter = timelineContent.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+            var hlg = timelineContent.GetComponent<HorizontalLayoutGroup>();
+            if (hlg != null) hlg.enabled = false;
+            var vlg = timelineContent.GetComponent<VerticalLayoutGroup>();
+            if (vlg != null) vlg.enabled = false;
+            var glg = timelineContent.GetComponent<GridLayoutGroup>();
+            if (glg != null) glg.enabled = false;
+        }
+        if (gridContainer != null)
+        {
+            var fitter = gridContainer.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+        }
+        if (notesContainer != null)
+        {
+            var fitter = notesContainer.GetComponent<ContentSizeFitter>();
+            if (fitter != null) fitter.enabled = false;
+        }
+        // Отключаем Canvas pixel perfect если есть
+        if (rootCanvas != null) rootCanvas.pixelPerfect = false;
+    }
+
     void Start()
     {
         if (waveformRect == null && timelineContent != null) waveformRect = timelineContent;
         if (timelineViewport == null && timelineScrollRect != null) timelineViewport = timelineScrollRect.viewport;
         if (waveformRect == null && waveformImage != null) waveformRect = waveformImage.rectTransform;
         if (timelineScrollbar == null && timelineScrollRect != null) timelineScrollbar = timelineScrollRect.horizontalScrollbar;
+        OptimizeTimelineLayout();
         // грид теперь показывается (сетка секунд) — не выключаем
         // if (gridContainer != null) gridContainer.gameObject.SetActive(false);
         BindEvents();
@@ -273,9 +312,9 @@ public class TimelineUI : MonoBehaviour
         zoom = nz;
         isZoomAnimating = false;
         RefreshScrollContent();
-        RefreshGrid(true);
+        // Сетку не форсим — перерисуется только если сменился labelEvery или ClipLen
+        if (Time.unscaledTime - lastGridRefreshTime > 0.08f) RefreshGrid(false);
         ApplyNoteZoomScale();
-        if (Mathf.Abs(zoom - lastWaveformGenZoom) > 0.15f) RefreshWaveform(true);
         UpdateScrollToPlayhead(true);
         if (waveformRect != null) waveformRect.localScale = Vector3.one;
     }
@@ -310,7 +349,7 @@ public class TimelineUI : MonoBehaviour
         if (playPauseButton != null) { playPauseButton.onClick.RemoveListener(TogglePlayPause); playPauseButton.onClick.AddListener(TogglePlayPause); }
         if (autoscrollToggleButton != null) { autoscrollToggleButton.onClick.RemoveListener(ToggleAutoscroll); autoscrollToggleButton.onClick.AddListener(ToggleAutoscroll); }
         // preview
-        if (preview == null) preview = FindObjectOfType<TimelineObstaclePreview>();
+        if (preview == null) preview = FindObjectOfType<TimelinePreview>();
         if (previewToggleButton != null)
         {
             previewToggleButton.onClick.RemoveListener(TogglePreview);
@@ -568,7 +607,7 @@ public class TimelineUI : MonoBehaviour
         RefreshNotes();
         ShowPropertiesPanel(selectedIndex);
         if (closeGridOnSelect) HidePrefabGrid();
-        if (preview != null) preview.ForceRefresh(); else FindObjectOfType<TimelineObstaclePreview>()?.ForceRefresh();
+        if (preview != null) preview.ForceRefresh(); else FindObjectOfType<TimelinePreview>()?.ForceRefresh();
         FlashStatus($"Вид → {GetPrefabName(idx)}");
     }
 
@@ -681,7 +720,7 @@ public class TimelineUI : MonoBehaviour
 
     public void TogglePreview()
     {
-        if (preview == null) preview = FindObjectOfType<TimelineObstaclePreview>();
+        if (preview == null) preview = FindObjectOfType<TimelinePreview>();
         if (preview == null) { Debug.LogWarning("[Timeline] Preview не найден", this); return; }
         preview.TogglePreview();
         UpdatePreviewToggleVisual();
@@ -782,13 +821,20 @@ public class TimelineUI : MonoBehaviour
     void RefreshWaveform(bool force = false)
     {
         if (waveformImage == null) return;
+        if (!showWaveform)
+        {
+            waveformImage.enabled = false;
+            if (waveformImage.texture != null) waveformImage.texture = null;
+            return;
+        }
+        waveformImage.enabled = true;
         AudioClip clip = levelData != null ? levelData.music : null;
         if (clip == null && audioSource != null) clip = audioSource.clip;
         if (clip == null) { waveformImage.texture = null; waveformImage.color = new Color(1, 1, 1, 0.08f); return; }
-        int desiredWidth = Mathf.Clamp(Mathf.RoundToInt(GetClipLength() * pixelsPerSecond * zoom), 2048, 16384);
-        desiredWidth = Mathf.Clamp(Mathf.Max(desiredWidth, waveformTexWidth), 1024, 16384);
-        if (desiredWidth < 2048) desiredWidth = Mathf.Clamp(waveformTexWidth, 2048, 16384);
-        bool needRegen = force || clip != lastClip || waveformTex == null || desiredWidth != lastWaveformGenWidth || Mathf.Abs(pixelsPerSecond - lastWaveformGenPPS) > 0.1f || Mathf.Abs(zoom - lastWaveformGenZoom) > 0.05f;
+        // Адаптивная ширина с учётом зума, но троттлинг — не пиксельный
+        int desiredWidth = Mathf.Clamp(Mathf.RoundToInt(GetClipLength() * pixelsPerSecond * Mathf.Clamp(zoom, 0.8f, 2.2f)), 4096, 16384);
+        desiredWidth = Mathf.Clamp(Mathf.Max(desiredWidth, waveformTexWidth), 4096, 16384);
+        bool needRegen = force || clip != lastClip || waveformTex == null || desiredWidth != lastWaveformGenWidth || Mathf.Abs(pixelsPerSecond - lastWaveformGenPPS) > 1f || Mathf.Abs(zoom - lastWaveformGenZoom) > 0.22f;
         if (!needRegen) return;
         lastClip = clip;
         lastWaveformGenWidth = desiredWidth;
@@ -800,7 +846,8 @@ public class TimelineUI : MonoBehaviour
         waveformTex = WaveformGenerator.GenerateTexture(waveformData, desiredWidth, h, waveformWaveColor, waveformBgColor);
         waveformImage.texture = waveformTex;
         waveformImage.color = Color.white;
-        // сброс скейла — без анимации
+        // Сглаживание — убирает пиксельность
+        if (waveformTex != null) waveformTex.filterMode = FilterMode.Bilinear;
         if (waveformRect != null) waveformRect.localScale = Vector3.one;
     }
 
@@ -818,6 +865,39 @@ public class TimelineUI : MonoBehaviour
         float clipLen = GetClipLength();
         if (clipLen < 0.01f)
         {
+            foreach (var go in gridLinePool) if (go) go.SetActive(false);
+            foreach (var go in gridLabelPool) if (go) go.SetActive(false);
+            gridContainer.gameObject.SetActive(false);
+            return;
+        }
+        float pps = pixelsPerSecond * Mathf.Max(0.1f, zoom);
+        int labelEvery = 1;
+        if (pps < 25f) labelEvery = 10;
+        else if (pps < 50f) labelEvery = 5;
+        else if (pps < 90f) labelEvery = 2;
+        else labelEvery = 1;
+
+        bool need = force
+            || Mathf.Abs(clipLen - lastGridClipLen) > 0.1f
+            || Mathf.Abs(pixelsPerSecond - lastGridStepSec) > 1f
+            || labelEvery != lastGridLabelEvery
+            || gridLinePool.Count == 0;
+        if (!need)
+        {
+            // Проверяем только zoom без форса — уже отфильтровано в вызывающем коде
+            if (Mathf.Abs(zoom - lastGridZoom) < 0.05f) return;
+        }
+        // Троттлинг — не чаще 12Гц
+        if (!force && Time.unscaledTime - lastGridRefreshTime < 0.08f) return;
+        lastGridZoom = zoom;
+        lastGridClipLen = clipLen;
+        lastGridStepSec = pixelsPerSecond;
+        lastGridLabelEvery = labelEvery;
+        lastGridRefreshTime = Time.unscaledTime;
+
+        // Один раз почистить старый мусор если пулы пустые а в иерархии есть объекты (миграция с бывшего Destroy-подхода)
+        if (gridLinePool.Count == 0 && gridContainer.childCount > 0)
+        {
             for (int i = gridContainer.childCount - 1; i >= 0; i--)
             {
 #if UNITY_EDITOR
@@ -827,49 +907,27 @@ public class TimelineUI : MonoBehaviour
                 Destroy(gridContainer.GetChild(i).gameObject);
 #endif
             }
-            gridContainer.gameObject.SetActive(false);
-            return;
         }
-        // проверка нужно ли перерисовывать
-        bool need = force
-            || Mathf.Abs(zoom - lastGridZoom) > 0.02f
-            || Mathf.Abs(clipLen - lastGridClipLen) > 0.1f
-            || Mathf.Abs(pixelsPerSecond - lastGridStepSec) > 1f
-            || gridContainer.childCount == 0;
-        if (!need) return;
-        lastGridZoom = zoom;
-        lastGridClipLen = clipLen;
-        lastGridStepSec = pixelsPerSecond;
 
-        for (int i = gridContainer.childCount - 1; i >= 0; i--)
-        {
-#if UNITY_EDITOR
-            if (!Application.isPlaying) DestroyImmediate(gridContainer.GetChild(i).gameObject);
-            else Destroy(gridContainer.GetChild(i).gameObject);
-#else
-            Destroy(gridContainer.GetChild(i).gameObject);
-#endif
-        }
         gridContainer.gameObject.SetActive(true);
-
-        // gridContainer растянут на весь контент (anchor 0,0 -1,1) — дочерние линии ставим по norm
-        float pps = pixelsPerSecond * Mathf.Max(0.1f, zoom); // пикселей в секунду
-        int labelEvery = 1;
-        if (pps < 25f) labelEvery = 10;
-        else if (pps < 50f) labelEvery = 5;
-        else if (pps < 90f) labelEvery = 2;
-        else labelEvery = 1;
-
         int totalSecs = Mathf.CeilToInt(clipLen);
-        for (int sec = 0; sec <= totalSecs; sec++)
+        int neededLines = totalSecs + 1;
+        // Пул линий
+        while (gridLinePool.Count < neededLines)
+        {
+            var lineGO = new GameObject($"Grid_Pooled_{gridLinePool.Count}s", typeof(RectTransform), typeof(Image));
+            lineGO.transform.SetParent(gridContainer, false);
+            var img = lineGO.GetComponent<Image>(); img.raycastTarget = false;
+            gridLinePool.Add(lineGO);
+        }
+        for (int sec = 0; sec < neededLines; sec++)
         {
             float norm = Mathf.Clamp01(sec / clipLen);
             bool is5 = sec % 5 == 0;
             bool is10 = sec % 10 == 0;
-
-            // линия
-            var lineGO = new GameObject($"Grid_{sec}s", typeof(RectTransform), typeof(Image));
-            lineGO.transform.SetParent(gridContainer, false);
+            var lineGO = gridLinePool[sec];
+            lineGO.SetActive(true);
+            lineGO.name = $"Grid_{sec}s";
             var rt = lineGO.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(norm, 0f);
             rt.anchorMax = new Vector2(norm, 1f);
@@ -880,53 +938,64 @@ public class TimelineUI : MonoBehaviour
             if (is10) img.color = gridSec5Color;
             else if (is5) img.color = Color.Lerp(gridSecColor, gridSec5Color, 0.5f);
             else img.color = gridSecColor * 0.65f;
-            img.raycastTarget = false;
-
-            // подпись секунд (каждые labelEvery или каждую 5 сек крупно)
-            if (sec % labelEvery == 0 || is5)
-            {
-                var labelGO = new GameObject($"Lbl_{sec}", typeof(RectTransform));
-                labelGO.transform.SetParent(gridContainer, false);
-                var lrt = labelGO.GetComponent<RectTransform>();
-                lrt.anchorMin = lrt.anchorMax = new Vector2(norm, 1f);
-                lrt.pivot = new Vector2(0f, 1f);
-                lrt.anchoredPosition = new Vector2(3f, -2f);
-                lrt.sizeDelta = new Vector2(70f, 18f);
-
-                var tmp = labelGO.AddComponent<TextMeshProUGUI>();
-                tmp.text = FormatTime(sec); // 0:01.00
-                if (sec == 0) tmp.text = "0:00";
-                tmp.fontSize = is10 ? 11f : 10f;
-                tmp.color = is10 ? new Color(1,1,1,0.85f) : is5 ? new Color(1,1,1,0.65f) : new Color(1,1,1,0.45f);
-                tmp.alignment = TextAlignmentOptions.Left;
-                tmp.raycastTarget = false;
-                tmp.textWrappingMode = TextWrappingModes.NoWrap;
-
-                // подложка для читаемости
-                var bgGO = new GameObject("BG", typeof(RectTransform), typeof(Image));
-                bgGO.transform.SetParent(labelGO.transform, false);
-                bgGO.transform.SetAsFirstSibling();
-                var bgRT = bgGO.GetComponent<RectTransform>();
-                bgRT.anchorMin = Vector2.zero; bgRT.anchorMax = Vector2.one;
-                bgRT.offsetMin = new Vector2(-2, -1); bgRT.offsetMax = new Vector2(2, 1);
-                var bgImg = bgGO.GetComponent<Image>();
-                bgImg.color = new Color(0,0,0,0.28f);
-                bgImg.raycastTarget = false;
-            }
-
         }
+        for (int i = neededLines; i < gridLinePool.Count; i++) if (gridLinePool[i]) gridLinePool[i].SetActive(false);
+
+        // Пул лейблов — считаем сколько нужно
+        int neededLabels = 0;
+        for (int sec = 0; sec <= totalSecs; sec++)
+        {
+            bool is5 = sec % 5 == 0;
+            if (sec % labelEvery == 0 || is5) neededLabels++;
+        }
+        while (gridLabelPool.Count < neededLabels)
+        {
+            var labelGO = new GameObject($"Lbl_Pooled_{gridLabelPool.Count}", typeof(RectTransform));
+            labelGO.transform.SetParent(gridContainer, false);
+            var lrt = labelGO.GetComponent<RectTransform>();
+            lrt.pivot = new Vector2(0f, 1f);
+            lrt.sizeDelta = new Vector2(70f, 18f);
+            var tmp = labelGO.AddComponent<TextMeshProUGUI>();
+            tmp.alignment = TextAlignmentOptions.Left;
+            tmp.raycastTarget = false;
+            tmp.textWrappingMode = TextWrappingModes.NoWrap;
+            var bgGO = new GameObject("BG", typeof(RectTransform), typeof(Image));
+            bgGO.transform.SetParent(labelGO.transform, false);
+            bgGO.transform.SetAsFirstSibling();
+            var bgRT = bgGO.GetComponent<RectTransform>();
+            bgRT.anchorMin = Vector2.zero; bgRT.anchorMax = Vector2.one;
+            bgRT.offsetMin = new Vector2(-2, -1); bgRT.offsetMax = new Vector2(2, 1);
+            var bgImg = bgGO.GetComponent<Image>(); bgImg.color = new Color(0,0,0,0.28f); bgImg.raycastTarget = false;
+            gridLabelPool.Add(labelGO);
+        }
+        int labelIdx = 0;
+        for (int sec = 0; sec <= totalSecs; sec++)
+        {
+            bool is5 = sec % 5 == 0;
+            bool is10 = sec % 10 == 0;
+            if (!(sec % labelEvery == 0 || is5)) continue;
+            float norm = Mathf.Clamp01(sec / clipLen);
+            var labelGO = gridLabelPool[labelIdx++];
+            labelGO.SetActive(true);
+            labelGO.name = $"Lbl_{sec}";
+            var lrt = labelGO.GetComponent<RectTransform>();
+            lrt.anchorMin = lrt.anchorMax = new Vector2(norm, 1f);
+            lrt.anchoredPosition = new Vector2(3f, -2f);
+            var tmp = labelGO.GetComponent<TextMeshProUGUI>();
+            tmp.text = sec == 0 ? "0:00" : FormatTime(sec);
+            tmp.fontSize = is10 ? 11f : 10f;
+            tmp.color = is10 ? new Color(1,1,1,0.85f) : is5 ? new Color(1,1,1,0.65f) : new Color(1,1,1,0.45f);
+        }
+        for (int i = labelIdx; i < gridLabelPool.Count; i++) if (gridLabelPool[i]) gridLabelPool[i].SetActive(false);
     }
 
     public void RefreshNotes()
     {
         if (isDraggingNote) return;
         if (notesContainer == null || levelData == null) return;
-        for (int i = noteGos.Count - 1; i >= 0; i--) if (noteGos[i] != null) Destroy(noteGos[i]);
-        noteGos.Clear();
         float clipLen = GetClipLength();
         if (clipLen < 0.01f)
         {
-            // фолбэк если нет музыки — считаем по нотам
             clipLen = 60f;
             if (levelData.events.Count > 0)
             {
@@ -935,7 +1004,61 @@ public class TimelineUI : MonoBehaviour
                 clipLen = Mathf.Max(30f, maxT + 5f);
             }
         }
-        for (int i = 0; i < levelData.events.Count; i++) { var ev = levelData.events[i]; float hitTime = GetHitTime(ev); float norm = Mathf.Clamp01(hitTime / clipLen); var go = CreateNoteGO(i, ev, norm); noteGos.Add(go); }
+        // Пул: переиспользуем существующие GO вместо Destroy/Instantiate
+        // Скрываем лишние
+        for (int i = levelData.events.Count; i < noteGos.Count; i++)
+        {
+            if (noteGos[i] != null) noteGos[i].SetActive(false);
+        }
+        // Убираем лишние из списка но оставляем в пуле notePool
+        while (noteGos.Count > levelData.events.Count)
+        {
+            var go = noteGos[noteGos.Count - 1];
+            noteGos.RemoveAt(noteGos.Count - 1);
+            if (go != null) { go.SetActive(false); notePool.Add(go); }
+        }
+        for (int i = 0; i < levelData.events.Count; i++)
+        {
+            var ev = levelData.events[i];
+            float hitTime = GetHitTime(ev);
+            float norm = Mathf.Clamp01(hitTime / clipLen);
+            GameObject go = null;
+            if (i < noteGos.Count && noteGos[i] != null)
+            {
+                go = noteGos[i];
+                // Обновляем существующую ноту без пересоздания
+                var rt = go.GetComponent<RectTransform>();
+                if (rt != null) { rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.anchoredPosition = Vector2.zero; }
+                go.name = $"Note_{i}_{ev.prefabIndex}";
+                // Обновляем визуал (цвет, выделение)
+                UpdateNoteVisual(go, i, ev);
+                go.SetActive(true);
+            }
+            else
+            {
+                if (notePool.Count > 0)
+                {
+                    go = notePool[notePool.Count - 1];
+                    notePool.RemoveAt(notePool.Count - 1);
+                    go.transform.SetParent(notesContainer, false);
+                    var rt = go.GetComponent<RectTransform>();
+                    if (rt != null) { rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.anchoredPosition = Vector2.zero; rt.sizeDelta = GetScaledNoteSize(); }
+                    go.name = $"Note_{i}_{ev.prefabIndex}";
+                    UpdateNoteVisual(go, i, ev);
+                    go.SetActive(true);
+                    if (i < noteGos.Count) noteGos[i] = go;
+                    else noteGos.Add(go);
+                }
+                else
+                {
+                    go = CreateNoteGO(i, ev, norm);
+                    if (i < noteGos.Count) noteGos[i] = go;
+                    else noteGos.Add(go);
+                }
+            }
+        }
+        // Удаляем лишние если уровень уменьшился (уже скрыты)
+        ApplyNoteZoomScale();
         if (selectedIndex >= 0) RefreshPropertiesPanel(); else HidePropertiesPanel();
     }
 
@@ -1000,6 +1123,75 @@ public class TimelineUI : MonoBehaviour
         var endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
         endDrag.callback.AddListener((_) => EndNoteDrag()); et.triggers.Add(endDrag);
         return go;
+    }
+
+    void UpdateNoteVisual(GameObject go, int index, ObstacleEvent ev)
+    {
+        if (go == null) return;
+        var rt = go.GetComponent<RectTransform>();
+        if (rt != null)
+        {
+            rt.sizeDelta = GetScaledNoteSize();
+            if (ev.scale != Vector3.one && ev.scale != Vector3.zero) { float avg=(ev.scale.x+ev.scale.y+ev.scale.z)/3f; rt.sizeDelta *= Mathf.Clamp(avg,0.6f,2.2f); }
+            if (rt.sizeDelta.x < 8) rt.sizeDelta = GetScaledNoteSize();
+            // lane offset
+            Vector2 basePos = Vector2.zero;
+            if (Mathf.Abs(ev.position.x) > 0.01f) basePos += new Vector2(0, ev.position.x * 7f);
+            rt.anchoredPosition = basePos;
+        }
+        var img = go.GetComponent<Image>(); if (img == null) img = go.GetComponentInChildren<Image>();
+        if (img != null)
+        {
+            Color noteCol = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex);
+            img.color = noteCol;
+        }
+        bool isSel = selectedIndex == index || selectedIndices.Contains(index);
+        if (notePrefabUseCustomView)
+        {
+            var custom = go.GetComponent<ITimelineNoteView>();
+            if (custom != null) custom.Setup(index, ev, GetHitBeat(ev), isSel);
+        }
+        Transform selTf = go.transform.Find("Selected");
+        if (selTf != null) selTf.gameObject.SetActive(isSel);
+        var outline = go.GetComponent<Outline>();
+        if (isSel)
+        {
+            if (outline == null) { outline = go.AddComponent<Outline>(); outline.effectColor = Color.white; outline.effectDistance = new Vector2(2,2); }
+            if (selTf == null) outline.enabled = true;
+        }
+        else
+        {
+            if (outline != null && selTf == null) { Destroy(outline); }
+            else if (outline != null) outline.enabled = false;
+        }
+        // Перепривязка кликов на новый индекс
+        var btn = go.GetComponent<Button>();
+        if (btn != null)
+        {
+            btn.onClick.RemoveAllListeners();
+            int captured = index;
+            btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
+        }
+        var et = go.GetComponent<EventTrigger>();
+        if (et != null)
+        {
+            et.triggers.Clear();
+            int captured = index;
+            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
+            entry.callback.AddListener((data) => { var ped = (PointerEventData)data; if (ped.button == PointerEventData.InputButton.Right) RemoveNoteAt(captured); });
+            et.triggers.Add(entry);
+            var hoverEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (statusLabel != null) statusLabel.text = $"{FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Ctrl+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
+            et.triggers.Add(hoverEntry);
+            var exitEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
+            exitEntry.callback.AddListener((_) => ClearStatus()); et.triggers.Add(exitEntry);
+            var beginDrag = new EventTrigger.Entry { eventID = EventTriggerType.BeginDrag };
+            beginDrag.callback.AddListener((data) => { var ped = (PointerEventData)data; ped.Use(); StartNoteDrag(captured, ped); }); et.triggers.Add(beginDrag);
+            var drag = new EventTrigger.Entry { eventID = EventTriggerType.Drag };
+            drag.callback.AddListener((data) => OnNoteDrag((PointerEventData)data)); et.triggers.Add(drag);
+            var endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
+            endDrag.callback.AddListener((_) => EndNoteDrag()); et.triggers.Add(endDrag);
+        }
     }
 
     void StartNoteDrag(int idx, PointerEventData ped)
@@ -1103,17 +1295,32 @@ public class TimelineUI : MonoBehaviour
         if (!scaleNotesWithZoom) return noteSize;
         float t = Mathf.InverseLerp(0.25f, 4f, zoom);
         float s = Mathf.Lerp(noteZoomScaleMin, noteZoomScaleMax, t);
+        if (scaleNotesWidthOnly) return new Vector2(noteSize.x * s, noteSize.y * Mathf.Lerp(1f, 1.08f, t));
         return noteSize * s;
     }
     void ApplyNoteZoomScale()
     {
         if (!scaleNotesWithZoom || noteGos == null) return;
-        Vector2 scaled = GetScaledNoteSize();
-        foreach (var go in noteGos)
+        Vector2 baseScaled = GetScaledNoteSize();
+        for (int i = 0; i < noteGos.Count; i++)
         {
+            var go = noteGos[i];
             if (go == null) continue;
             var rt = go.GetComponent<RectTransform>();
-            if (rt != null) rt.sizeDelta = scaled;
+            if (rt == null) continue;
+            Vector2 scaled = baseScaled;
+            // Учитываем per-note scale
+            if (levelData != null && i < levelData.events.Count)
+            {
+                var ev = levelData.events[i];
+                if (ev.scale != Vector3.one && ev.scale != Vector3.zero)
+                {
+                    float avg = (ev.scale.x + ev.scale.y + ev.scale.z) / 3f;
+                    scaled *= Mathf.Clamp(avg, 0.6f, 2.2f);
+                    if (scaled.x < 8) scaled = baseScaled;
+                }
+            }
+            rt.sizeDelta = scaled;
         }
     }
     Color GetColorForPrefab(int idx) { float h = (idx * 0.37f) % 1f; return Color.HSVToRGB(h, 0.78f, 0.92f); }
@@ -1158,9 +1365,9 @@ public class TimelineUI : MonoBehaviour
             isZoomAnimating = false;
             if (waveformRect != null) waveformRect.localScale = Vector3.one;
             RefreshScrollContent();
-            RefreshGrid(true);
+            // Финальная сетка без форса — только если реально нужно
+            if (Time.unscaledTime - lastGridRefreshTime > 0.05f) RefreshGrid(false);
             ApplyNoteZoomScale();
-            RefreshWaveform(true);
             UpdatePlayhead();
             if (_pendingZoomCursorTime >= 0f) { ApplyZoomCursorCorrection(_pendingZoomCursorTime, _pendingZoomCursorScreenPos); _pendingZoomCursorTime = -1f; }
             else UpdateScrollToPlayhead(false);
@@ -1171,8 +1378,8 @@ public class TimelineUI : MonoBehaviour
         if (Mathf.Abs(zoom - targetZoom) < 0.005f) zoom = targetZoom;
         RefreshScrollContent();
         ApplyNoteZoomScale();
-        // сетку тоже обновляем т.к. интервал меняется от pps
-        if (Mathf.Abs(zoom - prevZoom) > 0.03f) RefreshGrid(false);
+        // Сетку обновляем редко — только при смене labelEvery и не чаще 10Гц
+        if (Mathf.Abs(zoom - prevZoom) > 0.08f && Time.unscaledTime - lastGridRefreshTime > 0.1f) RefreshGrid(false);
         UpdatePlayhead();
         if (_pendingZoomCursorTime >= 0f) ApplyZoomCursorCorrection(_pendingZoomCursorTime, _pendingZoomCursorScreenPos);
         else if (autoScrollWithPlayhead) UpdateScrollToPlayhead(false);
@@ -1561,7 +1768,7 @@ public class TimelineUI : MonoBehaviour
         // применяем только вид — ко всем выделенным
         var tgt = selectedIndices.Count > 1 ? new System.Collections.Generic.List<int>(selectedIndices) : new System.Collections.Generic.List<int>{selectedIndex};
         foreach (var ti in tgt) { if (ti<0||ti>=levelData.events.Count) continue; var ee = levelData.events[ti]; ee.prefabIndex = newPrefab; levelData.events[ti]=ee; }
-        if (preview != null) preview.ForceRefresh(); else FindObjectOfType<TimelineObstaclePreview>()?.ForceRefresh();
+        if (preview != null) preview.ForceRefresh(); else FindObjectOfType<TimelinePreview>()?.ForceRefresh();
         levelData.SortByTime();
         // после сортировки найдем первый измененный
         for (int i=0;i<levelData.events.Count;i++) if (tgt.Contains(i) || levelData.events[i].prefabIndex==newPrefab) { /* keep */ }
@@ -1862,7 +2069,7 @@ public class TimelineUI : MonoBehaviour
                     var pf = GlobalObstacleCatalog.GetPrefab(i);
                     if (pf==null && levelData!=null) pf=levelData.GetPrefab(i);
                     if (pf!=null) { var ob = pf.GetComponent<Obstacle>(); if (ob) ev.speed = ob.baseSpeed; fbSpeed = ev.speed.ToString("0.##"); }
-                    levelData.events[selectedIndex]=ev; RefreshNotes(); FindObjectOfType<TimelineObstaclePreview>()?.ForceRefresh(); fbShowGrid=false; fbLastIdx=-1;
+                    levelData.events[selectedIndex]=ev; RefreshNotes(); FindObjectOfType<TimelinePreview>()?.ForceRefresh(); fbShowGrid=false; fbLastIdx=-1;
                 }
                 GUI.backgroundColor = prev;
             }
@@ -1874,7 +2081,7 @@ public class TimelineUI : MonoBehaviour
                 {
                     Color prev = GUI.backgroundColor;
                     GUI.backgroundColor = ev.prefabIndex==i ? Color.green : Color.white;
-                    if (GUILayout.Button($"{i}", GUILayout.Width(38), GUILayout.Height(38))) { ev.prefabIndex=i; levelData.events[selectedIndex]=ev; RefreshNotes(); FindObjectOfType<TimelineObstaclePreview>()?.ForceRefresh(); fbShowGrid=false; fbLastIdx=-1; }
+                    if (GUILayout.Button($"{i}", GUILayout.Width(38), GUILayout.Height(38))) { ev.prefabIndex=i; levelData.events[selectedIndex]=ev; RefreshNotes(); FindObjectOfType<TimelinePreview>()?.ForceRefresh(); fbShowGrid=false; fbLastIdx=-1; }
                     GUI.backgroundColor = prev;
                 }
                 GUILayout.EndHorizontal();

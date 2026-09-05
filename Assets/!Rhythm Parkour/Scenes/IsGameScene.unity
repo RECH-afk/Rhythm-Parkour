@@ -962,6 +962,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   dspSongStartTime: 0
@@ -996,6 +998,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   conductor: {fileID: 820601936}
@@ -1288,7 +1292,7 @@ PrefabInstance:
     - target: {fileID: 9156347144040445544, guid: c82236c16aae9d34fbd437f8dea6e2c9,
         type: 3}
       propertyPath: sprintSpeed
-      value: 10
+      value: 15
       objectReference: {fileID: 0}
     - target: {fileID: 9156347144040445544, guid: c82236c16aae9d34fbd437f8dea6e2c9,
         type: 3}
@@ -1308,7 +1312,7 @@ PrefabInstance:
     - target: {fileID: 9156347144040445544, guid: c82236c16aae9d34fbd437f8dea6e2c9,
         type: 3}
       propertyPath: landingShakeDuration
-      value: 1
+      value: 0.8
       objectReference: {fileID: 0}
     - target: {fileID: 9156347144040445544, guid: c82236c16aae9d34fbd437f8dea6e2c9,
         type: 3}
@@ -2210,6 +2214,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   manager: {fileID: 0}

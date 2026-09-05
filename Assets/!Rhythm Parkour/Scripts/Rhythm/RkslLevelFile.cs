@@ -28,6 +28,7 @@ public class RkslManifest
     public Color obstacleColor = Color.white;
     public Color trackColor = new Color(0.2f, 0.6f, 1f, 1f);
     public bool sphereRotates = true;
+    public string defaultObstacleMaterialName = "";
 
     public float BeatToTime(float beat) => offset + beat * 60f / Mathf.Max(1f, bpm);
     public float TimeToBeat(float time) => (time - offset) * Mathf.Max(1f, bpm) / 60f;
@@ -275,6 +276,7 @@ public static class RkslFile
         data.obstacleColor = m.obstacleColor;
         data.trackColor = m.trackColor;
         data.sphereRotates = m.sphereRotates;
+        data.defaultObstacleMaterialName = m.defaultObstacleMaterialName ?? "";
         data.music = audioClip;
         data.video = videoClip;
         data.cover = cover;
@@ -285,6 +287,12 @@ public static class RkslFile
 
     public static RkslManifest FromRuntimeData(RhythmLevelData data)
     {
+        // Синхронизируем имя материала если задан референс
+        if (data.defaultObstacleMaterial != null && string.IsNullOrEmpty(data.defaultObstacleMaterialName))
+            data.defaultObstacleMaterialName = data.defaultObstacleMaterial.name;
+        else if (data.defaultObstacleMaterial != null && data.defaultObstacleMaterial.name != data.defaultObstacleMaterialName)
+            data.defaultObstacleMaterialName = data.defaultObstacleMaterial.name;
+
         return new RkslManifest
         {
             title = data.fullTitle,
@@ -298,6 +306,7 @@ public static class RkslFile
             obstacleColor = data.obstacleColor,
             trackColor = data.trackColor,
             sphereRotates = data.sphereRotates,
+            defaultObstacleMaterialName = data.defaultObstacleMaterialName ?? "",
             audioFile = !string.IsNullOrEmpty(data.audioPath) ? Path.GetFileName(data.audioPath) : "",
             videoFile = !string.IsNullOrEmpty(data.videoPath) ? Path.GetFileName(data.videoPath) : "",
             coverFile = data.cover != null ? "cover.png" : ""

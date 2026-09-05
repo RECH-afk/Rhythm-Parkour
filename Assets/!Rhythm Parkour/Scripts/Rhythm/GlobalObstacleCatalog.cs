@@ -14,6 +14,8 @@ public class GlobalObstacleCatalog : ScriptableObject
 {
     [Tooltip("Общий пул объектов для всех уровней (как в GD). Порядок важен — индекс сохраняется в .rksl")]
     public List<GameObject> prefabs = new List<GameObject>();
+    [Tooltip("Доступные материалы для препятствий. Первый = дефолтный")]
+    public List<Material> obstacleMaterials = new List<Material>();
 
     // ── Singleton via Resources ──
     static GlobalObstacleCatalog _instance;
@@ -100,6 +102,18 @@ public class GlobalObstacleCatalog : ScriptableObject
         catalog.prefabs = found;
         if (found.Count > 0)
             Debug.Log($"[GlobalCatalog] Авто-заполнено {found.Count} префабов из Obstacles/");
+        // Материалы
+        var matGuids = AssetDatabase.FindAssets("t:Material", new[] { "Assets/!Rhythm Parkour/Materials/Obstacles" });
+        List<Material> mats = new List<Material>();
+        foreach (var g in matGuids)
+        {
+            string p = AssetDatabase.GUIDToAssetPath(g);
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(p);
+            if (mat != null) mats.Add(mat);
+        }
+        mats.Sort((a,b)=> string.Compare(a.name,b.name, System.StringComparison.Ordinal));
+        catalog.obstacleMaterials = mats;
+        if (mats.Count>0) Debug.Log($"[GlobalCatalog] Авто-заполнено {mats.Count} материалов");
     }
 
     [InitializeOnLoadMethod]
@@ -161,5 +175,36 @@ public class GlobalObstacleCatalog : ScriptableObject
         var inst = Instance;
         if (inst == null) return new List<GameObject>();
         return inst.prefabs;
+    }
+
+    public static Material GetMaterial(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        var inst = Instance;
+        if (inst != null && inst.obstacleMaterials != null)
+        {
+            foreach (var m in inst.obstacleMaterials)
+                if (m != null && m.name == name) return m;
+        }
+        // Fallback: Resources
+        var res = Resources.Load<Material>(name);
+        if (res != null) return res;
+        // Try Find by name among all loaded materials
+        var allMats = Resources.FindObjectsOfTypeAll<Material>();
+        foreach (var m in allMats) if (m.name == name) return m;
+        return null;
+    }
+    public static List<Material> GetAllMaterials()
+    {
+        var inst = Instance;
+        if (inst == null || inst.obstacleMaterials == null) return new List<Material>();
+        return inst.obstacleMaterials;
+    }
+    public static Material GetDefaultMaterial()
+    {
+        var inst = Instance;
+        if (inst != null && inst.obstacleMaterials != null && inst.obstacleMaterials.Count>0)
+            return inst.obstacleMaterials[0];
+        return null;
     }
 }

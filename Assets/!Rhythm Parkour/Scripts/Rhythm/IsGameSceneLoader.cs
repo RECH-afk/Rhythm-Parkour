@@ -3,6 +3,7 @@ using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
+using UnityEngine.Video;
 
 /// <summary>
 /// Единственный авторитетный загрузчик уровня для IsGameScene.
@@ -166,12 +167,6 @@ public class IsGameSceneLoader : MonoBehaviour
             Debug.Log($"[IsGameSceneLoader] Fallback BPM {data.bpm:0} conf {det.confidence:0.##}");
         }
         catch {}
-        // авто-генерация если нет нот
-        if (data.events.Count == 0)
-        {
-            var cfg = RhythmAutoGenerator.FlexibleSettings.Default;
-            RhythmAutoGenerator.Generate(data, 0, cfg);
-        }
         LevelTransfer.levelData = data.CloneDeep();
         ApplyLevel(data);
     }
@@ -182,7 +177,6 @@ public class IsGameSceneLoader : MonoBehaviour
         if (manager == null) { Debug.LogError("[IsGameSceneLoader] manager null в ApplyLevel"); return; }
         RhythmLevelData toApply = data;
         try { toApply = data.CloneDeep(); } catch { }
-        // Не даём менеджеру затереть — отключаем его авто-Prepare если он ещё не сделал
         manager.levelData = toApply;
         manager.PrepareLevel(toApply);
         if (toApply.music != null && manager.musicSource != null)
@@ -190,10 +184,12 @@ public class IsGameSceneLoader : MonoBehaviour
             manager.musicSource.clip = toApply.music;
             manager.musicSource.Stop();
         }
+        // Видео — через VisualApplier (ставит url или clip)
+        LevelVisualApplier.Apply(toApply, manager.videoPlayer);
         var mi = FindObjectOfType<MusicInfoUI>();
         if (mi != null) mi.Show(toApply);
 
-        Debug.Log($"[IsGameSceneLoader] Применен '{toApply.fullTitle}' bpm={toApply.bpm} events={toApply.events.Count} music={(toApply.music?toApply.music.name:"null")}", this);
+        Debug.Log($"[IsGameSceneLoader] Применен '{toApply.fullTitle}' bpm={toApply.bpm} events={toApply.events.Count} music={(toApply.music?toApply.music.name:"null")} video={(toApply.videoPath??"null")}", this);
 
         if (manager.autoPlayOnStart)
         {
@@ -247,22 +243,6 @@ public class IsGameSceneLoader : MonoBehaviour
         var data = RkslFile.ToRuntimeData(man, clip, null, cover);
         data.audioPath = audioPath;
         data.videoPath = videoPath;
-        // Если .rksl пустой (0 нот) но есть музыка — авто-генерируем чтобы не было пустого уровня
-        if ((data.events == null || data.events.Count == 0) && clip != null)
-        {
-            Debug.Log($"[IsGameSceneLoader] rksl '{man.title}' пустой, генерирую ноты автоматом", this);
-            // пробуем детект BPM
-            try
-            {
-                var det = BpmDetector.Detect(clip);
-                data.bpm = Mathf.Clamp(det.bpm, 70f, 200f);
-                data.offset = det.offset;
-                Debug.Log($"[IsGameSceneLoader] Auto BPM {data.bpm:0} offset {data.offset:0.##} conf {det.confidence:0.##}");
-            }
-            catch {}
-            var cfg = RhythmAutoGenerator.FlexibleSettings.Default;
-            RhythmAutoGenerator.Generate(data, 0, cfg);
-        }
         LevelTransfer.levelData = data.CloneDeep();
         LevelTransfer.rkslPath = rkslPath;
         LevelTransfer.levelName = man.title;

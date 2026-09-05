@@ -101,23 +101,12 @@ public class MenuController : MonoBehaviour
 
     void CreateFallbackUI()
     {
-        // гарантируем EventSystem
-        if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
-        {
-            var esGO = new GameObject("EventSystem", typeof(UnityEngine.EventSystems.EventSystem), typeof(UnityEngine.EventSystems.StandaloneInputModule));
-            Debug.Log("[Menu] Создан EventSystem", esGO);
-        }
         Canvas canvas = GetComponentInParent<Canvas>();
         if (canvas == null) canvas = FindObjectOfType<Canvas>();
         if (canvas == null)
         {
-            var cgo = new GameObject("MenuCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-            canvas = cgo.GetComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100;
-            cgo.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            cgo.GetComponent<CanvasScaler>().referenceResolution = new Vector2(1920,1080);
-            Debug.Log("[Menu] Создан MenuCanvas", cgo);
+            Debug.LogWarning("[Menu] Canvas не найден — MenuController требует Canvas в сцене. Создай Canvas вручную и назначь menuPanel.", this);
+            return;
         }
         Debug.Log($"[Menu] CreateFallbackUI canvas={canvas.name} panel={(menuPanel!=null?menuPanel.name:"null")}", this);
 

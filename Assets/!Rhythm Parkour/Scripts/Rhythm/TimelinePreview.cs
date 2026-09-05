@@ -9,7 +9,7 @@ using TMPro;
 /// Вешай на тот же GameObject где TimelineUI, или на отдельный PreviewRoot в сцене IsLevelEditorScene.
 /// Требует: TimelineUI + RhythmParkourManager (для spawn/despawn точек)
 /// </summary>
-public class TimelineObstaclePreview : MonoBehaviour
+public class TimelinePreview : MonoBehaviour
 {
     [Header("Ссылки")]
     public TimelineUI timelineUI;

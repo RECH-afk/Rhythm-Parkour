@@ -315,7 +315,8 @@ public class RhythmParkourManager : MonoBehaviour
             }
         }
 
-        if (videoPlayer != null && data.video != null) videoPlayer.clip = data.video;
+        // Применяем глобальный визуал (партиклы, дорожка, сфера, видео url)
+        LevelVisualApplier.Apply(data, videoPlayer);
     }
 
     void MigrateSpeeds(RhythmLevelData data)
@@ -347,7 +348,18 @@ public class RhythmParkourManager : MonoBehaviour
         if (levelData == null || levelData.music == null) { Debug.LogWarning("[Rhythm] Нет LevelData/music", this); return; }
         PrepareLevel(levelData);
         conductor.Play(levelData, musicSource);
-        if (videoPlayer != null && levelData.video != null) { videoPlayer.clip = levelData.video; videoPlayer.Play(); }
+        if (videoPlayer != null)
+        {
+            // Видео: приоритет у файла на диске (из .rksl), иначе VideoClip
+            if (!string.IsNullOrEmpty(levelData.videoPath) && System.IO.File.Exists(levelData.videoPath))
+            {
+                videoPlayer.source = UnityEngine.Video.VideoSource.Url;
+                videoPlayer.url = RkslFile.GetFileUri(levelData.videoPath);
+                videoPlayer.Play();
+            }
+            else if (levelData.video != null) { videoPlayer.source = UnityEngine.Video.VideoSource.VideoClip; videoPlayer.clip = levelData.video; videoPlayer.Play(); }
+            else { videoPlayer.Stop(); }
+        }
         nextEventIndex = 0;
         isPlaying = true;
         currentTime = 0f;
@@ -467,6 +479,29 @@ public class RhythmParkourManager : MonoBehaviour
             }
         }
 
+        // Дефолтный материал уровня (если выбран)
+        {
+            Material defMat = null;
+            if (levelData != null)
+            {
+                if (!string.IsNullOrEmpty(levelData.defaultObstacleMaterialName))
+                    defMat = GlobalObstacleCatalog.GetMaterial(levelData.defaultObstacleMaterialName);
+                if (defMat == null && levelData.defaultObstacleMaterial != null)
+                    defMat = levelData.defaultObstacleMaterial;
+            }
+            if (defMat != null)
+            {
+                foreach (var r in ob.GetComponentsInChildren<Renderer>())
+                {
+                    var mats = r.materials;
+                    for (int i=0;i<mats.Length;i++)
+                    {
+                        mats[i] = new Material(defMat);
+                    }
+                    r.materials = mats;
+                }
+            }
+        }
         // пер-нотный цвет (если задан — перекрашиваем все рендеры), иначе возвращаем к глобальному/белому
         {
             Color toApply = Color.clear;

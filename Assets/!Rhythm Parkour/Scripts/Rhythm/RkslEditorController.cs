@@ -86,19 +86,41 @@ public class RkslEditorController : MonoBehaviour
             if (manTmp != null) manTmp.levelData = levelData;
         }
         if (audioLoader != null) audioLoader.onFileLoaded.AddListener(OnAudioLoaded);
-        if (videoLoader != null) videoLoader.onFileLoaded.AddListener((p, c) => { currentVideoPath = p; UpdateStatus($"Видео: {Path.GetFileName(p)}"); });
+        if (videoLoader != null) videoLoader.onFileLoaded.AddListener((p, c) => { currentVideoPath = p; UpdateStatus($"Видео: {Path.GetFileName(p)}"); if (levelData != null) levelData.videoPath = p; PreviewVideo(p); });
         if (coverLoader != null) coverLoader.onFileLoaded.AddListener((p, c) => { currentCoverPath = p; UpdateStatus($"Обложка: {Path.GetFileName(p)}"); LoadCoverPreview(p); });
 
         EnsureButtons();
+        EnsureVisualSettings();
 
         if (saveRkslButton != null) { saveRkslButton.onClick.RemoveAllListeners(); saveRkslButton.onClick.AddListener(SaveRksl); }
 
         if (levelData != null) PopulateUIFromData();
         else if (timelineUI != null && timelineUI.levelData != null) { levelData = timelineUI.levelData; PopulateUIFromData(); }
         else if (LevelTransfer.hasLevel) { levelData = LevelTransfer.levelData; PopulateUIFromData(); }
+        else if (levelData == null) { levelData = new RhythmLevelData(); if (timelineUI != null) timelineUI.levelData = levelData; }
         UpdateStatus("Готов — загрузите аудио и создавайте уровень (SAVE .RKSL)");
         // если есть трансфер — сразу обновить таймлайн
         if (LevelTransfer.hasLevel && timelineUI != null) { timelineUI.levelData = LevelTransfer.levelData; timelineUI.RefreshAll(); }
+        // Применяем визуал
+        if (levelData != null) LevelVisualApplier.Apply(levelData, FindObjectOfType<UnityEngine.Video.VideoPlayer>(), true);
+    }
+
+    void EnsureVisualSettings()
+    {
+        if (FindObjectOfType<LevelEditorVisualSettings>() != null) return;
+        var go = new GameObject("LevelVisualSettings (Auto)");
+        go.AddComponent<LevelEditorVisualSettings>();
+        Debug.Log("[RkslEditor] LevelEditorVisualSettings авто-создан", go);
+    }
+    void PreviewVideo(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+        var vp = FindObjectOfType<UnityEngine.Video.VideoPlayer>();
+        if (vp == null) return;
+        vp.source = UnityEngine.Video.VideoSource.Url;
+        vp.url = RkslFile.GetFileUri(path);
+        vp.prepareCompleted += (v) => Debug.Log($"[RkslEditor] Video preview ready {path}", v);
+        vp.Prepare();
     }
 
     void EnsureButtons()
@@ -161,7 +183,7 @@ public class RkslEditorController : MonoBehaviour
     }
     IEnumerator LoadCoverCoroutine(string path)
     {
-        using (var uwr = UnityWebRequestTexture.GetTexture("file://" + path))
+        using (var uwr = UnityWebRequestTexture.GetTexture(RkslFile.GetFileUri(path)))
         {
             yield return uwr.SendWebRequest();
             if (uwr.result == UnityWebRequest.Result.Success)
@@ -182,6 +204,13 @@ public class RkslEditorController : MonoBehaviour
         if (artistInput != null) artistInput.text = levelData.songAuthor;
         if (creatorInput != null) creatorInput.text = levelData.mapAuthor;
         if (coverPreviewImage != null && levelData.cover != null) coverPreviewImage.sprite = levelData.cover;
+        // Обновляем визуальные настройки
+        var vs = FindObjectOfType<LevelEditorVisualSettings>();
+        if (vs != null) vs.RefreshFromData();
+        // Применяем визуал к сцене
+        LevelVisualApplier.Apply(levelData, FindObjectOfType<UnityEngine.Video.VideoPlayer>(), true);
+        if (!string.IsNullOrEmpty(levelData.videoPath) && File.Exists(levelData.videoPath))
+            PreviewVideo(levelData.videoPath);
     }
 
     public void CreateNewLevel()
@@ -342,6 +371,13 @@ public class RkslEditorController : MonoBehaviour
             timelineUI.RefreshAll();
             timelineUI.Seek(0);
         }
+        // Визуал + видео превью
+        var vs = FindObjectOfType<LevelEditorVisualSettings>();
+        if (vs != null) vs.RefreshFromData();
+        LevelVisualApplier.Apply(data, FindObjectOfType<UnityEngine.Video.VideoPlayer>(), true);
+        if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
+            PreviewVideo(videoPath);
+
         UpdateStatus($"Загружен: {manifest.title} ({manifest.events.Count} нот)");
         // сохраняем путь для игры
         PlayerPrefs.SetString("LastRkslPath", rkslPath);

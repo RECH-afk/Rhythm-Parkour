@@ -2117,6 +2117,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   audioSource: {fileID: 966405}
@@ -2142,6 +2144,7 @@ MonoBehaviour:
   notePrefab: {fileID: 0}
   noteSize: {x: 36, y: 48}
   scaleNotesWithZoom: 1
+  scaleNotesWidthOnly: 1
   noteZoomScaleMin: 0.85
   noteZoomScaleMax: 1.8
   notePrefabUseCustomView: 1
@@ -2156,12 +2159,13 @@ MonoBehaviour:
   addNoteKey: 13
   altAddNoteKey: 271
   noteDeleteThresholdBeats: 0.35
-  waveformWaveColor: {r: 0.3, g: 0.7, b: 1, a: 1}
+  waveformWaveColor: {r: 0.50377357, g: 1, b: 0.9491819, a: 1}
   waveformBgColor: {r: 0.16862746, g: 0.16862746, b: 0.16862746, a: 1}
   playheadColor: {r: 0, g: 1, b: 0.5, a: 0.95}
   gridBarColor: {r: 1, g: 1, b: 1, a: 0.22}
   gridBeatColor: {r: 1, g: 1, b: 1, a: 0.1}
   gridHalfColor: {r: 1, g: 1, b: 1, a: 0.05}
+  showWaveform: 1
   waveformTexWidth: 2048
   waveformTexHeight: 110
   animateWaveform: 0
@@ -3289,6 +3293,95 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 426744812}
   m_CullTransparentMesh: 1
+--- !u!1 &441002312
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 441002314}
+  - component: {fileID: 441002313}
+  m_Layer: 0
+  m_Name: LevelVisualSettings (AutoEditor)
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &441002313
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 441002312}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91063aebec920d0439607008e877d22b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LevelEditorVisualSettings
+  editorController: {fileID: 0}
+  timelineUI: {fileID: 0}
+  levelData:
+    music: {fileID: 0}
+    video: {fileID: 0}
+    cover: {fileID: 0}
+    fullTitle: 
+    songAuthor: 
+    mapAuthor: 
+    bpm: 128
+    offset: 0
+    audioPath: 
+    videoPath: 
+    particlesEnabled: 1
+    particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    obstacleColor: {r: 1, g: 1, b: 1, a: 1}
+    trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+    sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
+    obstaclePrefabs: []
+    events: []
+  particlesToggle: {fileID: 0}
+  particleColorPreview: {fileID: 0}
+  particleColorButton: {fileID: 0}
+  particleColorLabel: {fileID: 0}
+  obstacleColorPreview: {fileID: 0}
+  obstacleColorButton: {fileID: 0}
+  trackColorPreview: {fileID: 0}
+  trackColorButton: {fileID: 0}
+  sphereToggle: {fileID: 0}
+  defaultMaterialButton: {fileID: 0}
+  defaultMaterialLabel: {fileID: 0}
+  materialGridPanel: {fileID: 0}
+  materialGridContainer: {fileID: 0}
+  autoCreateFallbackUI: 1
+  presetColors:
+  - {r: 0.2, g: 0.7, b: 1, a: 1}
+  - {r: 1, g: 0.3, b: 0.3, a: 1}
+  - {r: 0.3, g: 1, b: 0.4, a: 1}
+  - {r: 1, g: 0.9, b: 0.2, a: 1}
+  - {r: 0.8, g: 0.4, b: 1, a: 1}
+  - {r: 1, g: 0.5, b: 0.1, a: 1}
+  - {r: 1, g: 1, b: 1, a: 1}
+  - {r: 0.2, g: 0.2, b: 0.2, a: 1}
+--- !u!4 &441002314
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 441002312}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &484157966
 GameObject:
   m_ObjectHideFlags: 0
@@ -3363,6 +3456,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   saveRkslButton: {fileID: 287668755}
@@ -3472,7 +3567,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 100
+  far clip plane: 150
   field of view: 60
   orthographic: 0
   orthographic size: 5
@@ -4641,6 +4736,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   dspSongStartTime: 0
@@ -4675,6 +4772,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   conductor: {fileID: 820601936}
@@ -7672,6 +7771,8 @@ MonoBehaviour:
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    defaultObstacleMaterialName: 
+    defaultObstacleMaterial: {fileID: 0}
     obstaclePrefabs: []
     events: []
   manager: {fileID: 0}
@@ -13849,7 +13950,7 @@ GameObject:
   - component: {fileID: 1684260319}
   - component: {fileID: 1684260318}
   m_Layer: 5
-  m_Name: ButtonScene
+  m_Name: ButtonTest
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -15940,7 +16041,9 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u0421\u0426\u0415\u041D\u0410"
+  m_text: 'Test Level
+
+'
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -16594,3 +16697,4 @@ SceneRoots:
   - {fileID: 966406}
   - {fileID: 851315056}
   - {fileID: 536306676}
+  - {fileID: 441002314}
