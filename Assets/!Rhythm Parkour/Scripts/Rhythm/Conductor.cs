@@ -14,7 +14,11 @@ public class Conductor : MonoBehaviour
     public float secPerBeat => 60f / bpm;
     public System.Action onBeat;
     public System.Action<float> onBeatFloat;
+    public System.Action onSongFinished;
     private float _lastBeat = -1f;
+    private bool _finishSent;
+    [Tooltip("Пауза после конца трека перед экраном результатов (сек). 0.1–0.2 = итог сразу")]
+    public float finishDelay = 0.15f;
 
     void Awake() { if (Instance != null && Instance != this) { Destroy(gameObject); return; } Instance = this; }
     void OnDestroy() { if (Instance == this) Instance = null; }
@@ -28,7 +32,7 @@ public class Conductor : MonoBehaviour
         if (data != null && data.music != null) { musicSource.clip = data.music; musicSource.playOnAwake = false; musicSource.loop = false; }
         dspSongStartTime = AudioSettings.dspTime + 0.1;
         if (musicSource.clip != null) musicSource.PlayScheduled(dspSongStartTime);
-        isPlaying = true; _lastBeat = -1f; songPosition = -0.1f;
+        isPlaying = true; _lastBeat = -1f; songPosition = -0.1f; _finishSent = false;
     }
     public void Stop() { isPlaying = false; if (musicSource != null) musicSource.Stop(); songPosition = 0f; songPositionBeats = 0f; }
 
@@ -40,7 +44,11 @@ public class Conductor : MonoBehaviour
         songPositionBeats = (songPosition - offset) / secPerBeat;
         float curBeat = Mathf.Floor(songPositionBeats);
         if (curBeat != _lastBeat && curBeat >= 0) { _lastBeat = curBeat; onBeat?.Invoke(); onBeatFloat?.Invoke(curBeat); }
-        if (!musicSource.isPlaying && songPosition > musicSource.clip.length + 1f) isPlaying = false;
+        if (!musicSource.isPlaying && songPosition > musicSource.clip.length + Mathf.Max(0f, finishDelay))
+        {
+            isPlaying = false;
+            if (!_finishSent) { _finishSent = true; try { onSongFinished?.Invoke(); } catch {} }
+        }
     }
     public float GetTimeAtBeat(float beat) => offset + beat * secPerBeat;
 }

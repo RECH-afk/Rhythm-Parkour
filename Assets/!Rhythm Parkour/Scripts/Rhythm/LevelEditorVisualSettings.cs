@@ -1,483 +1,407 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// UI для визуальных настроек уровня в редакторе.
-/// - Toggle партиклов + цвет
-/// - Цвет дорожки / препятствий
-/// - Toggle сферы
-/// - Выбор дефолтного материала для препятствий
-/// Всё привязано к RhythmLevelData и сохраняется в .rksl через RkslManifest.
-/// Создаёт fallback UI если не настроено в сцене.
+/// Контроллер визуальных настроек уровня в редакторе.
+/// Все ссылки на UI назначаются через Inspector — никакого автоспавна и GameObject.Find.
 /// </summary>
 public class LevelEditorVisualSettings : MonoBehaviour
 {
-    [Header("Ссылки (авто)")]
-    public RkslEditorController editorController;
-    public TimelineUI timelineUI;
-    public RhythmLevelData levelData; // если пусто — берём из timeline/editor
+    #region Inspector References
 
-    [Header("UI — Партиклы")]
-    public Toggle particlesToggle;
-    public Image particleColorPreview;
-    public Button particleColorButton;
-    public TextMeshProUGUI particleColorLabel;
+    [Header("Dependencies (обязательные)")]
+    [SerializeField] private RkslEditorController _editorController;
+    [SerializeField] private TimelineUI _timelineUI;
 
-    [Header("UI — Цвета")]
-    public Image obstacleColorPreview;
-    public Button obstacleColorButton;
-    public Image trackColorPreview;
-    public Button trackColorButton;
+    [Header("Партиклы")]
+    [SerializeField] private Toggle _particlesToggle;
+    [SerializeField] private Image _particleColorPreview;
+    [SerializeField] private Button _particleColorButton;
 
-    [Header("UI — Сфера")]
-    public Toggle sphereToggle;
+    [Header("Цвета")]
+    [SerializeField] private Image _obstacleColorPreview;
+    [SerializeField] private Button _obstacleColorButton;
+    [SerializeField] private Image _trackColorPreview;
+    [SerializeField] private Button _trackColorButton;
 
-    [Header("UI — Материалы")]
-    public Button defaultMaterialButton;
-    public TextMeshProUGUI defaultMaterialLabel;
-    public GameObject materialGridPanel;
-    public Transform materialGridContainer;
+    [Header("Сфера")]
+    [SerializeField] private Toggle _sphereToggle;
+
+    [Header("Материалы")]
+    [SerializeField] private Button _defaultMaterialButton;
+    [SerializeField] private TextMeshProUGUI _defaultMaterialLabel;
+    [SerializeField] private GameObject _materialGridPanel;
+    [SerializeField] private Transform _materialGridContainer;
 
     [Header("Настройки")]
-    public bool autoCreateFallbackUI = true;
-    public Color[] presetColors = new Color[]
+    [SerializeField]
+    private Color[] _presetColors = new Color[]
     {
-        new Color(0.2f,0.7f,1f,1f),
-        new Color(1f,0.3f,0.3f,1f),
-        new Color(0.3f,1f,0.4f,1f),
-        new Color(1f,0.9f,0.2f,1f),
-        new Color(0.8f,0.4f,1f,1f),
-        new Color(1f,0.5f,0.1f,1f),
+        new Color(0.2f, 0.7f, 1f),
+        new Color(1f, 0.3f, 0.3f),
+        new Color(0.3f, 1f, 0.4f),
+        new Color(1f, 0.9f, 0.2f),
+        new Color(0.8f, 0.4f, 1f),
+        new Color(1f, 0.5f, 0.1f),
         Color.white,
-        new Color(0.2f,0.2f,0.2f,1f),
+        new Color(0.2f, 0.2f, 0.2f),
     };
 
-    Canvas rootCanvas;
-    bool isRefreshing;
+    #endregion
 
-    void Awake()
+    #region Private State
+
+    private RhythmLevelData _levelData;
+    private bool _isRefreshing;
+
+    #endregion
+
+    #region Unity Lifecycle
+
+    private void Awake()
     {
-        if (editorController == null) editorController = FindObjectOfType<RkslEditorController>();
-        if (timelineUI == null) timelineUI = FindObjectOfType<TimelineUI>();
-        rootCanvas = GetComponentInParent<Canvas>();
-        if (rootCanvas == null) rootCanvas = FindObjectOfType<Canvas>();
-
-        if (levelData == null && timelineUI != null) levelData = timelineUI.levelData;
-        if (levelData == null && editorController != null) levelData = editorController.levelData;
-        if (levelData == null) levelData = FindObjectOfType<RhythmParkourManager>()?.levelData;
-
-        TryFindUI();
-        if (autoCreateFallbackUI && (particlesToggle == null || sphereToggle == null))
-            CreateFallbackUI();
-        BindEvents();
+        ResolveDependencies();
+        ValidateReferences();
     }
 
-    void Start()
+    private void Start()
     {
+        Subscribe();
         RefreshFromData();
         ApplyVisual();
     }
 
-    void Update()
+    private void OnDestroy()
     {
-        // Синхронизируем levelData если он сменился в редакторе (загрузка .rksl)
-        RhythmLevelData cur = null;
-        if (timelineUI != null) cur = timelineUI.levelData;
-        else if (editorController != null) cur = editorController.levelData;
-        if (cur != null && cur != levelData)
-        {
-            levelData = cur;
-            RefreshFromData();
-        }
+        Unsubscribe();
     }
 
-    void TryFindUI()
+    #endregion
+
+    #region Initialization
+
+    private void ResolveDependencies()
     {
-        if (particlesToggle == null)
-        {
-            var go = GameObject.Find("ParticlesToggle");
-            if (go) particlesToggle = go.GetComponent<Toggle>();
-        }
-        if (sphereToggle == null)
-        {
-            var go = GameObject.Find("SphereToggle");
-            if (go) sphereToggle = go.GetComponent<Toggle>();
-        }
-        if (particleColorPreview == null)
-        {
-            var go = GameObject.Find("ParticleColorPreview");
-            if (go) particleColorPreview = go.GetComponent<Image>();
-        }
-        if (particleColorButton == null)
-        {
-            var go = GameObject.Find("ParticleColorButton");
-            if (go) particleColorButton = go.GetComponent<Button>();
-        }
-        if (obstacleColorPreview == null)
-        {
-            var go = GameObject.Find("ObstacleColorPreview");
-            if (go) obstacleColorPreview = go.GetComponent<Image>();
-        }
-        if (obstacleColorButton == null)
-        {
-            var go = GameObject.Find("ObstacleColorButton");
-            if (go) obstacleColorButton = go.GetComponent<Button>();
-        }
-        if (trackColorPreview == null)
-        {
-            var go = GameObject.Find("TrackColorPreview");
-            if (go) trackColorPreview = go.GetComponent<Image>();
-        }
-        if (trackColorButton == null)
-        {
-            var go = GameObject.Find("TrackColorButton");
-            if (go) trackColorButton = go.GetComponent<Button>();
-        }
-        if (defaultMaterialButton == null)
-        {
-            var go = GameObject.Find("DefaultMaterialButton");
-            if (go) defaultMaterialButton = go.GetComponent<Button>();
-        }
-        if (defaultMaterialLabel == null && defaultMaterialButton != null)
-            defaultMaterialLabel = defaultMaterialButton.GetComponentInChildren<TextMeshProUGUI>();
-        if (materialGridPanel == null)
-        {
-            var go = GameObject.Find("MaterialGridPanel");
-            if (go) materialGridPanel = go;
-        }
-        if (materialGridContainer == null && materialGridPanel != null)
-        {
-            var t = materialGridPanel.transform.Find("Grid");
-            if (t) materialGridContainer = t;
-            else materialGridContainer = materialGridPanel.transform;
-        }
+        if (_editorController == null) _editorController = FindObjectOfType<RkslEditorController>();
+        if (_timelineUI == null) _timelineUI = FindObjectOfType<TimelineUI>();
+
+        _levelData = _timelineUI?.levelData
+                     ?? _editorController?.levelData
+                     ?? FindObjectOfType<RhythmParkourManager>()?.levelData;
     }
 
-    void CreateFallbackUI()
+    private void ValidateReferences()
     {
-        // Требует ручного Canvas — авто-создание Canvas удалено по запросу
-        Transform parent = null;
-        var settingsGO = GameObject.Find("SettingsWindow");
-        if (settingsGO) parent = settingsGO.transform;
-        else if (timelineUI != null && timelineUI.transform.parent != null) parent = timelineUI.transform.parent;
-        else if (rootCanvas != null) parent = rootCanvas.transform;
-        else
+        if (_levelData == null)
         {
-            Debug.LogWarning("[VisualSettings] Canvas/SettingsWindow не найден — создай UI вручную, авто-создание отключено", this);
-            return;
-        }
-        if (parent.GetComponentInParent<Canvas>() == null)
-        {
-            Debug.LogWarning("[VisualSettings] Parent не под Canvas — пропустил авто-создание панели", this);
+            Debug.LogError("[VisualSettings] RhythmLevelData не найден. " +
+                           "Убедитесь, что в сцене есть RkslEditorController или TimelineUI.", this);
+            enabled = false;
             return;
         }
 
-        // Создаём контейнер VisualSettings
-        var panelGO = new GameObject("VisualSettingsPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
-        panelGO.transform.SetParent(parent, false);
-        var rt = panelGO.GetComponent<RectTransform>();
-        // Позиционируем внизу SettingsWindow или сбоку
-        rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(0, 1); rt.pivot = new Vector2(0, 1);
-        rt.anchoredPosition = new Vector2(12, -420); rt.sizeDelta = new Vector2(360, 320);
-        var img = panelGO.GetComponent<Image>(); img.color = new Color(0.14f,0.14f,0.16f,0.95f);
-        var vlg = panelGO.GetComponent<VerticalLayoutGroup>(); vlg.padding = new RectOffset(10,10,10,10); vlg.spacing = 6; vlg.childControlWidth = true; vlg.childControlHeight = false;
-        var fitter = panelGO.AddComponent<ContentSizeFitter>(); fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-        // Заголовок
-        CreateLabel(panelGO.transform, "ВИЗУАЛ УРОВНЯ", 14, FontStyles.Bold);
-
-        // Партиклы toggle
-        particlesToggle = CreateToggle(panelGO.transform, "Партиклы", true);
-        // Цвет партиклов
-        var row1 = CreateRow(panelGO.transform);
-        CreateLabel(row1, "Цвет партиклов", 12);
-        particleColorPreview = CreateColorPreview(row1, presetColors[0]);
-        particleColorButton = CreateButton(row1, "Сменить", () => CycleColor(ref levelData.particleColor, particleColorPreview, true));
-
-        // Цвет препятствий
-        var row2 = CreateRow(panelGO.transform);
-        CreateLabel(row2, "Цвет препятствий", 12);
-        obstacleColorPreview = CreateColorPreview(row2, Color.white);
-        obstacleColorButton = CreateButton(row2, "Сменить", () => CycleColor(ref levelData.obstacleColor, obstacleColorPreview, true));
-
-        // Цвет дорожки
-        var row3 = CreateRow(panelGO.transform);
-        CreateLabel(row3, "Цвет дорожки", 12);
-        trackColorPreview = CreateColorPreview(row3, presetColors[0]);
-        trackColorButton = CreateButton(row3, "Сменить", () => CycleColor(ref levelData.trackColor, trackColorPreview, true));
-
-        // Сфера toggle
-        sphereToggle = CreateToggle(panelGO.transform, "Сфера крутится", true);
-
-        // Материал
-        var matRow = CreateRow(panelGO.transform);
-        CreateLabel(matRow, "Материал препятствий", 12);
-        defaultMaterialButton = CreateButton(matRow, "Выбрать...", ToggleMaterialGrid);
-        if (defaultMaterialButton != null)
+        if (_particlesToggle == null || _sphereToggle == null)
         {
-            var lbl = defaultMaterialButton.GetComponentInChildren<TextMeshProUGUI>();
-            if (lbl) defaultMaterialLabel = lbl;
-        }
-
-        // Панель выбора материалов (скрыта)
-        materialGridPanel = new GameObject("MaterialGridPanel", typeof(RectTransform), typeof(Image), typeof(GridLayoutGroup));
-        materialGridPanel.transform.SetParent(panelGO.transform, false);
-        var mrt = materialGridPanel.GetComponent<RectTransform>(); mrt.sizeDelta = new Vector2(0, 0);
-        var mimg = materialGridPanel.GetComponent<Image>(); mimg.color = new Color(0.1f,0.1f,0.12f,0.9f);
-        var glg = materialGridPanel.GetComponent<GridLayoutGroup>(); glg.cellSize = new Vector2(80, 30); glg.spacing = new Vector2(6,6); glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount; glg.constraintCount = 3;
-        materialGridPanel.SetActive(false);
-        materialGridContainer = materialGridPanel.transform;
-
-        Debug.Log("[VisualSettings] Fallback UI создан", panelGO);
-    }
-
-    // ——— Helpers для создания UI ———
-    TextMeshProUGUI CreateLabel(Transform parent, string txt, int size, FontStyles style = FontStyles.Normal)
-    {
-        var go = new GameObject("Label", typeof(RectTransform));
-        go.transform.SetParent(parent, false);
-        var tmp = go.AddComponent<TextMeshProUGUI>(); tmp.text = txt; tmp.fontSize = size; tmp.fontStyle = style; tmp.color = Color.white;
-        var le = go.AddComponent<LayoutElement>(); le.minHeight = size + 6;
-        return tmp;
-    }
-    Toggle CreateToggle(Transform parent, string label, bool def)
-    {
-        var go = new GameObject(label, typeof(RectTransform), typeof(Toggle), typeof(Image));
-        go.transform.SetParent(parent, false);
-        var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(0, 24);
-        var bg = go.GetComponent<Image>(); bg.color = new Color(0.2f,0.2f,0.2f,1f);
-        var toggle = go.GetComponent<Toggle>(); toggle.isOn = def;
-        // Checkmark
-        var ckGO = new GameObject("Checkmark", typeof(RectTransform), typeof(Image));
-        ckGO.transform.SetParent(go.transform, false);
-        var ckRT = ckGO.GetComponent<RectTransform>(); ckRT.anchorMin = new Vector2(0,0); ckRT.anchorMax = new Vector2(0,1); ckRT.offsetMin = new Vector2(2,2); ckRT.offsetMax = new Vector2(-2,2); ckRT.sizeDelta = new Vector2(20,0);
-        ckGO.GetComponent<Image>().color = new Color(0.2f,0.8f,0.3f,1f);
-        toggle.graphic = ckGO.GetComponent<Image>();
-        toggle.targetGraphic = bg;
-        // Label
-        var lblGO = new GameObject("Label", typeof(RectTransform));
-        lblGO.transform.SetParent(go.transform, false);
-        var lblRT = lblGO.GetComponent<RectTransform>(); lblRT.anchorMin = new Vector2(0,0); lblRT.anchorMax = new Vector2(1,1); lblRT.offsetMin = new Vector2(26,0); lblRT.offsetMax = Vector2.zero;
-        var lbl = lblGO.AddComponent<TextMeshProUGUI>(); lbl.text = label; lbl.fontSize = 12; lbl.color = Color.white; lbl.alignment = TextAlignmentOptions.Left;
-        var le = go.AddComponent<LayoutElement>(); le.minHeight = 24;
-        return toggle;
-    }
-    Transform CreateRow(Transform parent)
-    {
-        var go = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-        go.transform.SetParent(parent, false);
-        var hlg = go.GetComponent<HorizontalLayoutGroup>(); hlg.spacing = 8; hlg.childAlignment = TextAnchor.MiddleLeft; hlg.childControlWidth = false; hlg.childControlHeight = false;
-        var le = go.AddComponent<LayoutElement>(); le.minHeight = 28;
-        return go.transform;
-    }
-    Image CreateColorPreview(Transform parent, Color c)
-    {
-        var go = new GameObject("ColorPreview", typeof(RectTransform), typeof(Image));
-        go.transform.SetParent(parent, false);
-        var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(40, 20);
-        var img = go.GetComponent<Image>(); img.color = c;
-        var le = go.AddComponent<LayoutElement>(); le.minWidth = 40; le.minHeight = 20;
-        return img;
-    }
-    Button CreateButton(Transform parent, string txt, UnityEngine.Events.UnityAction act)
-    {
-        var go = new GameObject("Btn_"+txt, typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(80, 24);
-        var img = go.GetComponent<Image>(); img.color = new Color(0.25f,0.45f,0.85f,1f);
-        var btn = go.GetComponent<Button>();
-        var tgo = new GameObject("Text", typeof(RectTransform));
-        tgo.transform.SetParent(go.transform, false);
-        var trt = tgo.GetComponent<RectTransform>(); trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = trt.offsetMax = Vector2.zero;
-        var tmp = tgo.AddComponent<TextMeshProUGUI>(); tmp.text = txt; tmp.fontSize = 11; tmp.alignment = TextAlignmentOptions.Center; tmp.color = Color.white;
-        var le = go.AddComponent<LayoutElement>(); le.minWidth = 70; le.minHeight = 24;
-        if (act != null) btn.onClick.AddListener(act);
-        return btn;
-    }
-
-    void BindEvents()
-    {
-        if (particlesToggle != null)
-        {
-            particlesToggle.onValueChanged.RemoveListener(OnParticlesToggle);
-            particlesToggle.onValueChanged.AddListener(OnParticlesToggle);
-        }
-        if (sphereToggle != null)
-        {
-            sphereToggle.onValueChanged.RemoveListener(OnSphereToggle);
-            sphereToggle.onValueChanged.AddListener(OnSphereToggle);
-        }
-        if (particleColorButton != null)
-        {
-            particleColorButton.onClick.RemoveListener(() => CycleColor(ref levelData.particleColor, particleColorPreview, true));
-            // already bound in creation
-        }
-        if (defaultMaterialButton != null)
-        {
-            defaultMaterialButton.onClick.RemoveListener(ToggleMaterialGrid);
-            defaultMaterialButton.onClick.AddListener(ToggleMaterialGrid);
+            Debug.LogError("[VisualSettings] Обязательные UI-ссылки не назначены в Inspector. " +
+                           "Настройте VisualSettings вручную в сцене.", this);
+            enabled = false;
         }
     }
 
-    void OnParticlesToggle(bool v)
+    private void Subscribe()
     {
-        if (isRefreshing || levelData == null) return;
-        levelData.particlesEnabled = v;
-        ApplyVisual();
-    }
-    void OnSphereToggle(bool v)
-    {
-        if (isRefreshing || levelData == null) return;
-        levelData.sphereRotates = v;
-        ApplyVisual();
-    }
-    void CycleColor(ref Color c, Image preview, bool apply)
-    {
-        if (levelData == null) return;
-        // Находим ближайший пресет и берём следующий
-        int idx = 0;
-        float best = float.MaxValue;
-        for (int i=0;i<presetColors.Length;i++)
-        {
-            float d = Mathf.Abs(presetColors[i].r - c.r) + Mathf.Abs(presetColors[i].g - c.g) + Mathf.Abs(presetColors[i].b - c.b);
-            if (d < best) { best = d; idx = i; }
-        }
-        int next = (idx + 1) % presetColors.Length;
-        c = presetColors[next];
-        if (preview) preview.color = c;
-        if (apply) ApplyVisual();
-        // Обновляем оба поля если это obstacle/track
-        if (preview == particleColorPreview) levelData.particleColor = c;
-        else if (preview == obstacleColorPreview) levelData.obstacleColor = c;
-        else if (preview == trackColorPreview) levelData.trackColor = c;
+        if (_particlesToggle != null) _particlesToggle.onValueChanged.AddListener(OnParticlesChanged);
+        if (_sphereToggle != null) _sphereToggle.onValueChanged.AddListener(OnSphereChanged);
+
+        if (_particleColorButton != null)
+            _particleColorButton.onClick.AddListener(() => CycleColor(
+                c => _levelData.particleColor = c,
+                () => _levelData.particleColor,
+                _particleColorPreview));
+
+        if (_obstacleColorButton != null)
+            _obstacleColorButton.onClick.AddListener(() => CycleColor(
+                c => _levelData.obstacleColor = c,
+                () => _levelData.obstacleColor,
+                _obstacleColorPreview));
+
+        if (_trackColorButton != null)
+            _trackColorButton.onClick.AddListener(() => CycleColor(
+                c => _levelData.trackColor = c,
+                () => _levelData.trackColor,
+                _trackColorPreview));
+
+        if (_defaultMaterialButton != null)
+            _defaultMaterialButton.onClick.AddListener(ToggleMaterialGrid);
     }
 
+    private void Unsubscribe()
+    {
+        if (_particlesToggle != null) _particlesToggle.onValueChanged.RemoveListener(OnParticlesChanged);
+        if (_sphereToggle != null) _sphereToggle.onValueChanged.RemoveListener(OnSphereChanged);
+
+        _particleColorButton?.onClick.RemoveAllListeners();
+        _obstacleColorButton?.onClick.RemoveAllListeners();
+        _trackColorButton?.onClick.RemoveAllListeners();
+        _defaultMaterialButton?.onClick.RemoveAllListeners();
+    }
+
+    #endregion
+
+    #region Public API
+
+    /// <summary>
+    /// Обновляет UI из текущего levelData. Вызывается извне при смене уровня.
+    /// </summary>
+    public void SetLevelData(RhythmLevelData data)
+    {
+        if (data == null) return;
+        _levelData = data;
+        RefreshFromData();
+    }
+
+    /// <summary>
+    /// Перечитывает значения из levelData в UI.
+    /// </summary>
     public void RefreshFromData()
     {
-        if (levelData == null) return;
-        isRefreshing = true;
-        if (particlesToggle) particlesToggle.isOn = levelData.particlesEnabled;
-        if (sphereToggle) sphereToggle.isOn = levelData.sphereRotates;
-        if (particleColorPreview) particleColorPreview.color = levelData.particleColor;
-        if (obstacleColorPreview) obstacleColorPreview.color = levelData.obstacleColor;
-        if (trackColorPreview) trackColorPreview.color = levelData.trackColor;
-        if (defaultMaterialLabel)
+        if (_levelData == null) return;
+
+        _isRefreshing = true;
+        try
         {
-            string name = string.IsNullOrEmpty(levelData.defaultObstacleMaterialName) ? "Дефолт (префаб)" : levelData.defaultObstacleMaterialName;
-            defaultMaterialLabel.text = name;
+            if (_particlesToggle != null) _particlesToggle.isOn = _levelData.particlesEnabled;
+            if (_sphereToggle != null) _sphereToggle.isOn = _levelData.sphereRotates;
+
+            if (_particleColorPreview != null) _particleColorPreview.color = _levelData.particleColor;
+            if (_obstacleColorPreview != null) _obstacleColorPreview.color = _levelData.obstacleColor;
+            if (_trackColorPreview != null) _trackColorPreview.color = _levelData.trackColor;
+
+            UpdateMaterialLabel();
         }
-        isRefreshing = false;
+        finally
+        {
+            _isRefreshing = false;
+        }
     }
 
-    void ApplyVisual()
+    #endregion
+
+    #region Event Handlers
+
+    private void OnParticlesChanged(bool value)
     {
-        if (levelData == null) return;
-        // Синхронизируем материал референс
-        if (!string.IsNullOrEmpty(levelData.defaultObstacleMaterialName))
-        {
-            var mat = GlobalObstacleCatalog.GetMaterial(levelData.defaultObstacleMaterialName);
-            if (mat) levelData.defaultObstacleMaterial = mat;
-        }
-        LevelVisualApplier.Apply(levelData, null, true);
-        // Обновляем timeline preview
-        var preview = FindObjectOfType<TimelinePreview>();
-        if (preview) preview.ForceRefresh();
+        if (_isRefreshing || _levelData == null) return;
+        _levelData.particlesEnabled = value;
+        ApplyVisual();
     }
 
-    public void ToggleMaterialGrid()
+    private void OnSphereChanged(bool value)
     {
-        if (materialGridPanel == null) return;
-        bool show = !materialGridPanel.activeSelf;
-        materialGridPanel.SetActive(show);
-        if (show) RefreshMaterialGrid();
+        if (_isRefreshing || _levelData == null) return;
+        _levelData.sphereRotates = value;
+        ApplyVisual();
     }
-    void RefreshMaterialGrid()
+
+    #endregion
+
+    #region Color Cycling
+
+    private void CycleColor(Action<Color> setter, Func<Color> getter, Image preview)
     {
-        if (materialGridContainer == null) return;
-        for (int i=materialGridContainer.childCount-1;i>=0;i--) Destroy(materialGridContainer.GetChild(i).gameObject);
-        var mats = GlobalObstacleCatalog.GetAllMaterials();
-        // Добавляем кнопку "Дефолт"
-        CreateMatButton("Дефолт (префаб)", null, true);
-        foreach (var m in mats)
+        if (_levelData == null || _presetColors.Length == 0) return;
+
+        Color current = getter();
+        int idx = FindNearestColorIndex(current);
+        int next = (idx + 1) % _presetColors.Length;
+        Color newColor = _presetColors[next];
+
+        setter(newColor);
+        if (preview != null) preview.color = newColor;
+        ApplyVisual();
+    }
+
+    private int FindNearestColorIndex(Color target)
+    {
+        int bestIdx = 0;
+        float bestDist = float.MaxValue;
+
+        for (int i = 0; i < _presetColors.Length; i++)
         {
-            if (m == null) continue;
-            CreateMatButton(m.name, m, false);
-        }
-        // Также пробуем найти материалы в проекте если каталог пуст
-        if (mats.Count==0)
-        {
-            // fallback: ищем в Resources
-            var found = Resources.FindObjectsOfTypeAll<Material>();
-            HashSet<string> seen = new HashSet<string>();
-            foreach (var mat in found)
+            float dist = ColorDistance(_presetColors[i], target);
+            if (dist < bestDist)
             {
-                if (mat == null || seen.Contains(mat.name)) continue;
-                // фильтр по имени Obstacle
-                if (!mat.name.ToLower().Contains("obstacle") && !mat.name.ToLower().Contains("level")) continue;
-                seen.Add(mat.name);
-                CreateMatButton(mat.name, mat, false);
+                bestDist = dist;
+                bestIdx = i;
             }
         }
+
+        return bestIdx;
     }
-    void CreateMatButton(string name, Material mat, bool isDefault)
+
+    private static float ColorDistance(Color a, Color b)
     {
-        var btn = CreateButton(materialGridContainer, name, null);
-        btn.onClick.RemoveAllListeners();
-        string n = name;
-        Material m = mat;
-        btn.onClick.AddListener(() => OnMaterialPicked(n, m, isDefault));
-        // Превью цвета материала
-        var img = btn.GetComponent<Image>();
-        if (m != null && m.HasProperty("_Color")) img.color = m.color;
-        else if (m != null && m.HasProperty("_BaseColor")) img.color = m.GetColor("_BaseColor");
-        else if (isDefault) img.color = new Color(0.3f,0.3f,0.3f,1f);
+        return Mathf.Abs(a.r - b.r) + Mathf.Abs(a.g - b.g) + Mathf.Abs(a.b - b.b);
     }
-    void OnMaterialPicked(string name, Material mat, bool isDefault)
+
+    #endregion
+
+    #region Material Selection
+
+    private void ToggleMaterialGrid()
     {
-        if (levelData == null) return;
-        if (isDefault)
+        if (_materialGridPanel == null) return;
+
+        bool show = !_materialGridPanel.activeSelf;
+        _materialGridPanel.SetActive(show);
+
+        if (show) BuildMaterialOptions();
+    }
+
+    private void BuildMaterialOptions()
+    {
+        if (_materialGridContainer == null) return;
+
+        ClearMaterialGrid();
+
+        AddMaterialOption("Дефолт (префаб)", null, isDefault: true);
+
+        var catalogMaterials = GlobalObstacleCatalog.GetAllMaterials();
+        if (catalogMaterials.Count > 0)
         {
-            levelData.defaultObstacleMaterialName = "";
-            levelData.defaultObstacleMaterial = null;
+            foreach (var mat in catalogMaterials)
+            {
+                if (mat != null) AddMaterialOption(mat.name, mat, isDefault: false);
+            }
         }
         else
         {
-            levelData.defaultObstacleMaterialName = mat ? mat.name : name;
-            levelData.defaultObstacleMaterial = mat;
+            AddDiscoveredMaterialsFallback();
         }
-        if (defaultMaterialLabel) defaultMaterialLabel.text = isDefault ? "Дефолт (префаб)" : name;
-        materialGridPanel.SetActive(false);
-        ApplyVisual();
-        Debug.Log($"[VisualSettings] Материал выбран: {(isDefault ? "Дефолт" : name)}");
     }
 
-#if UNITY_EDITOR
-    [UnityEditor.InitializeOnLoadMethod]
-    static void EditorAutoEnsure()
+    private void AddDiscoveredMaterialsFallback()
     {
-        UnityEditor.EditorApplication.delayCall += () =>
+        var discovered = Resources.FindObjectsOfTypeAll<Material>();
+        var seen = new HashSet<string>();
+
+        foreach (var mat in discovered)
         {
-            if (FindObjectOfType<LevelEditorVisualSettings>() != null) return;
-            // Не спамим в IsGameScene
-            string cur = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            if (cur == "IsLevelEditorScene" || cur == "LevelEditor")
-            {
-                var go = new GameObject("LevelVisualSettings (AutoEditor)");
-                go.AddComponent<LevelEditorVisualSettings>();
-            }
-        };
+            if (mat == null) continue;
+            if (seen.Contains(mat.name)) continue;
+
+            string lower = mat.name.ToLowerInvariant();
+            if (!lower.Contains("obstacle") && !lower.Contains("level")) continue;
+
+            seen.Add(mat.name);
+            AddMaterialOption(mat.name, mat, isDefault: false);
+        }
     }
-#endif
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void RuntimeAutoCreate()
+
+    private void ClearMaterialGrid()
     {
-        string cur = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-        if (cur != "IsLevelEditorScene" && cur != "LevelEditor" && cur != "IsMenuScene") return;
-        if (FindObjectOfType<LevelEditorVisualSettings>() != null) return;
-        var go = new GameObject("LevelVisualSettings (Auto)");
-        go.AddComponent<LevelEditorVisualSettings>();
-        Debug.Log("[VisualSettings] AutoCreated for " + cur, go);
+        for (int i = _materialGridContainer.childCount - 1; i >= 0; i--)
+            Destroy(_materialGridContainer.GetChild(i).gameObject);
     }
+
+    private void AddMaterialOption(string name, Material mat, bool isDefault)
+    {
+        var btnGo = new GameObject("MatBtn_" + name, typeof(RectTransform), typeof(Image), typeof(Button));
+        btnGo.transform.SetParent(_materialGridContainer, false);
+
+        var rt = btnGo.GetComponent<RectTransform>();
+        rt.sizeDelta = new Vector2(80, 24);
+
+        var img = btnGo.GetComponent<Image>();
+        img.color = GetMaterialPreviewColor(mat, isDefault);
+
+        var btn = btnGo.GetComponent<Button>();
+        string capturedName = name;
+        Material capturedMat = mat;
+        bool capturedDefault = isDefault;
+        btn.onClick.AddListener(() => OnMaterialPicked(capturedName, capturedMat, capturedDefault));
+
+        var textGo = new GameObject("Text", typeof(RectTransform));
+        textGo.transform.SetParent(btnGo.transform, false);
+        var textRt = textGo.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = Vector2.zero;
+        textRt.offsetMax = Vector2.zero;
+
+        var tmp = textGo.AddComponent<TextMeshProUGUI>();
+        tmp.text = name;
+        tmp.fontSize = 10;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+    }
+
+    private static Color GetMaterialPreviewColor(Material mat, bool isDefault)
+    {
+        if (mat != null)
+        {
+            if (mat.HasProperty("_BaseColor")) return mat.GetColor("_BaseColor");
+            if (mat.HasProperty("_Color")) return mat.color;
+        }
+        return isDefault ? new Color(0.3f, 0.3f, 0.3f) : Color.gray;
+    }
+
+    private void OnMaterialPicked(string name, Material mat, bool isDefault)
+    {
+        if (_levelData == null) return;
+
+        if (isDefault)
+        {
+            _levelData.defaultObstacleMaterialName = string.Empty;
+            _levelData.defaultObstacleMaterial = null;
+        }
+        else
+        {
+            _levelData.defaultObstacleMaterialName = mat != null ? mat.name : name;
+            _levelData.defaultObstacleMaterial = mat;
+        }
+
+        UpdateMaterialLabel();
+
+        if (_materialGridPanel != null) _materialGridPanel.SetActive(false);
+        ApplyVisual();
+
+        Debug.Log($"[VisualSettings] Материал: {(isDefault ? "Дефолт" : name)}", this);
+    }
+
+    private void UpdateMaterialLabel()
+    {
+        if (_defaultMaterialLabel == null) return;
+
+        string name = string.IsNullOrEmpty(_levelData.defaultObstacleMaterialName)
+            ? "Дефолт (префаб)"
+            : _levelData.defaultObstacleMaterialName;
+
+        _defaultMaterialLabel.text = name;
+    }
+
+    #endregion
+
+    #region Visual Application
+
+    private void ApplyVisual()
+    {
+        if (_levelData == null) return;
+
+        if (!string.IsNullOrEmpty(_levelData.defaultObstacleMaterialName))
+        {
+            var mat = GlobalObstacleCatalog.GetMaterial(_levelData.defaultObstacleMaterialName);
+            if (mat != null) _levelData.defaultObstacleMaterial = mat;
+        }
+
+        LevelVisualApplier.Apply(_levelData, null, true);
+
+        var preview = FindObjectOfType<TimelinePreview>();
+        preview?.ForceRefresh();
+    }
+
+    #endregion
 }

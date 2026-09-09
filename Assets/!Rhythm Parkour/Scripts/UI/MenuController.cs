@@ -1,455 +1,769 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
+using DG.Tweening;
+using System.Diagnostics;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using Debug = UnityEngine.Debug;
 
-/// <summary>
-/// Меню загрузки уровней и входа в редактор.
-/// Вешай на Canvas в IsGameScene / IsLevelEditorScene или в отдельной MainMenu сцене.
-/// Если UI не назначен — создаст простой fallback через код.
-/// Esc в игре открывает меню, Esc в меню закрывает.
-/// </summary>
 public class MenuController : MonoBehaviour
 {
-    [Header("Ссылки (опционально — создаст fallback)")]
-    public GameObject menuPanel;
-    public Transform levelListContainer;
-    public GameObject levelButtonPrefab;
-    public Button editorButton;
-    public Button refreshButton;
-    public Button closeButton;
-    public TextMeshProUGUI titleLabel;
-    public TextMeshProUGUI statusLabel;
+    #region Inspector References
 
-    [Header("Настройки")]
-    public bool showOnEscInGame = true;
-    public bool autoCreateFallbackUI = true;
-    public string editorSceneName = "IsLevelEditorScene";
-    public string gameSceneName = "IsGameScene";
+    [Header("Main Menu")]
+    [SerializeField] private GameObject _mainMenuRoot;
+    [SerializeField] private RectTransform _logoTransform;
+    [SerializeField] private RectTransform _mainMenuButtonsContainer;
 
-    List<string> foundPaths = new List<string>();
+    [Header("Buttons")]
+    [SerializeField] private Button _playButton;
+    [SerializeField] private Button _editorButton;
+    [SerializeField] private Button _backFromListButton;
 
-    void Awake()
+    [Header("Level List Menu")]
+    [SerializeField] private GameObject _levelListMenuRoot;
+    [SerializeField] private Transform _levelListContainer;
+    [SerializeField] private GameObject _levelButtonPrefab;
+
+    [Header("Level Details Panel")]
+    [SerializeField] private GameObject _levelDetailsRoot;
+    [SerializeField] private Image _levelCoverImage;
+    [SerializeField] private TextMeshProUGUI _detailBpmText;
+    [SerializeField] private TextMeshProUGUI _detailDurationText;
+    [SerializeField] private TextMeshProUGUI _detailNotesText;
+    [SerializeField] private TextMeshProUGUI _detailAuthorText;
+    [SerializeField] private TextMeshProUGUI _detailArtistText;
+    [SerializeField] private TextMeshProUGUI _detailTrackText;
+
+    [Header("Details Actions")]
+    [SerializeField] private Button _editLevelButton;
+    [SerializeField] private Button _deleteLevelButton;
+
+    [Header("No Levels Window")]
+    [SerializeField] private GameObject _noLevelsWindow;
+    [SerializeField] private Button _openLevelsFolderButton;
+    [SerializeField] private Button _backFromNoLevelsButton;
+
+    [Header("Delete Confirmation Window")]
+    [SerializeField] private GameObject _deleteConfirmationWindow;
+    [SerializeField] private Button _confirmDeleteButton;
+    [SerializeField] private Button _cancelDeleteButton;
+
+    [Header("Settings")]
+    [SerializeField] private string _editorSceneName = "IsLevelEditorScene";
+    [SerializeField] private string _gameSceneName = "IsGameScene";
+    [SerializeField] private float _animDuration = 0.5f;
+
+    #endregion
+
+    #region Private Fields
+
+    private readonly List<string> _foundPaths = new();
+    private string _selectedLevelPath;
+    private float _lastClickTime;
+    private const float DoubleClickThreshold = 0.35f;
+
+    private bool _isTransitioning = false;
+
+    private Sequence _transitionSequence;
+
+    private readonly Dictionary<GameObject, Vector2> _originalPositions = new();
+
+    #endregion
+
+    #region Compatibility Shims
+
+    public bool IsMenuActive => (_mainMenuRoot != null && _mainMenuRoot.activeSelf) ||
+                                (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf) ||
+                                (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf) ||
+                                (_noLevelsWindow != null && _noLevelsWindow.activeSelf);
+
+    public void ShowMenu() => ShowMainMenu();
+    public GameObject MenuPanel => _mainMenuRoot;
+
+    #endregion
+
+    #region Unity Lifecycle
+
+    private void Awake()
     {
-        if (menuPanel == null)
-        {
-            var go = GameObject.Find("MenuPanel");
-            if (go != null) menuPanel = go;
-        }
-        if (levelListContainer == null && menuPanel != null)
-        {
-            var t = menuPanel.transform.Find("Scroll/Viewport/Content");
-            if (t != null) levelListContainer = t;
-            else
-            {
-                var f = menuPanel.GetComponentInChildren<ScrollRect>();
-                if (f != null && f.content != null) levelListContainer = f.content;
-            }
-        }
-        if (autoCreateFallbackUI && menuPanel == null)
-            CreateFallbackUI();
-    }
-
-    void Start()
-    {
-        if (menuPanel != null) menuPanel.SetActive(false);
-        RefreshList();
-        // бинды
-        if (editorButton != null)
-        {
-            editorButton.onClick.RemoveListener(OpenEditor);
-            editorButton.onClick.AddListener(OpenEditor);
-        }
-        if (refreshButton != null)
-        {
-            refreshButton.onClick.RemoveListener(RefreshList);
-            refreshButton.onClick.AddListener(RefreshList);
-        }
-        if (closeButton != null)
-        {
-            closeButton.onClick.RemoveListener(HideMenu);
-            closeButton.onClick.AddListener(HideMenu);
-        }
-        // если пришли из редактора и нажали Esc в игре — меню не показываем сразу, только по Esc
-    }
-
-    void Update()
-    {
-        if (!showOnEscInGame) return;
-        // в IsGameScene Esc — либо возврат в редактор (если fromEditor) либо меню
-        if (Input.GetKeyDown(KeyCode.Escape))
-        {
-            string cur = SceneManager.GetActiveScene().name;
-            if (cur == gameSceneName && LevelTransfer.fromEditor)
-            {
-                // возврат уже обрабатывается в RhythmParkourManager, не мешаем
-                return;
-            }
-            if (menuPanel != null)
-            {
-                if (menuPanel.activeSelf) HideMenu();
-                else ShowMenu();
-            }
-        }
-    }
-
-    void CreateFallbackUI()
-    {
-        Canvas canvas = GetComponentInParent<Canvas>();
-        if (canvas == null) canvas = FindObjectOfType<Canvas>();
-        if (canvas == null)
-        {
-            Debug.LogWarning("[Menu] Canvas не найден — MenuController требует Canvas в сцене. Создай Canvas вручную и назначь menuPanel.", this);
-            return;
-        }
-        Debug.Log($"[Menu] CreateFallbackUI canvas={canvas.name} panel={(menuPanel!=null?menuPanel.name:"null")}", this);
-
-        // панель
-        var panelGO = new GameObject("MenuPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
-        panelGO.transform.SetParent(canvas.transform, false);
-        var rt = panelGO.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f,0.5f);
-        rt.anchoredPosition = Vector2.zero; rt.sizeDelta = new Vector2(720, 620);
-        var img = panelGO.GetComponent<Image>(); img.color = new Color(0.08f,0.08f,0.10f,0.96f);
-        var vlg = panelGO.GetComponent<VerticalLayoutGroup>(); vlg.padding = new RectOffset(16,16,16,16); vlg.spacing = 10; vlg.childAlignment = TextAnchor.UpperCenter; vlg.childControlWidth = true; vlg.childControlHeight = false;
-
-        // заголовок
-        var titleGO = new GameObject("Title", typeof(RectTransform));
-        titleGO.transform.SetParent(panelGO.transform, false);
-        var ttmp = titleGO.AddComponent<TextMeshProUGUI>(); ttmp.text = "МЕНЮ УРОВНЕЙ"; ttmp.fontSize = 22; ttmp.alignment = TextAlignmentOptions.Center; ttmp.color = Color.white;
-        var tle = titleGO.AddComponent<LayoutElement>(); tle.minHeight = 30;
-
-        // кнопки верхние
-        var topRow = new GameObject("TopRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-        topRow.transform.SetParent(panelGO.transform, false);
-        var trh = topRow.GetComponent<HorizontalLayoutGroup>(); trh.spacing = 8; trh.childAlignment = TextAnchor.MiddleCenter; trh.childControlWidth = false;
-        var trle = topRow.AddComponent<LayoutElement>(); trle.minHeight = 36;
-        editorButton = CreateBtn(topRow.transform, "В РЕДАКТОР", new Color(0.2f,0.5f,0.9f));
-        editorButton.onClick.AddListener(OpenEditor);
-        refreshButton = CreateBtn(topRow.transform, "ОБНОВИТЬ", new Color(0.3f,0.3f,0.3f));
-        refreshButton.onClick.AddListener(RefreshList);
-        closeButton = CreateBtn(topRow.transform, "ЗАКРЫТЬ", new Color(0.5f,0.2f,0.2f));
-        closeButton.onClick.AddListener(HideMenu);
-
-        // статус
-        var statusGO = new GameObject("Status", typeof(RectTransform));
-        statusGO.transform.SetParent(panelGO.transform, false);
-        statusLabel = statusGO.AddComponent<TextMeshProUGUI>(); statusLabel.text = ""; statusLabel.fontSize = 11; statusLabel.alignment = TextAlignmentOptions.Center; statusLabel.color = new Color(1,1,1,0.6f);
-        var sle2 = statusGO.AddComponent<LayoutElement>(); sle2.minHeight = 18;
-
-        // скролл
-        var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(Image), typeof(Mask));
-        scrollGO.transform.SetParent(panelGO.transform, false);
-        var srt = scrollGO.GetComponent<RectTransform>(); srt.sizeDelta = new Vector2(0, 400);
-        var sle = scrollGO.AddComponent<LayoutElement>(); sle.flexibleHeight = 1; sle.minHeight = 300;
-        var sImg = scrollGO.GetComponent<Image>(); sImg.color = new Color(0,0,0,0.2f);
-        scrollGO.GetComponent<Mask>().showMaskGraphic = false;
-        var scroll = scrollGO.GetComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.movementType = ScrollRect.MovementType.Clamped;
-        var contentGO = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
-        contentGO.transform.SetParent(scrollGO.transform, false);
-        var crt = contentGO.GetComponent<RectTransform>(); crt.anchorMin = new Vector2(0,1); crt.anchorMax = new Vector2(1,1); crt.pivot = new Vector2(0.5f,1); crt.anchoredPosition = Vector2.zero; crt.sizeDelta = new Vector2(0,0);
-        var cvlg = contentGO.GetComponent<VerticalLayoutGroup>(); cvlg.spacing = 6; cvlg.padding = new RectOffset(4,4,4,4); cvlg.childAlignment = TextAnchor.UpperCenter; cvlg.childControlWidth = true; cvlg.childControlHeight = false;
-        var csf = contentGO.GetComponent<ContentSizeFitter>(); csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        scroll.content = crt;
-        scroll.viewport = srt;
-        levelListContainer = crt.transform;
-
-        // префаб кнопки уровня — храним как неактивный child MenuController, не DontDestroy
-        var btnGO = new GameObject("LevelButton", typeof(RectTransform), typeof(Image), typeof(Button), typeof(HorizontalLayoutGroup));
-        btnGO.transform.SetParent(transform, false);
-        var brt = btnGO.GetComponent<RectTransform>(); brt.sizeDelta = new Vector2(0, 54);
-        var bhlg = btnGO.GetComponent<HorizontalLayoutGroup>(); bhlg.spacing = 8; bhlg.padding = new RectOffset(10,10,6,6); bhlg.childAlignment = TextAnchor.MiddleLeft;
-        var bimg = btnGO.GetComponent<Image>(); bimg.color = new Color(0.18f,0.18f,0.20f,1f);
-        var btn = btnGO.GetComponent<Button>();
-        var txtGO = new GameObject("Text", typeof(RectTransform));
-        txtGO.transform.SetParent(btnGO.transform, false);
-        var trt = txtGO.GetComponent<RectTransform>(); trt.anchorMin = new Vector2(0,0); trt.anchorMax = new Vector2(1,1); trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
-        var ttmp2 = txtGO.AddComponent<TextMeshProUGUI>(); ttmp2.text = "Level"; ttmp2.fontSize = 13; ttmp2.alignment = TextAlignmentOptions.Left; ttmp2.color = Color.white;
-        levelButtonPrefab = btnGO;
-        btnGO.SetActive(false);
-
-        menuPanel = panelGO;
-        menuPanel.transform.SetAsLastSibling();
-        titleLabel = ttmp;
-        // statusLabel уже есть
-        menuPanel.SetActive(false);
-        Debug.Log("[Menu] Fallback UI создан", menuPanel);
-    }
-
-    Button CreateBtn(Transform parent, string txt, Color col)
-    {
-        var go = new GameObject("Btn_"+txt, typeof(RectTransform), typeof(Image), typeof(Button));
-        go.transform.SetParent(parent, false);
-        var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(160, 36);
-        var img = go.GetComponent<Image>(); img.color = col;
-        var btn = go.GetComponent<Button>();
-        var tgo = new GameObject("Text", typeof(RectTransform));
-        tgo.transform.SetParent(go.transform, false);
-        var trt = tgo.GetComponent<RectTransform>(); trt.anchorMin=Vector2.zero; trt.anchorMax=Vector2.one; trt.offsetMin=Vector2.zero; trt.offsetMax=Vector2.zero;
-        var tmp = tgo.AddComponent<TextMeshProUGUI>(); tmp.text=txt; tmp.fontSize=14; tmp.alignment=TextAlignmentOptions.Center; tmp.color=Color.white;
-        var le = go.AddComponent<LayoutElement>(); le.minWidth=120; le.minHeight=36;
-        return btn;
-    }
-
-    public void ShowMenu()
-    {
-        if (menuPanel == null) CreateFallbackUI();
-        if (menuPanel == null) { Debug.LogError("[Menu] menuPanel всё ещё null!"); return; }
-        menuPanel.SetActive(true);
-        menuPanel.transform.SetAsLastSibling();
-        RefreshList();
-        Time.timeScale = 0f;
+        ValidateReferences();
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
-        Debug.Log("[Menu] ShowMenu", menuPanel);
+        UpdateDetailsButtonsState();
+
+        CacheOriginalPosition(_mainMenuRoot);
+        CacheOriginalPosition(_levelListMenuRoot);
+        CacheOriginalPosition(_levelDetailsRoot);
+        CacheOriginalPosition(_noLevelsWindow);
+        CacheOriginalPosition(_deleteConfirmationWindow);
+        if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
+        if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
     }
-    public void HideMenu()
+
+    private void Start()
     {
-        if (menuPanel != null) menuPanel.SetActive(false);
-        Time.timeScale = 1f;
-        // курсор вернет игра сама
-        if (SceneManager.GetActiveScene().name == gameSceneName)
+        SetupBindings();
+        HideAllMenusImmediate();
+        _mainMenuRoot.SetActive(true);
+        PlayStartupAnimations();
+    }
+
+    private void OnDestroy()
+    {
+        DOTween.Kill(this);
+        _transitionSequence?.Kill(true);
+        UnbindButtons();
+    }
+
+    #endregion
+
+    #region Initialization & Bindings
+
+    private void CacheOriginalPosition(GameObject obj)
+    {
+        if (obj != null)
         {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            var rt = obj.GetComponent<RectTransform>();
+            if (rt != null) _originalPositions[obj] = rt.anchoredPosition;
         }
     }
 
-    public void RefreshList()
+    private void ValidateReferences()
     {
-        if (levelListContainer == null) return;
-        for (int i=levelListContainer.childCount-1;i>=0;i--) Destroy(levelListContainer.GetChild(i).gameObject);
-        foundPaths.Clear();
-        // Централизованный скан — один источник правды
-        var files = RkslFile.FindAllRkslFiles();
-        foreach (var f in files)
+        if (_mainMenuRoot == null || _levelListContainer == null || _levelButtonPrefab == null)
+            Debug.LogError("[MenuController] Критические ссылки UI не назначены в инспекторе!", this);
+    }
+
+    private void SetupBindings()
+    {
+        if (_playButton != null) _playButton.onClick.AddListener(ShowLevelList);
+        if (_editorButton != null) _editorButton.onClick.AddListener(OpenNewLevelInEditor);
+        if (_backFromListButton != null) _backFromListButton.onClick.AddListener(ShowMainMenu);
+        if (_editLevelButton != null) _editLevelButton.onClick.AddListener(EditSelectedLevel);
+        if (_deleteLevelButton != null) _deleteLevelButton.onClick.AddListener(DeleteSelectedLevel);
+
+        if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.AddListener(OpenLevelsFolder);
+        if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.AddListener(ShowMainMenu);
+        if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.AddListener(ConfirmDelete);
+        if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.AddListener(HideDeleteConfirmation);
+    }
+
+    private void UnbindButtons()
+    {
+        if (_playButton != null) _playButton.onClick.RemoveListener(ShowLevelList);
+        if (_editorButton != null) _editorButton.onClick.RemoveListener(OpenNewLevelInEditor);
+        if (_backFromListButton != null) _backFromListButton.onClick.RemoveListener(ShowMainMenu);
+        if (_editLevelButton != null) _editLevelButton.onClick.RemoveListener(EditSelectedLevel);
+        if (_deleteLevelButton != null) _deleteLevelButton.onClick.RemoveListener(DeleteSelectedLevel);
+
+        if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.RemoveListener(OpenLevelsFolder);
+        if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.RemoveListener(ShowMainMenu);
+        if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.RemoveListener(ConfirmDelete);
+        if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.RemoveListener(HideDeleteConfirmation);
+    }
+
+    private float GetScreenOffsetX() => Screen.width + 100f;
+    private float GetScreenOffsetY() => Screen.height + 100f;
+
+    private void PlayStartupAnimations()
+    {
+        if (_logoTransform == null || _mainMenuButtonsContainer == null) return;
+
+        _logoTransform.DOKill(true);
+        _mainMenuButtonsContainer.DOKill(true);
+
+        Vector2 origLogoPos = _originalPositions.TryGetValue(_logoTransform.gameObject, out var oL) ? oL : _logoTransform.anchoredPosition;
+        Vector2 origBtnsPos = _originalPositions.TryGetValue(_mainMenuButtonsContainer.gameObject, out var oB) ? oB : _mainMenuButtonsContainer.anchoredPosition;
+
+        _logoTransform.anchoredPosition = origLogoPos + new Vector2(-GetScreenOffsetX(), 0f);
+        _logoTransform.localScale = Vector3.one * 0.98f;
+        _logoTransform.localRotation = Quaternion.Euler(0, 0, -1.5f);
+
+        var logoSeq = DOTween.Sequence()
+            .Join(_logoTransform.DOAnchorPosX(origLogoPos.x, _animDuration * 1.6f).SetEase(Ease.OutQuint))
+            .Join(_logoTransform.DORotate(Vector3.zero, _animDuration * 1.6f, RotateMode.Fast))
+            .Join(_logoTransform.DOScale(1f, _animDuration * 1.6f).SetEase(Ease.OutBack))
+            .SetTarget(this);
+
+        _mainMenuButtonsContainer.anchoredPosition = origBtnsPos + new Vector2(GetScreenOffsetX(), 0f);
+        _mainMenuButtonsContainer.localScale = Vector3.one * 0.98f;
+        _mainMenuButtonsContainer.localRotation = Quaternion.Euler(0, 0, 1.5f);
+
+        var btnsSeq = DOTween.Sequence()
+            .Join(_mainMenuButtonsContainer.DOAnchorPosX(origBtnsPos.x, _animDuration * 1.6f).SetEase(Ease.OutQuint).SetDelay(0.2f))
+            .Join(_mainMenuButtonsContainer.DORotate(Vector3.zero, _animDuration * 1.6f, RotateMode.Fast).SetDelay(0.2f))
+            .Join(_mainMenuButtonsContainer.DOScale(1f, _animDuration * 1.6f).SetEase(Ease.OutBack).SetDelay(0.2f))
+            .SetTarget(this);
+
+        Sequence startupSeq = DOTween.Sequence();
+        startupSeq.Join(logoSeq);
+        startupSeq.Join(btnsSeq);
+    }
+
+    private void HideAllMenusImmediate()
+    {
+        if (_mainMenuRoot != null) _mainMenuRoot.SetActive(false);
+        if (_levelListMenuRoot != null) _levelListMenuRoot.SetActive(false);
+        if (_levelDetailsRoot != null) _levelDetailsRoot.SetActive(false);
+        if (_noLevelsWindow != null) _noLevelsWindow.SetActive(false);
+        if (_deleteConfirmationWindow != null) _deleteConfirmationWindow.SetActive(false);
+    }
+
+    #endregion
+
+    #region Navigation & Transitions
+
+    private void TransitionTo(GameObject targetWindow)
+    {
+        if (_isTransitioning || targetWindow == null || targetWindow.activeSelf) return;
+
+        _isTransitioning = true;
+        _transitionSequence?.Kill(true);
+        _transitionSequence = DOTween.Sequence().SetTarget(this);
+
+        List<GameObject> windowsToHide = new List<GameObject>();
+
+        bool isDetails = targetWindow == _levelDetailsRoot;
+
+        if (isDetails && _levelListMenuRoot != null && !_levelListMenuRoot.activeSelf)
         {
-            foundPaths.Add(f);
-            AddLevelButton(f);
+            var listRt = _levelListMenuRoot.GetComponent<RectTransform>();
+            listRt.DOKill(true);
+            Vector2 listOrig = _originalPositions.TryGetValue(_levelListMenuRoot, out var lo) ? lo : listRt.anchoredPosition;
+
+            listRt.anchoredPosition = listOrig + new Vector2(GetScreenOffsetX(), 0f);
+            listRt.localScale = Vector3.one * 0.97f;
+            listRt.localRotation = Quaternion.Euler(0, 0, 1.5f);
+            _levelListMenuRoot.SetActive(true);
+
+            var listAppearSeq = DOTween.Sequence()
+                .Join(listRt.DOAnchorPos(listOrig, _animDuration * 1.2f).SetEase(Ease.OutQuint))
+                .Join(listRt.DORotate(Vector3.zero, _animDuration * 1.2f, RotateMode.Fast))
+                .Join(listRt.DOScale(1f, _animDuration * 1.2f).SetEase(Ease.OutBack))
+                .SetTarget(_levelListMenuRoot);
+
+            _transitionSequence.Join(listAppearSeq);
         }
-        // если есть трансфер-уровень — показать первым
-        if (LevelTransfer.hasLevel && LevelTransfer.levelData != null)
+
+        if (_mainMenuRoot != null && _mainMenuRoot.activeSelf && _mainMenuRoot != targetWindow)
+            windowsToHide.Add(_mainMenuRoot);
+
+        if (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf && _levelListMenuRoot != targetWindow && !isDetails)
+            windowsToHide.Add(_levelListMenuRoot);
+
+        if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf && _levelDetailsRoot != targetWindow)
+            windowsToHide.Add(_levelDetailsRoot);
+
+        if (_noLevelsWindow != null && _noLevelsWindow.activeSelf && _noLevelsWindow != targetWindow)
+            windowsToHide.Add(_noLevelsWindow);
+
+        if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf && _deleteConfirmationWindow != targetWindow)
+            windowsToHide.Add(_deleteConfirmationWindow);
+
+        foreach (var win in windowsToHide)
         {
-            string name = string.IsNullOrEmpty(LevelTransfer.levelName) ? "Текущий (не сохранен)" : LevelTransfer.levelName;
-            AddTransferButton(name);
-        }
-        else if (LevelTransfer.hasLevel && !string.IsNullOrEmpty(LevelTransfer.GetEffectivePath()))
-        {
-            // есть только путь без in-memory
-            string p = LevelTransfer.GetEffectivePath();
-            if (!foundPaths.Contains(p))
+            var rt = win.GetComponent<RectTransform>();
+            rt.DOKill(true);
+            Vector2 origPos = _originalPositions.TryGetValue(win, out var o) ? o : rt.anchoredPosition;
+
+            rt.anchoredPosition = origPos;
+            rt.localScale = Vector3.one;
+            rt.localRotation = Quaternion.identity;
+
+            Vector2 hideTarget = origPos;
+            float rotationZ = 0f;
+
+            if (win == _mainMenuRoot)
             {
-                string n = Path.GetFileNameWithoutExtension(p);
-                AddTransferButton(n);
+                hideTarget = origPos + new Vector2(-GetScreenOffsetX(), 0f);
+                rotationZ = -1.5f;
             }
+            else if (win == _levelListMenuRoot)
+            {
+                hideTarget = origPos + new Vector2(GetScreenOffsetX(), 0f);
+                rotationZ = 1.5f;
+            }
+            else if (win == _levelDetailsRoot)
+            {
+                hideTarget = origPos + new Vector2(0f, GetScreenOffsetY());
+                rotationZ = 1f;
+            }
+            else if (win == _noLevelsWindow)
+            {
+                hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
+                rotationZ = -1f;
+            }
+            else if (win == _deleteConfirmationWindow)
+            {
+                hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
+                rotationZ = -1f;
+            }
+
+            var hideSeq = DOTween.Sequence()
+                .Join(rt.DOAnchorPos(hideTarget, _animDuration).SetEase(Ease.InQuart).SetTarget(win))
+                .Join(rt.DORotate(new Vector3(0, 0, rotationZ), _animDuration, RotateMode.Fast))
+                .Join(rt.DOScale(0.97f, _animDuration).SetEase(Ease.InQuart))
+                .SetTarget(win);
+
+            _transitionSequence.Append(hideSeq);
         }
-        if (foundPaths.Count==0 && !LevelTransfer.hasLevel)
+
+        var rtTarget = targetWindow.GetComponent<RectTransform>();
+        rtTarget.DOKill(true);
+        Vector2 origTarget = _originalPositions.TryGetValue(targetWindow, out var ot) ? ot : rtTarget.anchoredPosition;
+
+        Vector2 startPos = origTarget;
+        float startRotZ = 0f;
+
+        if (targetWindow == _mainMenuRoot)
         {
-            var go = new GameObject("Empty", typeof(RectTransform));
-            go.transform.SetParent(levelListContainer, false);
-            var tmp = go.AddComponent<TextMeshProUGUI>(); tmp.text = "Нет .rksl уровней\nСохрани из редактора (SAVE .RKSL)\nили закинь .rksl в " + Path.Combine(Application.persistentDataPath,"Levels"); tmp.fontSize=11; tmp.alignment=TextAlignmentOptions.Center; tmp.color=new Color(1,1,1,0.5f);
-            var le = go.AddComponent<LayoutElement>(); le.minHeight=60;
+            startPos = origTarget + new Vector2(-GetScreenOffsetX(), 0f);
+            startRotZ = -1.5f;
         }
-        if (statusLabel != null) statusLabel.text = $"{foundPaths.Count} уровней • Esc закрыть";
-        Debug.Log($"[Menu] RefreshList нашел {foundPaths.Count} уровней hasLevel={LevelTransfer.hasLevel}", this);
+        else if (targetWindow == _levelListMenuRoot)
+        {
+            startPos = origTarget + new Vector2(GetScreenOffsetX(), 0f);
+            startRotZ = 1.5f;
+        }
+        else if (targetWindow == _levelDetailsRoot)
+        {
+            startPos = origTarget + new Vector2(0f, GetScreenOffsetY());
+            startRotZ = 1f;
+        }
+        else if (targetWindow == _noLevelsWindow)
+        {
+            startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
+            startRotZ = -1f;
+        }
+        else if (targetWindow == _deleteConfirmationWindow)
+        {
+            startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
+            startRotZ = -1f;
+        }
+
+        rtTarget.anchoredPosition = startPos;
+        rtTarget.localScale = Vector3.one * 0.97f;
+        rtTarget.localRotation = Quaternion.Euler(0, 0, startRotZ);
+
+        targetWindow.SetActive(true);
+
+        var appearSeq = DOTween.Sequence()
+            .Join(rtTarget.DOAnchorPos(origTarget, _animDuration * 1.2f).SetEase(Ease.OutQuint).SetTarget(targetWindow))
+            .Join(rtTarget.DORotate(Vector3.zero, _animDuration * 1.2f, RotateMode.Fast))
+            .Join(rtTarget.DOScale(1f, _animDuration * 1.2f).SetEase(Ease.OutBack))
+            .SetTarget(targetWindow);
+
+        _transitionSequence.Append(appearSeq);
+
+        _transitionSequence.AppendCallback(() =>
+        {
+            foreach (var win in windowsToHide)
+            {
+                win.SetActive(false);
+            }
+        });
+
+        _transitionSequence.OnComplete(() =>
+        {
+            _isTransitioning = false;
+            if (targetWindow == _levelListMenuRoot) RefreshLevelList();
+        });
     }
 
-    void AddLevelButton(string path)
+    private void ShowMainMenu()
+    {
+        if (_isTransitioning) return;
+        _selectedLevelPath = null;
+        UpdateDetailsButtonsState();
+        HideDeleteConfirmationImmediate();
+        TransitionTo(_mainMenuRoot);
+    }
+
+    private void ShowLevelList()
+    {
+        if (_isTransitioning) return;
+        _selectedLevelPath = null;
+        UpdateDetailsButtonsState();
+        HideDeleteConfirmationImmediate();
+
+        _foundPaths.Clear();
+        _foundPaths.AddRange(RkslFile.FindAllRkslFiles());
+
+        if (_foundPaths.Count == 0)
+            TransitionTo(_noLevelsWindow);
+        else
+            TransitionTo(_levelListMenuRoot);
+    }
+
+    private void ShowLevelDetails(string path)
+    {
+        if (_isTransitioning) return;
+        _selectedLevelPath = path;
+        UpdateDetailsButtonsState();
+        PopulateDetails(path);
+        TransitionTo(_levelDetailsRoot);
+    }
+
+    private void HideLevelDetails()
+    {
+        if (_isTransitioning) return;
+        if (_levelDetailsRoot == null || !_levelDetailsRoot.activeSelf) return;
+
+        _isTransitioning = true;
+        _selectedLevelPath = null;
+        UpdateDetailsButtonsState();
+
+        var rt = _levelDetailsRoot.GetComponent<RectTransform>();
+        rt.DOKill(true);
+        Vector2 origPos = _originalPositions.TryGetValue(_levelDetailsRoot, out var o) ? o : rt.anchoredPosition;
+
+        Sequence hideSeq = DOTween.Sequence()
+            .Join(rt.DOAnchorPos(origPos + new Vector2(0f, GetScreenOffsetY()), _animDuration * 1.2f).SetEase(Ease.InQuart).SetTarget(_levelDetailsRoot))
+            .Join(rt.DORotate(new Vector3(0, 0, 1f), _animDuration * 1.2f, RotateMode.Fast))
+            .Join(rt.DOScale(0.97f, _animDuration * 1.2f).SetEase(Ease.InQuart))
+            .SetTarget(_levelDetailsRoot);
+
+        hideSeq.OnComplete(() =>
+        {
+            _levelDetailsRoot.SetActive(false);
+            rt.anchoredPosition = origPos;
+            rt.localScale = Vector3.one;
+            rt.localRotation = Quaternion.identity;
+            _isTransitioning = false;
+        });
+    }
+
+    private void HideDeleteConfirmationImmediate()
+    {
+        if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf)
+        {
+            _deleteConfirmationWindow.GetComponent<RectTransform>()?.DOKill(true);
+            _deleteConfirmationWindow.SetActive(false);
+        }
+    }
+
+    private void HideLevelDetailsImmediate()
+    {
+        if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf)
+        {
+            _levelDetailsRoot.GetComponent<RectTransform>()?.DOKill(true);
+            _levelDetailsRoot.SetActive(false);
+        }
+    }
+
+    #endregion
+
+    #region Level List Logic
+
+    private void RefreshLevelList()
+    {
+        if (_levelListContainer == null) return;
+
+        for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
+        {
+            DOTween.Kill(_levelListContainer.GetChild(i).gameObject);
+            Destroy(_levelListContainer.GetChild(i).gameObject);
+        }
+
+        _foundPaths.Clear();
+        _foundPaths.AddRange(RkslFile.FindAllRkslFiles());
+
+        if (_foundPaths.Count == 0) return;
+
+        foreach (string path in _foundPaths) CreateLevelListItem(path);
+
+        var containerRT = _levelListContainer as RectTransform;
+        if (containerRT != null)
+        {
+            LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
+        }
+    }
+
+    private void CreateLevelListItem(string path)
     {
         RkslManifest man = null;
         RkslFile.LoadManifestOnly(path, out man);
-        string title = man != null ? man.title : Path.GetFileNameWithoutExtension(path);
-        string artist = man != null ? man.artist : "";
-        string info = man != null ? $"{man.events.Count} нот • BPM {man.bpm:0}" : "";
-        string label = string.IsNullOrEmpty(artist) ? title : $"{title} — {artist}";
-        var btnGO = CreateLevelButtonGO(label, info, path);
-        // клик — играть
-        var btn = btnGO.GetComponent<Button>();
-        btn.onClick.AddListener(()=> LoadAndPlay(path));
-        // ПКМ — редактировать? добавим вторую кнопку
-        // найдем кнопку Edit внутри
-        var editBtn = btnGO.transform.Find("EditBtn")?.GetComponent<Button>();
-        if (editBtn != null) editBtn.onClick.AddListener(()=> LoadAndEdit(path));
-    }
-    void AddTransferButton(string name)
-    {
-        var btnGO = CreateLevelButtonGO($"[ТЕКУЩИЙ] {name}", "из редактора • не сохранен", "__transfer__");
-        var btn = btnGO.GetComponent<Button>();
-        btn.onClick.AddListener(()=> {
-            if (LevelTransfer.hasLevel)
-            {
-                // играть трансфер
-                SceneManager.LoadScene(gameSceneName);
-            }
-        });
-        var editBtn = btnGO.transform.Find("EditBtn")?.GetComponent<Button>();
-        if (editBtn != null) { editBtn.GetComponentInChildren<TextMeshProUGUI>().text = "В редактор"; editBtn.onClick.AddListener(()=> OpenEditor()); }
-        btnGO.GetComponent<Image>().color = new Color(0.15f,0.35f,0.18f,1f);
+
+        string title = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
+        if (string.IsNullOrEmpty(title)) title = "Без названия";
+
+        var btnGO = Instantiate(_levelButtonPrefab, _levelListContainer);
+
+        var rect = btnGO.GetComponent<RectTransform>();
+        if (rect != null)
+        {
+            rect.localScale = Vector3.one;
+            rect.localPosition = new Vector3(rect.localPosition.x, rect.localPosition.y, 0f);
+
+            var le = btnGO.GetComponent<LayoutElement>();
+            if (le == null) le = btnGO.AddComponent<LayoutElement>();
+            le.minHeight = 80f;
+            le.flexibleWidth = 1f;
+        }
+
+        btnGO.SetActive(true);
+
+        TextMeshProUGUI btnText = btnGO.GetComponentInChildren<TextMeshProUGUI>();
+        if (btnText != null) btnText.text = title;
+
+        Button btn = btnGO.GetComponent<Button>();
+        if (btn != null) btn.onClick.AddListener(() => HandleLevelClick(path));
     }
 
-    GameObject CreateLevelButtonGO(string label, string info, string path)
+    private void HandleLevelClick(string path)
     {
-        GameObject go;
-        if (levelButtonPrefab != null)
+        if (_isTransitioning) return;
+
+        float timeSinceLastClick = Time.unscaledTime - _lastClickTime;
+
+        if (timeSinceLastClick < DoubleClickThreshold && _selectedLevelPath == path)
         {
-            go = Instantiate(levelButtonPrefab, levelListContainer);
-            go.SetActive(true);
-            // пробуем найти текст
-            var txts = go.GetComponentsInChildren<TextMeshProUGUI>();
-            if (txts.Length>0) txts[0].text = label;
-            if (txts.Length>1) txts[1].text = info;
-            // путь в имени
-            go.name = Path.GetFileName(path);
+            LoadAndPlay(path);
         }
         else
         {
-            go = new GameObject(Path.GetFileName(path), typeof(RectTransform), typeof(Image), typeof(Button));
-            go.transform.SetParent(levelListContainer, false);
-            var rt = go.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(0, 56);
-            var img = go.GetComponent<Image>(); img.color = new Color(0.18f,0.18f,0.20f,1f);
-            var btn = go.GetComponent<Button>();
-            var hlg = go.AddComponent<HorizontalLayoutGroup>(); hlg.spacing=8; hlg.padding=new RectOffset(12,6,12,6); hlg.childAlignment=TextAnchor.MiddleLeft;
-            var le = go.AddComponent<LayoutElement>(); le.minHeight=56;
-            // текст
-            var txtGO = new GameObject("Text", typeof(RectTransform));
-            txtGO.transform.SetParent(go.transform, false);
-            var trt = txtGO.GetComponent<RectTransform>(); trt.anchorMin=new Vector2(0,0); trt.anchorMax=new Vector2(1,1); trt.offsetMin=Vector2.zero; trt.offsetMax=Vector2.zero;
-            var tmp = txtGO.AddComponent<TextMeshProUGUI>(); tmp.text = $"<b>{label}</b>\n<size=10><color=#AAAAAA>{info} • {Path.GetFileName(path)}</color></size>"; tmp.fontSize=13; tmp.alignment=TextAlignmentOptions.Left; tmp.color=Color.white;
-            // кнопка Edit
-            var editGO = new GameObject("EditBtn", typeof(RectTransform), typeof(Image), typeof(Button));
-            editGO.transform.SetParent(go.transform, false);
-            var ert = editGO.GetComponent<RectTransform>(); ert.sizeDelta = new Vector2(80, 32);
-            var eimg = editGO.GetComponent<Image>(); eimg.color = new Color(0.22f,0.45f,0.85f,1f);
-            var ebtn = editGO.GetComponent<Button>();
-            var etxtGO = new GameObject("Text", typeof(RectTransform));
-            etxtGO.transform.SetParent(editGO.transform, false);
-            var etrt = etxtGO.GetComponent<RectTransform>(); etrt.anchorMin=Vector2.zero; etrt.anchorMax=Vector2.one; etrt.offsetMin=Vector2.zero; etrt.offsetMax=Vector2.zero;
-            var etmp = etxtGO.AddComponent<TextMeshProUGUI>(); etmp.text="Edit"; etmp.fontSize=12; etmp.alignment=TextAlignmentOptions.Center; etmp.color=Color.white;
-            ebtn.onClick.AddListener(()=> LoadAndEdit(path));
-            return go;
+            ShowLevelDetails(path);
         }
-        // добавляем Edit кнопку если нет
-        if (go.transform.Find("EditBtn")==null)
-        {
-            var editGO = new GameObject("EditBtn", typeof(RectTransform), typeof(Image), typeof(Button));
-            editGO.transform.SetParent(go.transform, false);
-            var ert = editGO.GetComponent<RectTransform>(); ert.sizeDelta = new Vector2(80, 32);
-            var eimg = editGO.GetComponent<Image>(); eimg.color = new Color(0.22f,0.45f,0.85f,1f);
-            var etxtGO = new GameObject("Text", typeof(RectTransform));
-            etxtGO.transform.SetParent(editGO.transform, false);
-            var etrt = etxtGO.GetComponent<RectTransform>(); etrt.anchorMin=Vector2.zero; etrt.anchorMax=Vector2.one; etrt.offsetMin=Vector2.zero; etrt.offsetMax=Vector2.zero;
-            var etmp = etxtGO.AddComponent<TextMeshProUGUI>(); etmp.text="Edit"; etmp.fontSize=12; etmp.alignment=TextAlignmentOptions.Center; etmp.color=Color.white;
-            editGO.GetComponent<Button>().onClick.AddListener(()=> LoadAndEdit(path));
-        }
-        return go;
+
+        _lastClickTime = Time.unscaledTime;
     }
 
-    public void LoadAndPlay(string path)
+    #endregion
+
+    #region Level Details Logic
+
+    private void UpdateDetailsButtonsState()
     {
-        if (path == "__transfer__")
+        bool hasSelection = !string.IsNullOrEmpty(_selectedLevelPath);
+        if (_editLevelButton != null) _editLevelButton.interactable = hasSelection;
+        if (_deleteLevelButton != null) _deleteLevelButton.interactable = hasSelection;
+    }
+
+    private void PopulateDetails(string path)
+    {
+        RkslManifest man = null;
+        RkslFile.LoadManifestOnly(path, out man);
+
+        if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0} BPM" : "N/A";
+        if (_detailDurationText) _detailDurationText.text = "N/A";
+        if (_detailNotesText) _detailNotesText.text = man != null ? $"{man.events.Count} нот" : "0 нот";
+        if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "Неизвестен";
+        if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "Неизвестен";
+        if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "Без названия";
+
+        LoadCoverImage(path);
+    }
+
+    private void LoadCoverImage(string rkslPath)
+    {
+        if (_levelCoverImage == null) return;
+
+        _levelCoverImage.sprite = null;
+
+        string extractDir = Path.Combine(Application.temporaryCachePath, "RkslCover_" + Path.GetFileNameWithoutExtension(rkslPath));
+
+        if (!RkslFile.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+            return;
+
+        if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
+            return;
+
+        try
         {
-            Time.timeScale = 1f;
-            if (menuPanel != null) menuPanel.SetActive(false);
-            SceneManager.LoadScene(gameSceneName);
+            byte[] bytes = File.ReadAllBytes(coverPath);
+            Texture2D tex = new Texture2D(2, 2);
+            if (tex.LoadImage(bytes))
+            {
+                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
+                _levelCoverImage.sprite = sprite;
+            }
+            else
+            {
+                Destroy(tex);
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[MenuController] Не удалось загрузить обложку: {e.Message}");
+        }
+    }
+
+    private void DeleteSelectedLevel()
+    {
+        if (_isTransitioning || string.IsNullOrEmpty(_selectedLevelPath)) return;
+        ShowDeleteConfirmation();
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        if (_isTransitioning) return;
+        TransitionTo(_deleteConfirmationWindow);
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        if (_deleteConfirmationWindow == null || !_deleteConfirmationWindow.activeSelf) return;
+
+        _isTransitioning = true;
+        var rt = _deleteConfirmationWindow.GetComponent<RectTransform>();
+
+        rt.DOKill(true);
+        Vector2 origPos = _originalPositions.TryGetValue(_deleteConfirmationWindow, out var o) ? o : rt.anchoredPosition;
+
+        Sequence seq = DOTween.Sequence()
+            .Join(rt.DOAnchorPos(origPos + new Vector2(0f, -GetScreenOffsetY()), _animDuration * 0.5f).SetEase(Ease.InQuart))
+            .Join(rt.DORotate(new Vector3(0, 0, -1f), _animDuration * 0.5f, RotateMode.Fast))
+            .Join(rt.DOScale(0.97f, _animDuration * 0.5f).SetEase(Ease.InQuart))
+            .SetTarget(_deleteConfirmationWindow);
+
+        seq.OnComplete(() => {
+            _deleteConfirmationWindow.SetActive(false);
+            rt.anchoredPosition = origPos;
+            rt.localScale = Vector3.one;
+            rt.localRotation = Quaternion.identity;
+            _isTransitioning = false;
+
+            if (!string.IsNullOrEmpty(_selectedLevelPath))
+                TransitionTo(_levelDetailsRoot);
+            else
+                TransitionTo(_levelListMenuRoot);
+        });
+    }
+
+    private void ConfirmDelete()
+    {
+        if (string.IsNullOrEmpty(_selectedLevelPath)) return;
+
+        if (File.Exists(_selectedLevelPath))
+        {
+            File.Delete(_selectedLevelPath);
+            Debug.Log($"[MenuController] Уровень удален: {_selectedLevelPath}");
+        }
+
+        if (PlayerPrefs.GetString("SelectedLevelPath") == _selectedLevelPath)
+        {
+            PlayerPrefs.DeleteKey("SelectedLevelPath");
+            PlayerPrefs.Save();
+        }
+
+        _selectedLevelPath = null;
+        UpdateDetailsButtonsState();
+
+        HideDeleteConfirmationImmediate();
+        HideLevelDetailsImmediate();
+
+        _foundPaths.Clear();
+        _foundPaths.AddRange(RkslFile.FindAllRkslFiles());
+
+        if (_foundPaths.Count == 0)
+            TransitionTo(_noLevelsWindow);
+        else
+            TransitionTo(_levelListMenuRoot);
+    }
+
+    private void OpenLevelsFolder()
+    {
+        string folderPath = "";
+        string possiblePath1 = Path.Combine(Application.streamingAssetsPath, "Levels");
+        string possiblePath2 = Path.Combine(Application.persistentDataPath, "Levels");
+
+        if (Directory.Exists(possiblePath1)) folderPath = possiblePath1;
+        else if (Directory.Exists(possiblePath2)) folderPath = possiblePath2;
+
+        if (!Directory.Exists(folderPath))
+        {
+            Debug.LogWarning($"Папка с уровнями не найдена: {folderPath}");
             return;
         }
-        StartCoroutine(LoadAndPlayCo(path));
+
+        try
+        {
+            Process.Start(new ProcessStartInfo()
+            {
+                FileName = folderPath,
+                UseShellExecute = true,
+                Verb = "open"
+            });
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"Не удалось открыть папку: {e.Message}");
+        }
     }
-    System.Collections.IEnumerator LoadAndPlayCo(string path)
+
+    #endregion
+
+    #region Actions (Play / Edit)
+
+    private void LoadAndPlay(string path)
     {
         LevelTransfer.SetRkslPath(path, "Menu");
         PlayerPrefs.SetString("LastRkslPath", path);
         PlayerPrefs.SetString("SelectedLevelPath", path);
         PlayerPrefs.Save();
-        Debug.Log($"[Menu] LoadAndPlay {path} -> LevelTransfer.rkslPath set", this);
-        Time.timeScale = 1f;
-        if (menuPanel != null) menuPanel.SetActive(false);
-        yield return null;
-        SceneManager.LoadScene(gameSceneName);
+
+        SceneManager.LoadScene(_gameSceneName);
     }
-    public void LoadAndEdit(string path)
+
+    private void EditSelectedLevel()
     {
-        Time.timeScale = 1f;
-        if (menuPanel != null) menuPanel.SetActive(false);
-        StartCoroutine(LoadAndEditCo(path));
+        if (string.IsNullOrEmpty(_selectedLevelPath)) return;
+        StartCoroutine(LoadAndEditRoutine(_selectedLevelPath));
     }
-    System.Collections.IEnumerator LoadAndEditCo(string path)
+
+    private void OpenNewLevelInEditor()
+    {
+        LevelTransfer.SetLevel(new RhythmLevelData { fullTitle = "New Level", bpm = 128f }, "Menu");
+        LevelTransfer.fromEditor = true;
+        LevelTransfer.sourceScene = _editorSceneName;
+        SceneManager.LoadScene(_editorSceneName);
+    }
+
+    private IEnumerator LoadAndEditRoutine(string path)
     {
         string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(path));
-        if (!RkslFile.Extract(path, extractDir, out var man, out var audioPath, out var videoPath, out var coverPath))
+
+        if (!RkslFile.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
         {
-            if (statusLabel!=null) statusLabel.text = "Ошибка .rksl";
+            Debug.LogError("[MenuController] Ошибка извлечения .rksl");
             yield break;
         }
+
         AudioClip clip = null;
         if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
         {
-            string url = RkslFile.GetFileUri(audioPath);
-            AudioType type = RkslFile.GetAudioType(audioPath);
-            using (var uwr = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(url, type))
-            {
-                yield return uwr.SendWebRequest();
-                if (uwr.result == UnityEngine.Networking.UnityWebRequest.Result.Success) clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(uwr);
-                else Debug.LogError($"[Menu] LoadAndEdit audio failed {uwr.error} url={url}");
-            }
+            using var uwr = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(
+                RkslFile.GetFileUri(audioPath), RkslFile.GetAudioType(audioPath));
+            yield return uwr.SendWebRequest();
+
+            if (uwr.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
+                clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(uwr);
         }
-        Sprite cover=null;
+
+        Sprite cover = null;
         if (!string.IsNullOrEmpty(coverPath) && File.Exists(coverPath))
         {
-            try
-            {
-                byte[] bytes = File.ReadAllBytes(coverPath);
-                Texture2D tex=new Texture2D(2,2);
-                if (tex.LoadImage(bytes)) cover=Sprite.Create(tex,new Rect(0,0,tex.width,tex.height),Vector2.one*0.5f);
-            }
-            catch (System.Exception e) { Debug.LogWarning($"[Menu] cover load {e.Message}"); }
+            var tex = new Texture2D(2, 2);
+            if (tex.LoadImage(File.ReadAllBytes(coverPath)))
+                cover = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
         }
+
         var data = RkslFile.ToRuntimeData(man, clip, null, cover);
-        data.audioPath = audioPath; data.videoPath = videoPath;
+        data.audioPath = audioPath;
+        data.videoPath = videoPath;
+
         LevelTransfer.SetLevel(data, "Menu");
         LevelTransfer.fromEditor = true;
-        // также сохраним путь для надёжности
         PlayerPrefs.SetString("SelectedLevelPath", path);
         PlayerPrefs.Save();
-        Time.timeScale = 1f;
-        if (menuPanel != null) menuPanel.SetActive(false);
-        SceneManager.LoadScene(editorSceneName);
+
+        SceneManager.LoadScene(_editorSceneName);
     }
 
-    public void OpenEditor()
-    {
-        Time.timeScale = 1f;
-        if (menuPanel != null) menuPanel.SetActive(false);
-        if (!LevelTransfer.hasLevel)
-        {
-            var data = new RhythmLevelData();
-            data.fullTitle = "New Level";
-            data.bpm = 128f;
-            LevelTransfer.SetLevel(data, "Menu");
-        }
-        LevelTransfer.fromEditor = true;
-        LevelTransfer.sourceScene = editorSceneName;
-        SceneManager.LoadScene(editorSceneName);
-    }
-
-    AudioType GetAudioType(string path) => RkslFile.GetAudioType(path);
-
-    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    static void AutoCreate()
-    {
-        if (FindObjectOfType<MenuController>() != null) return;
-        // создаем только в игровых сценах
-        string cur = SceneManager.GetActiveScene().name;
-        if (cur == "IsGameScene" || cur == "IsLevelEditorScene" || cur == "LevelEditor" || cur == "MainMenu")
-        {
-            var go = new GameObject("MenuController (Auto)");
-            go.AddComponent<MenuController>();
-        }
-    }
+    #endregion
 }

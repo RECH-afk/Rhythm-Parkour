@@ -53,10 +53,16 @@ public class RhythmParkourManager : MonoBehaviour
     public bool autoPlayOnStart = true;
     public float autoPlayDelay = 0.5f;
 
+    [Header("Отладка попаданий")]
+    [Tooltip("Логировать спавн/деспанн/удары препятствий (мин. дистанция, касания)")]
+    public bool debugHits = false;
+
     [Header("Состояние")]
     public int nextEventIndex;
     public bool isPlaying;
     public float currentTime;
+    [Tooltip("Уровень уже завершён (показан экран результатов)")]
+    public bool levelFinished;
 
     private List<ObstacleEvent> sortedEvents;
     private readonly List<Obstacle> active = new List<Obstacle>();
@@ -363,8 +369,28 @@ public class RhythmParkourManager : MonoBehaviour
         nextEventIndex = 0;
         isPlaying = true;
         currentTime = 0f;
+        levelFinished = false;
         foreach (var o in active.ToArray()) ReturnToPool(o);
         active.Clear();
+        // старт подсчёта как в osu (сбрасывает комбо/скор/миссы)
+        var sm = RhythmScoreManager.Instance;
+        if (sm == null) sm = gameObject.AddComponent<RhythmScoreManager>();
+        int total = sortedEvents != null ? sortedEvents.Count : (levelData != null ? levelData.events.Count : 0);
+        sm.BeginLevel(levelData != null ? levelData.fullTitle : "", total);
+        // вернуть управление (после смерти оно залочено) и спрятать курсор
+        var fpc = FindObjectOfType<EasyPeasyFirstPersonController.FirstPersonController>();
+        if (fpc != null) fpc.SetControl(true);
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
+    /// <summary>Провал (смерть): стопает уровень и показывает результаты с рангом TRASH.</summary>
+    public void FailLevel()
+    {
+        if (levelFinished) return;
+        var sm = RhythmScoreManager.Instance;
+        if (sm != null) sm.Fail();
+        FinishLevel(true);
     }
 
     public void Stop()
@@ -375,6 +401,40 @@ public class RhythmParkourManager : MonoBehaviour
         foreach (var o in active.ToArray()) ReturnToPool(o);
         active.Clear();
         nextEventIndex = 0;
+    }
+
+    /// <summary>
+    /// Финиш уровня как в osu: додживает висящие ноты (при успехе),
+    /// считает итоги и показывает экран результатов через RhythmScoreManager.
+    /// </summary>
+    public void FinishLevel(bool failed = false)
+    {
+        if (levelFinished) return;
+        levelFinished = true;
+        isPlaying = false;
+        if (failed)
+        {
+            conductor?.Stop();
+            if (videoPlayer != null) videoPlayer.Stop();
+        }
+        var sm = RhythmScoreManager.Instance;
+        if (sm != null && sm.isLevelActive && !sm.isFinished)
+        {
+            if (!failed)
+            {
+                // ноты что ещё летели, а песня кончилась: чистые — Perfect, задевшие игрока — Miss
+                foreach (var o in active.ToArray())
+                {
+                    if (o == null || !o.gameObject.activeSelf || o.countedAsMiss) continue;
+                    if (o.touchedPlayer) { o.countedAsMiss = true; sm.RegisterMiss(); }
+                    else sm.RegisterPerfect();
+                }
+            }
+        }
+        foreach (var o in active.ToArray()) ReturnToPool(o);
+        active.Clear();
+        if (sm != null && !sm.isFinished) sm.Finish(failed);
+        else if (sm == null) Debug.Log("[Rhythm] Уровень завершён (нет RhythmScoreManager)", this);
     }
 
     void Update()
@@ -410,7 +470,10 @@ public class RhythmParkourManager : MonoBehaviour
             }
         }
 
-        if (!isPlaying || levelData == null || conductor == null || !conductor.isPlaying) return;
+        if (!isPlaying || levelData == null || conductor == null) return;
+        // песня доиграла — финиш с экраном результатов как в osu
+        if (!conductor.isPlaying && !levelFinished) { FinishLevel(false); return; }
+        if (!conductor.isPlaying) return;
         currentTime = conductor.songPosition;
 
         while (nextEventIndex < sortedEvents.Count)
@@ -533,6 +596,7 @@ public class RhythmParkourManager : MonoBehaviour
         }
 
         ob.gameObject.SetActive(true);
+        ob.noteId = nextEventIndex; // индекс ивента = уникальный id ноты в прохождении
         float spd = evt.speed > 0.01f ? evt.speed : (ob.baseSpeed > 0.01f ? ob.baseSpeed : defaultObstacleSpeed);
         ob.Init(this, dirNormalized, spd, despawnPoint, evt.time);
         active.Add(ob);

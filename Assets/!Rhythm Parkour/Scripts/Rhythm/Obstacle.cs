@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using UnityEngine;
+using TMPro;
 
 /// <summary>
 /// Вешай на префаб препятствия. Двигается строго по дорожке и удаляется у точки деспавна.
@@ -17,7 +19,7 @@ public class Obstacle : MonoBehaviour
     public int damage = 20;
     [Tooltip("Уничтожать препятствие после удара?")]
     public bool destroyOnHit = false;
-    [Tooltip("Кулдаун нанесения урона этим препятствием (сек)")]
+    [Tooltip("Кулдаун засчитывания удара этим препятствием (сек)")]
     public float damageCooldown = 0.6f;
     float lastDamageTime;
 
@@ -33,9 +35,73 @@ public class Obstacle : MonoBehaviour
     public bool spawnFromGround = true;
     public float spawnGroundOffset = 0.9f;
 
+    [Header("Хитбокс")]
+    [Tooltip("Строить триггер по реальному визуалу (рендеры) при каждом спавне. Выкл = как настроено в префабе")]
+    public bool useVisualHitbox = true;
+    [Tooltip("Расширение хитбокса от визуала со всех сторон (м). Можно в минус — тогда хитбокс МЕНЬШЕ картинки (прощение)")]
+    public float hitboxPadding = 0.05f;
+
+    [Header("Нота-клавиша (tap)")]
+    [Tooltip("Если вкл — урона касанием нет, надо нажать клавишу в момент пролёта мимо игрока")]
+    public bool isKeyNote = false;
+    [Tooltip("Какую клавишу жать (буква пишется на ноте)")]
+    public KeyCode keyCode = KeyCode.F;
+    [Tooltip("Окно идеального нажатия (сек, ± от пролёта)")]
+    public float keyPerfectWindow = 0.09f;
+    [Tooltip("Окно хорошего нажатия (сек, ± от пролёта)")]
+    public float keyGoodWindow = 0.18f;
+    [Tooltip("Показывать букву клавиши на ноте")]
+    public bool showKeyLabel = true;
+    [Tooltip("Размер буквы (масштаб текста)")]
+    public float keyLabelSize = 1f;
+    public Color keyLabelColor = Color.white;
+    [Tooltip("Смещение текста от центра ноты (локальные единицы)")]
+    public Vector3 keyLabelOffset = new Vector3(0f, 0.9f, 0f);
+    [Tooltip("Поворачивать текст к камере")]
+    public bool keyLabelFacePlayer = true;
+
+    [Header("Точный хит-тест")]
+    [Tooltip("Считать ударом капсулу игрока (точно по форме), а не(box) её bounds-квадрат")]
+    public bool useCapsuleHitTest = true;
+    [Tooltip("Камера внутри триггера = удар, даже если капсула не задета (голова в стене)")]
+    public bool cameraCountsAsHit = true;
+    [Tooltip("Точек-семплов вдоль капсулы для замера зазора (больше = точнее, дороже)")]
+    [Range(2, 9)] public int capsuleGapSamples = 5;
+
+    [Header("Проверка проходимости (debugHits)")]
+    [Tooltip("Мин. время подлёта ноты для реакции (сек). Меньше — варнинг")]
+    public float minReactionTime = 0.7f;
+
     [HideInInspector] public float spawnTime;
     internal RhythmParkourManager manager;
     internal Transform despawnPoint;
+
+    [Header("Счёт (osu)")]
+    [Tooltip("Уникальный id ноты в текущем прохождении. Ставит менеджер при спавне")]
+    [HideInInspector] public int noteId = -1;
+    [Tooltip("По этой ноте уже засчитан Miss (повторный урон не плодит миссы)")]
+    [HideInInspector] public bool countedAsMiss;
+    [Tooltip("Препятствие реально задело игрока (даже если HP-урон заблокирован неуязвимостью) — Perfect уже невозможен")]
+    [HideInInspector] public bool touchedPlayer;
+    [Tooltip("Мин. зазор между объёмами игрока и препятствия за жизнь ноты — из него считается опасность")]
+    [HideInInspector] public float minGap = float.MaxValue;
+    private Transform playerTf;
+    private Collider playerCol;
+    private CapsuleCollider playerCapsule;
+    private Camera playerCam;
+    private PlayerHealth playerHealth;
+    private EasyPeasyFirstPersonController.FirstPersonController playerFpc;
+    private bool triggerAutoBuilt;
+    // ── состояние ноты-клавиши ──
+    private bool keyJudged;
+    private HitJudgement keyResult;
+    private bool keyCrossed;
+    private float keyCrossTime;
+    private readonly List<float> keyPressTimes = new List<float>();
+    private Transform keyLabelT;
+    private TextMeshPro keyLabelTmp;
+    private TextMesh keyLabelLegacy;
+    private Camera labelCam;
 
     private Vector3 direction;
     private float speed;
@@ -75,38 +141,85 @@ public class Obstacle : MonoBehaviour
             rb.isKinematic = true;
             rb.useGravity = false;
         }
-        // гарантируем триггер-коллайдер для урона (отдельно от солидного MeshCollider)
-        bool hasTrigger = false;
-        foreach (var c in GetComponents<Collider>()) if (c.isTrigger) { hasTrigger = true; break; }
-        if (!hasTrigger)
+        // гарантируем триггер-коллайдер для урона строго на КОРНЕ
+        // (компенсация спавн-масштаба и проверка объёмов работают только с корневым).
+        // Точный размер выставит RefreshHitboxFromVisual при спавне (по реальному мешу,
+        // который ProBuilder строит в рантайме) — здесь только заглушка чтобы было что ресайзить.
+        triggerCol = null;
+        triggerAutoBuilt = false;
+        foreach (var c in GetComponents<Collider>()) if (c.isTrigger && c is BoxCollider) { triggerCol = (BoxCollider)c; break; }
+        if (triggerCol == null)
         {
-            var solid = GetComponent<Collider>();
             BoxCollider bc = gameObject.AddComponent<BoxCollider>();
             bc.isTrigger = true;
-            if (solid != null && solid != bc)
-            {
-                Bounds wb = solid.bounds;
-                Vector3 localCenter = transform.InverseTransformPoint(wb.center);
-                Vector3 ls = transform.lossyScale;
-                ls.x = Mathf.Abs(ls.x) < 0.001f ? 1f : ls.x;
-                ls.y = Mathf.Abs(ls.y) < 0.001f ? 1f : ls.y;
-                ls.z = Mathf.Abs(ls.z) < 0.001f ? 1f : ls.z;
-                Vector3 localSize = new Vector3(wb.size.x / ls.x, wb.size.y / ls.y, wb.size.z / ls.z);
-                bc.center = localCenter;
-                bc.size = localSize * 0.99f;
-            }
-            else
-            {
-                bc.center = new Vector3(0, 0.75f, 0);
-                bc.size = new Vector3(1f, 1.5f, 1f);
-            }
+            bc.center = new Vector3(0, 0.75f, 0);
+            bc.size = new Vector3(1f, 1.5f, 1f);
+            triggerCol = bc;
+            triggerAutoBuilt = true;
         }
-        // запомним триггер для компенсации масштаба (хит точно в бит, даже когда визуал ещё маленький)
-        foreach (var c in GetComponents<Collider>()) if (c.isTrigger && c is BoxCollider) { triggerCol = (BoxCollider)c; break; }
-        if (triggerCol != null) { triggerBaseSize = triggerCol.size; triggerBaseCenter = triggerCol.center; triggerBaseScale = transform.localScale; if (triggerBaseScale.x==0) triggerBaseScale.x=1; if(triggerBaseScale.y==0) triggerBaseScale.y=1; if(triggerBaseScale.z==0) triggerBaseScale.z=1; }
+        if (triggerCol != null) CaptureTriggerBase();
     }
 
-    // прямой урон игроку (надёжнее чем только PlayerHealth.OnTriggerEnter — работает с обеих сторон)
+    void CaptureTriggerBase()
+    {
+        if (triggerCol == null) return;
+        triggerBaseSize = triggerCol.size;
+        triggerBaseCenter = triggerCol.center;
+        triggerBaseScale = transform.localScale;
+        if (triggerBaseScale.x == 0) triggerBaseScale.x = 1;
+        if (triggerBaseScale.y == 0) triggerBaseScale.y = 1;
+        if (triggerBaseScale.z == 0) triggerBaseScale.z = 1;
+    }
+
+    /// <summary>
+    /// Выставляет корневой триггер по реальному визуалу (рендеры self+дети).
+    /// Вызывать при спавне: ProBuilder строит меш в рантайме, в Awake его ещё нет.
+    /// Ручной триггер из префаба не трогаем. Размеры — в локальных единицах (масштаб префаба учитывается).
+    /// </summary>
+    void RefreshHitboxFromVisual()
+    {
+        if (triggerCol == null) return;
+        if (!useVisualHitbox || !triggerAutoBuilt) { CaptureTriggerBase(); return; }
+
+        Bounds vb = new Bounds(transform.position, Vector3.zero);
+        bool has = false;
+        foreach (var r in GetComponentsInChildren<MeshRenderer>())
+        {
+            if (r == null) continue;
+            Bounds b = r.bounds;
+            if (b.size.sqrMagnitude < 1e-8f) continue; // меш ещё не построен
+            if (!has) { vb = b; has = true; }
+            else vb.Encapsulate(b);
+        }
+        if (!has)
+        {
+            // визуала нет — fallback по коллайдерам иерархии
+            foreach (var c in GetComponentsInChildren<Collider>())
+            {
+                if (c.isTrigger || c == triggerCol) continue;
+                Bounds b = c.bounds;
+                if (b.size.sqrMagnitude < 1e-8f) continue;
+                if (!has) { vb = b; has = true; }
+                else vb.Encapsulate(b);
+            }
+        }
+        if (has)
+        {
+            vb.Expand(hitboxPadding * 2f);
+            // прощение (отрицательный паддинг) не должно выворачивать объём
+            vb.size = new Vector3(Mathf.Max(0.05f, vb.size.x), Mathf.Max(0.05f, vb.size.y), Mathf.Max(0.05f, vb.size.z));
+            Vector3 ls = transform.lossyScale;
+            ls.x = Mathf.Abs(ls.x) < 0.001f ? 1f : ls.x;
+            ls.y = Mathf.Abs(ls.y) < 0.001f ? 1f : ls.y;
+            ls.z = Mathf.Abs(ls.z) < 0.001f ? 1f : ls.z;
+            triggerCol.center = transform.InverseTransformPoint(vb.center);
+            triggerCol.size = new Vector3(vb.size.x / ls.x, vb.size.y / ls.y, vb.size.z / ls.z);
+        }
+        // иначе остаётся заглушка из EnsurePhysics
+        CaptureTriggerBase();
+    }
+
+    // прямое касание игрока (надёжнее чем только PlayerHealth.OnTriggerEnter — работает с обеих сторон)
     void OnTriggerEnter(Collider other) => TryDamage(other);
     void OnTriggerStay(Collider other) => TryDamage(other);
     // для solid-столкновения (если триггер не сработал)
@@ -114,17 +227,60 @@ public class Obstacle : MonoBehaviour
 
     void TryDamage(Collider col)
     {
-        if (!moving) return;
-        if (Time.time - lastDamageTime < damageCooldown) return;
-        if (isSpawning && spawnAnimTimer < 0.18f) return;
+        if (!moving || isKeyNote) return;
         // ищем PlayerHealth строго на коллайдере игрока — без FindObjectOfType (иначе бьёт сквозь воздух)
         var ph = col.GetComponentInParent<PlayerHealth>();
         if (ph == null) ph = col.GetComponent<PlayerHealth>();
         if (ph == null) return;
+        HitPlayerChecked(ph);
+    }
+
+    /// <summary>Хитбокс игрока вне триггера — уворот засчитан, даже если что-то ещё задело.</summary>
+    bool HitboxDodged()
+    {
+        if (triggerCol == null) return false;
+        // точный тест: капсула (не квадрат!) + камера внутри стены
+        if (useCapsuleHitTest && playerCapsule != null)
+        {
+            if (CapsuleHitsTrigger()) return false;
+        }
+        else
+        {
+            if (!HasPlayerBounds) return false;
+            if (triggerCol.bounds.Intersects(GetPlayerBounds())) return false;
+        }
+        if (CameraInsideTrigger()) return false;
+        return true;
+    }
+
+    /// <summary>Удар с учётом хитбокса игрока (для колбэков физики и PlayerHealth).</summary>
+    public void HitPlayerChecked(PlayerHealth ph)
+    {
+        if (!moving || ph == null) return;
+        if (HitboxDodged()) return;
+        HitPlayer(ph);
+    }
+
+    /// <summary>
+    /// Единая точка удара: вызывается из колбэков физики И из покадровой проверки объёмов.
+    /// Касание фиксируется всегда (touchedPlayer) — даже если HP-урон заблокирован
+    /// неуязвимостью/кулдауном, для скоринга это уже не чистый додж.
+    /// </summary>
+    public void HitPlayer(PlayerHealth ph)
+    {
+        if (!moving || ph == null || isKeyNote) return;
+        touchedPlayer = true;
+        if (Time.time - lastDamageTime < damageCooldown) return;
+        if (isSpawning && spawnAnimTimer < 0.18f) return;
+        // триггер/пересечение уже гарантирует контакт — дистанцию не проверяем, только реальное касание объёмов
         if (ph.IsDead || ph.IsInvincible) return;
-        // триггер уже гарантирует контакт — дистанцию не проверяем, только реальное касание коллайдеров
         lastDamageTime = Time.time;
-        ph.TakeDamage(damage > 0 ? damage : 20, this);
+        bool applied = ph.TakeDamage(damage > 0 ? damage : 20, this);
+        if (applied && !countedAsMiss)
+        {
+            countedAsMiss = true;
+            if (RhythmScoreManager.Instance != null) RhythmScoreManager.Instance.RegisterMiss();
+        }
         if (destroyOnHit) Despawn();
     }
 
@@ -143,6 +299,50 @@ public class Obstacle : MonoBehaviour
         despawnPoint = despawn;
         spawnTime = time;
         moving = true;
+        // сброс подсчёта для нового спавна (пул переиспользует объекты)
+        countedAsMiss = false;
+        touchedPlayer = false;
+        lastDamageTime = -999f;
+        minGap = float.MaxValue;
+        keyJudged = false;
+        keyCrossed = false;
+        keyCrossTime = 0f;
+        keyPressTimes.Clear();
+        labelCam = null;
+        EnsureKeyLabel();
+        SetKeyLabel(isKeyNote && showKeyLabel ? KeyName(keyCode) : "");
+        if (keyLabelT != null) keyLabelT.gameObject.SetActive(isKeyNote && showKeyLabel);
+        if (playerTf == null || playerHealth == null)
+        {
+            var ph = FindObjectOfType<PlayerHealth>();
+            if (ph != null)
+            {
+                playerTf = ph.transform;
+                playerHealth = ph;
+                var cc = ph.GetComponentInChildren<CharacterController>();
+                playerCol = cc != null ? cc : ph.GetComponentInChildren<Collider>();
+                playerCapsule = ph.GetComponentInChildren<CapsuleCollider>();
+                if (playerCam == null)
+                {
+                    playerCam = ph.GetComponentInChildren<Camera>();
+                    if (playerCam == null) playerCam = Camera.main;
+                }
+            }
+        }
+        if (playerTf != null)
+        {
+            playerFpc = playerTf.GetComponent<EasyPeasyFirstPersonController.FirstPersonController>();
+            if (playerFpc == null) playerFpc = playerTf.GetComponentInChildren<EasyPeasyFirstPersonController.FirstPersonController>();
+        }
+        // хитбокс по реальному визуалу (масштаб префаба уже выставлен спавном, меш построен)
+        RefreshHitboxFromVisual();
+        if (manager != null && manager.debugHits)
+        {
+            if (playerHealth == null) Debug.LogWarning($"[Hits] {name}: игрок (PlayerHealth) не найден!", this);
+            if (triggerCol == null) Debug.LogWarning($"[Hits] {name}: нет триггера!", this);
+            else if (!HasPlayerBounds) Debug.LogWarning($"[Hits] {name}: у игрока нет коллайдера!", this);
+            else Debug.Log($"[Hits] Spawn {name}: trigger={triggerCol.bounds.size.x:0.00}x{triggerCol.bounds.size.y:0.00}x{triggerCol.bounds.size.z:0.00}м", this);
+        }
 
         // запоминаем границы дорожки и Y — spawnPosition это точка СПАВНА (а не хита)
         if (mgr != null)
@@ -158,6 +358,9 @@ public class Obstacle : MonoBehaviour
             trackMaxX = 3f;
         }
         spawnPosition = new Vector3(transform.position.x, lockedY, transform.position.z);
+
+        // проходимость: масштаб полный, хитбокс свежий, ширина трека известна
+        if (manager != null && manager.debugHits) CheckDodgeable();
 
         // ── анимация появления ──
         spawnTargetScale = transform.localScale;
@@ -245,6 +448,44 @@ public class Obstacle : MonoBehaviour
 
         transform.position = basePos;
 
+        // ── нота-клавиша: касания нет, только нажатие в момент пролёта ──
+        if (isKeyNote && !keyJudged)
+            UpdateKeyNote();
+
+        // трекаем мин. ЗАЗОР между объёмами — для дебага (суд бинарный: касание = Miss, иначе Perfect).
+        // Капсула игрока (точно по форме, не квадрат) vs триггер; прыжок/подкат вплотную = впритирку.
+        // (нотам-клавишам не нужно: их судят по нажатию)
+        if (!isKeyNote && triggerCol != null)
+        {
+            float gap;
+            if (useCapsuleHitTest && playerCapsule != null) gap = CapsuleTriggerGap();
+            else if (HasPlayerBounds) gap = BoundsGap(triggerCol.bounds, GetPlayerBounds());
+            else gap = float.MaxValue;
+            if (gap < minGap) minGap = gap;
+        }
+
+        // страховка колбэков физики: точное пересечение каждый кадр.
+        // Только триггеры и чтение геометрии — персонажа ничего не толкает.
+        // Капсула игрока (не квадрат) + камера внутри стены = попадание.
+        // (ноты-клавиши пролетают сквозь игрока без урона)
+        if (!isKeyNote && triggerCol != null && playerHealth != null)
+        {
+            Vector3 toPlayer = playerTf.position - transform.position;
+            toPlayer.y = 0f;
+            if (toPlayer.sqrMagnitude < 25f)
+            {
+                bool hit;
+                if (useCapsuleHitTest && playerCapsule != null) hit = CapsuleHitsTrigger();
+                else hit = HasPlayerBounds && triggerCol.bounds.Intersects(GetPlayerBounds());
+                if (!hit) hit = CameraInsideTrigger();
+                if (hit)
+                {
+                    if (minGap > 0f) minGap = 0f; // было касание — зазор нулевой
+                    HitPlayer(playerHealth);
+                }
+            }
+        }
+
         if (despawnPoint != null)
         {
             Vector3 toDespawn = despawnPoint.position - transform.position;
@@ -263,10 +504,309 @@ public class Obstacle : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Хитбокс игрока: коллайдер ВСЕГО тела (обычно CharacterController).
+    /// Присед/слайд меняют его высоту — хитбокс честно уменьшается.
+    /// Есть ли валидный объём — см. HasPlayerBounds.
+    /// </summary>
+    public bool HasPlayerBounds => playerCol != null;
+
+    public Bounds GetPlayerBounds()
+    {
+        return playerCol.bounds;
+    }
+
+    /// <summary>Мин. расстояние между поверхностями двух AABB (0 = пересекаются).</summary>
+    public static float BoundsGap(Bounds a, Bounds b)
+    {
+        float dx = Mathf.Max(a.min.x - b.max.x, b.min.x - a.max.x);
+        float dy = Mathf.Max(a.min.y - b.max.y, b.min.y - a.min.y);
+        float dz = Mathf.Max(a.min.z - b.max.z, b.min.z - a.min.z);
+        dx = Mathf.Max(0f, dx);
+        dy = Mathf.Max(0f, dy);
+        dz = Mathf.Max(0f, dz);
+        return Mathf.Sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    /// <summary>Мировые концы отрезка капсулы и её радиус (с учётом скейла). Нужно и визуализатору.</summary>
+    public static bool GetCapsuleWorld(CapsuleCollider cap, out Vector3 a, out Vector3 b, out float r)
+    {
+        a = b = Vector3.zero; r = 0.5f;
+        if (cap == null) return false;
+        Transform t = cap.transform;
+        Vector3 ls = t.lossyScale;
+        float axisScale, rScale;
+        if (cap.direction == 0) { axisScale = Mathf.Abs(ls.x); rScale = Mathf.Max(Mathf.Abs(ls.y), Mathf.Abs(ls.z)); }
+        else if (cap.direction == 2) { axisScale = Mathf.Abs(ls.z); rScale = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.y)); }
+        else { axisScale = Mathf.Abs(ls.y); rScale = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.z)); }
+        axisScale = Mathf.Max(axisScale, 0.001f); rScale = Mathf.Max(rScale, 0.001f);
+        Vector3 axisL = cap.direction == 0 ? Vector3.right : (cap.direction == 2 ? Vector3.forward : Vector3.up);
+        Vector3 c = t.TransformPoint(cap.center);
+        Vector3 axisW = t.TransformDirection(axisL).normalized;
+        float half = Mathf.Max(0f, cap.height * 0.5f * axisScale - cap.radius * rScale);
+        r = cap.radius * rScale;
+        a = c - axisW * half;
+        b = c + axisW * half;
+        return true;
+    }
+
+    /// <summary>Точное пересечение: капсула игрока vs триггер-бокс (не зависит от симуляции физики).</summary>
+    bool CapsuleHitsTrigger()
+    {
+        if (triggerCol == null || playerCapsule == null) return false;
+        return Physics.ComputePenetration(triggerCol, triggerCol.transform.position, triggerCol.transform.rotation,
+            playerCapsule, playerCapsule.transform.position, playerCapsule.transform.rotation,
+            out _, out _);
+    }
+
+    /// <summary>Зазор капсула→триггер: семплы вдоль отрезка капсулы до поверхности бокса минус радиус.</summary>
+    float CapsuleTriggerGap()
+    {
+        if (triggerCol == null || playerCapsule == null) return float.MaxValue;
+        if (!GetCapsuleWorld(playerCapsule, out var a, out var b, out float r)) return float.MaxValue;
+        int n = Mathf.Clamp(capsuleGapSamples, 2, 9);
+        float best = float.MaxValue;
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 p = Vector3.Lerp(a, b, (float)i / (n - 1));
+            Vector3 q = triggerCol.ClosestPoint(p);
+            float d = Vector3.Distance(p, q) - r;
+            if (d < best) best = d;
+        }
+        return best;
+    }
+
+    /// <summary>Камера внутри триггера (точная проверка в локальных координатах триггера).</summary>
+    bool CameraInsideTrigger()
+    {
+        if (!cameraCountsAsHit || triggerCol == null || playerCam == null) return false;
+        Vector3 lp = triggerCol.transform.InverseTransformPoint(playerCam.transform.position);
+        Vector3 e = triggerCol.size * 0.5f;
+        Vector3 c = triggerCol.center;
+        const float eps = 0.02f;
+        return Mathf.Abs(lp.x - c.x) <= e.x + eps
+            && Mathf.Abs(lp.y - c.y) <= e.y + eps
+            && Mathf.Abs(lp.z - c.z) <= e.z + eps;
+    }
+
+    /// <summary>Часы для ноты-клавиши: время песни в игре, иначе реальное время (превью).</summary>
+    float KeyNow()
+    {
+        if (manager != null && manager.isPlaying) return manager.currentTime;
+        return Time.time;
+    }
+
+    /// <summary>Кадровая логика ноты-клавиши: пишем нажатия, ловим пролёт, судим по закрытии окна.</summary>
+    void UpdateKeyNote()
+    {
+        if (Input.GetKeyDown(keyCode)) keyPressTimes.Add(KeyNow());
+        if (!keyCrossed)
+        {
+            Transform anchor = playerTf != null ? playerTf : (manager != null ? manager.hitTrigger : null);
+            Vector3 ap = anchor != null ? anchor.position : transform.position;
+            if (Vector3.Dot(ap - transform.position, direction) <= 0f)
+            {
+                keyCrossed = true;
+                keyCrossTime = KeyNow();
+            }
+        }
+        // буква всегда смотрит в камеру
+        if (keyLabelFacePlayer && keyLabelT != null)
+        {
+            if (labelCam == null) labelCam = playerCam != null ? playerCam : Camera.main;
+            if (labelCam != null)
+            {
+                Vector3 toCam = keyLabelT.position - labelCam.transform.position;
+                if (toCam.sqrMagnitude > 1e-6f) keyLabelT.rotation = Quaternion.LookRotation(toCam);
+            }
+        }
+        if (keyCrossed && KeyNow() >= keyCrossTime + keyGoodWindow)
+        {
+            JudgeKeyNote();
+            Despawn();
+        }
+    }
+
+    /// <summary>Суд ноты-клавиши по лучшему нажатию (|press - cross|). После суда нота исчезает.</summary>
+    void JudgeKeyNote()
+    {
+        if (keyJudged) return;
+        keyJudged = true;
+        float best = float.MaxValue;
+        foreach (float p in keyPressTimes)
+        {
+            float d = Mathf.Abs(p - keyCrossTime);
+            if (d < best) best = d;
+        }
+        if (best <= keyPerfectWindow) keyResult = HitJudgement.Perfect300;
+        else if (best <= keyGoodWindow) keyResult = HitJudgement.Great100;
+        else if (best <= keyGoodWindow * 2f) keyResult = HitJudgement.Good50;
+        else keyResult = HitJudgement.Miss;
+        var sm = RhythmScoreManager.Instance;
+        if (sm != null) sm.RegisterJudgement(keyResult);
+    }
+
+    /// <summary>Буква клавиши на ноте: TextMeshPro 3D, иначе legacy TextMesh (шрифт Arial всегда есть).</summary>
+    void EnsureKeyLabel()
+    {
+        if (!isKeyNote || !showKeyLabel) return;
+        if (keyLabelT != null) return;
+        var go = new GameObject("KeyLabel");
+        go.transform.SetParent(transform, false);
+        go.transform.localPosition = keyLabelOffset;
+        go.transform.localRotation = Quaternion.identity;
+        go.transform.localScale = Vector3.one;
+        TextMeshPro tmp = null;
+        TextMesh legacy = null;
+        try
+        {
+            tmp = go.AddComponent<TextMeshPro>();
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.fontSize = 10;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.color = keyLabelColor;
+            if (tmp.font == null)
+            {
+                var found = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
+                if (found != null && found.Length > 0) tmp.font = found[0];
+            }
+            if (tmp.font == null) { Destroy(tmp); tmp = null; }
+        }
+        catch { if (tmp != null) Destroy(tmp); tmp = null; }
+        if (tmp == null)
+        {
+            legacy = go.AddComponent<TextMesh>();
+            legacy.alignment = TextAlignment.Center;
+            legacy.anchor = TextAnchor.MiddleCenter;
+            legacy.fontSize = 64;
+            legacy.characterSize = 0.02f * Mathf.Max(0.1f, keyLabelSize);
+            legacy.color = keyLabelColor;
+        }
+        else
+        {
+            go.transform.localScale = Vector3.one * Mathf.Max(0.1f, keyLabelSize);
+        }
+        keyLabelT = go.transform;
+        keyLabelTmp = tmp;
+        keyLabelLegacy = legacy;
+    }
+
+    void SetKeyLabel(string s)
+    {
+        if (keyLabelTmp != null) keyLabelTmp.text = s;
+        if (keyLabelLegacy != null) keyLabelLegacy.text = s;
+    }
+
+    static string KeyName(KeyCode k)
+    {
+        string s = k.ToString();
+        if (s.StartsWith("Alpha") && s.Length == 6) return s.Substring(5); // Alpha1 -> 1
+        return s;
+    }
+
+    void OnValidate()
+    {
+        // живое обновление буквы в редакторе (только текст, без создания объектов)
+        SetKeyLabel(isKeyNote && showKeyLabel ? KeyName(keyCode) : "");
+    }
+
     public void Despawn()
     {
+        if (moving)
+        {
+            // Во время превью/остановки не считаем
+            var sm = RhythmScoreManager.Instance;
+            if (sm != null && sm.isLevelActive && !sm.isFinished && manager != null && manager.isPlaying)
+            {
+                if (!countedAsMiss)
+                {
+                    if (isKeyNote)
+                    {
+                        // ноту-клавишу судят только по нажатию (суд уже мог пройти в Update)
+                        if (!keyJudged) JudgeKeyNote();
+                    }
+                    // задел игрока, но Miss не засчитан (урон ушёл в неуязвимость) — всё равно Miss, не додж
+                    else if (touchedPlayer) { countedAsMiss = true; sm.RegisterMiss(); }
+                    else sm.RegisterPerfect(); // чистый пролёт — Perfect (бинарно: либо увернулся, либо Miss)
+                }
+            }
+            if (manager != null && manager.debugHits)
+            {
+                Debug.Log($"[Hits] Despawn {name}: gap={minGap:0.00} touched={touchedPlayer} miss={countedAsMiss}", this);
+            }
+        }
         moving = false;
         if (manager != null) manager.ReturnToPool(this);
         else Destroy(gameObject);
+    }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        // хит-объём: красный — уже задел игрока, зелёный — чистый
+        if (triggerCol != null)
+        {
+            Gizmos.color = touchedPlayer ? Color.red : new Color(0.2f, 1f, 0.4f, 0.8f);
+            Gizmos.DrawWireCube(triggerCol.bounds.center, triggerCol.bounds.size);
+        }
+        // хитбокс игрока: капсула (точно по форме) или квадрат fallback — синий
+        if (useCapsuleHitTest && playerCapsule != null && GetCapsuleWorld(playerCapsule, out var ca, out var cb, out float cr))
+        {
+            Gizmos.color = new Color(0.3f, 0.6f, 1f, 0.9f);
+            Gizmos.DrawWireSphere(ca, cr);
+            Gizmos.DrawWireSphere(cb, cr);
+            Gizmos.DrawLine(ca, cb);
+        }
+        else if (HasPlayerBounds)
+        {
+            Bounds pb = GetPlayerBounds();
+            Gizmos.color = new Color(0.3f, 0.6f, 1f, 0.9f);
+            Gizmos.DrawWireCube(pb.center, pb.size);
+        }
+        // камера-убийца: жёлтая точка
+        if (cameraCountsAsHit && playerCam != null)
+        {
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawSphere(playerCam.transform.position, 0.06f);
+        }
+    }
+#endif
+
+    /// <summary>
+    /// Проверка проходимости ноты: можно ли её перепрыгнуть / подкатиться / обойти стрейфом,
+    /// и хватает ли времени на реакцию. Вызывать при debugHits (масштаб полный, хитбокс свежий).
+    /// </summary>
+    void CheckDodgeable()
+    {
+        if (isKeyNote) return; // ноте-клавише уворот не нужен — там нажатие
+        if (triggerCol == null || manager == null || playerHealth == null) return;
+        Bounds tb = triggerCol.bounds;
+        if (tb.size.sqrMagnitude < 1e-8f) return;
+        float feetY = playerCol != null ? playerCol.bounds.min.y : playerTf.position.y;
+
+        bool canJump = false; float apex = 0f;
+        if (playerFpc != null && playerFpc.gravity > 0.01f && playerFpc.jumpSpeed > 0f)
+        {
+            apex = playerFpc.jumpSpeed * playerFpc.jumpSpeed / (2f * playerFpc.gravity);
+            canJump = tb.max.y < feetY + apex - 0.15f;
+        }
+        bool canSlide = false;
+        if (playerFpc != null)
+        {
+            float slideH = Mathf.Max(0.3f, playerFpc.crouchHeight);
+            canSlide = tb.min.y > feetY + slideH + 0.1f;
+        }
+        float trackWidth = Mathf.Max(0.5f, trackMaxX - trackMinX);
+        float pw = playerCol != null ? Mathf.Max(0.3f, playerCol.bounds.size.x) : 0.6f;
+        bool canStrafe = tb.size.x < trackWidth - pw - 0.4f;
+        float travel = speed > 0.01f ? manager.GetTravelTime(speed) : 999f;
+        bool reactOk = travel >= minReactionTime;
+
+        string opts = $"jump:{(canJump ? "OK" : "--")} slide:{(canSlide ? "OK" : "--")} strafe:{(canStrafe ? "OK" : "--")} react:{travel:0.00}с";
+        string dims = $"trigger={tb.size.x:0.0}x{tb.size.y:0.0}x{tb.size.z:0.0}@{tb.center.y:0.00} apex={apex:0.00} feet={feetY:0.00} track={trackWidth:0.00}";
+        if ((canJump || canSlide || canStrafe) && reactOk)
+            Debug.Log($"[Dodge] {name}: {opts} {dims}", this);
+        else
+            Debug.LogWarning($"[Dodge] {name}: IMPOSSIBLE? {opts} {dims}", this);
     }
 }

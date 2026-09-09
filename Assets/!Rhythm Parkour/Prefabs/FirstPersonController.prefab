@@ -103,7 +103,6 @@ GameObject:
   - component: {fileID: 9156347144040445546}
   - component: {fileID: 9156347144040445545}
   - component: {fileID: 9156347144040445544}
-  - component: {fileID: 9156347144040445550}
   m_Layer: 2
   m_Name: FirstPersonController
   m_TagString: Untagged
@@ -178,17 +177,67 @@ MonoBehaviour:
   slideTiltAngle: 5
   jumpSpeed: 3
   gravity: 9.81
-  coyoteTimeEnabled: 1
   coyoteTimeDuration: 0.2
   normalFov: 60
   sprintFov: 70
   fovChangeSpeed: 5
-  walkingBobbingSpeed: 10
+  zoomKey: 324
+  zoomFov: 40
+  zoomSensitivityMultiplier: 0.4
   bobbingAmount: 0.05
+  walkingBobbingSpeed: 10
+  idleBobbingAmount: 0.01
+  idleBobbingSpeed: 2
+  bobPitchAmount: 0.5
+  bobRollAmount: 0.5
+  strafeTiltAngle: 2
+  lookSwayMultiplier: 1.5
+  landingDipAmount: 0.15
+  jumpDipAmount: 0.1
+  bpm: 120
+  perfectWindow: 0.05
+  goodWindow: 0.15
+  maxFlowMeter: 100
+  flowDecayRate: 8
+  beatDashSpeedMultiplier: 2.2
+  beatDashDuration: 0.25
+  useConductor: 1
+  syncBpmFromMusic: 1
+  beatFovPulse: 2.5
+  beatBobPulse: 0.03
+  bobCyclesPerBeat: 0.5
+  beatJumpBoost: 1.12
+  jumpBufferTime: 0.12
+  quantizeJumpToBeat: 1
+  jumpCaptureBeats: 0.6
+  jumpQueueTimeoutBeats: 1.5
+  clampToTrack: 1
+  lockForwardBack: 0
+  areaPadding: 0.3
+  dodgeFlowBonus: 6
+  damageFlowPenalty: 25
+  groovePerfectScore: 15
+  grooveGoodScore: 5
+  musicShakeEnabled: 1
+  musicShakeAmount: 0.045
+  musicShakeFrequency: 31
+  musicShakeReactToLoudness: 1
+  spectrumGain: 4
+  enableLandingShake: 1
+  landingShakeIntensity: 0.3
+  landingShakeDuration: 0.4
+  landingShakeFrequency: 12
+  shakeEase: 6
+  syncToBeat: 1
+  beatMultiplier: 1.2
+  enableComboSystem: 1
+  comboIntensityMultiplier: 1.15
   canSlide: 1
   canJump: 1
   canSprint: 1
   canCrouch: 1
+  canZoom: 1
+  coyoteTimeEnabled: 1
   ceilingCheckQueryTriggerInteraction: 1
   groundCheckQueryTriggerInteraction: 1
   groundCheck: {fileID: 9156347144365898843}
@@ -201,6 +250,8 @@ MonoBehaviour:
   isSprinting: 0
   isCrouching: 0
   isSliding: 0
+  isZooming: 0
+  comboWindow: 0.5
 --- !u!1 &9156347144365898844
 GameObject:
   m_ObjectHideFlags: 0
@@ -354,5 +405,3 @@ Transform:
   - {fileID: 9156347143994207885}
   m_Father: {fileID: 9156347144040445546}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-
-

@@ -20,3 +20,5 @@ MonoBehaviour:
   - {fileID: 5555170931705320691, guid: bdcf1322bb89217489ee452ef0c7bd81, type: 3}
   - {fileID: 450351668688628145, guid: 76afb4ebdbae06c46b2f21e11ed1fe7f, type: 3}
   - {fileID: 6403843449976154025, guid: 6366f0c8ece97374b840b2be22b9d468, type: 3}
+  - {fileID: 9061343902686913011, guid: ba3ff39c1cd2d444f8de2cfdb30948b8, type: 3}
+  obstacleMaterials: []

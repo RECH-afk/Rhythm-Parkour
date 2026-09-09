@@ -60,7 +60,12 @@ public class CameraUISway : MonoBehaviour
 
         if (velocity.sqrMagnitude > 0.01f)
         {
-            bobTimer += Time.deltaTime * bobSpeed;
+            // покачивание в бит, если играет музыка, иначе свободное
+            var conductor = Conductor.Instance;
+            if (conductor != null && conductor.isPlaying && conductor.songPositionBeats >= 0f)
+                bobTimer = conductor.songPositionBeats * Mathf.PI * 2f * 0.5f;
+            else
+                bobTimer += Time.deltaTime * bobSpeed;
 
             bobOffset.x = Mathf.Sin(bobTimer) * bobAmountX;
             bobOffset.y = Mathf.Abs(Mathf.Cos(bobTimer)) * bobAmountY;
