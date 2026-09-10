@@ -1,769 +1,802 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using RKS.RhythmParkour.Core;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
 using DG.Tweening;
 using System.Diagnostics;
+using Zenject;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI.Timeline;
 
 using Debug = UnityEngine.Debug;
 
-public class MenuController : MonoBehaviour
+
+
+
+namespace RKS.RhythmParkour.UI
 {
+    public class MenuController : RKSBehaviour
+    {
     #region Inspector References
 
-    [Header("Main Menu")]
-    [SerializeField] private GameObject _mainMenuRoot;
-    [SerializeField] private RectTransform _logoTransform;
-    [SerializeField] private RectTransform _mainMenuButtonsContainer;
+        [Header("Main Menu")]
+        [SerializeField] private GameObject _mainMenuRoot;
+        [SerializeField] private RectTransform _logoTransform;
+        [SerializeField] private RectTransform _mainMenuButtonsContainer;
 
-    [Header("Buttons")]
-    [SerializeField] private Button _playButton;
-    [SerializeField] private Button _editorButton;
-    [SerializeField] private Button _backFromListButton;
+        [Header("Buttons")]
+        [SerializeField] private Button _playButton;
+        [SerializeField] private Button _editorButton;
+        [SerializeField] private Button _backFromListButton;
 
-    [Header("Level List Menu")]
-    [SerializeField] private GameObject _levelListMenuRoot;
-    [SerializeField] private Transform _levelListContainer;
-    [SerializeField] private GameObject _levelButtonPrefab;
+        [Header("Level List Menu")]
+        [SerializeField] private GameObject _levelListMenuRoot;
+        [SerializeField] private Transform _levelListContainer;
+        [SerializeField] private GameObject _levelButtonPrefab;
 
-    [Header("Level Details Panel")]
-    [SerializeField] private GameObject _levelDetailsRoot;
-    [SerializeField] private Image _levelCoverImage;
-    [SerializeField] private TextMeshProUGUI _detailBpmText;
-    [SerializeField] private TextMeshProUGUI _detailDurationText;
-    [SerializeField] private TextMeshProUGUI _detailNotesText;
-    [SerializeField] private TextMeshProUGUI _detailAuthorText;
-    [SerializeField] private TextMeshProUGUI _detailArtistText;
-    [SerializeField] private TextMeshProUGUI _detailTrackText;
+        [Header("Level Details Panel")]
+        [SerializeField] private GameObject _levelDetailsRoot;
+        [SerializeField] private Image _levelCoverImage;
+        [SerializeField] private TextMeshProUGUI _detailBpmText;
+        [SerializeField] private TextMeshProUGUI _detailDurationText;
+        [SerializeField] private TextMeshProUGUI _detailNotesText;
+        [SerializeField] private TextMeshProUGUI _detailAuthorText;
+        [SerializeField] private TextMeshProUGUI _detailArtistText;
+        [SerializeField] private TextMeshProUGUI _detailTrackText;
 
-    [Header("Details Actions")]
-    [SerializeField] private Button _editLevelButton;
-    [SerializeField] private Button _deleteLevelButton;
+        [Header("Details Actions")]
+        [SerializeField] private Button _editLevelButton;
+        [SerializeField] private Button _deleteLevelButton;
 
-    [Header("No Levels Window")]
-    [SerializeField] private GameObject _noLevelsWindow;
-    [SerializeField] private Button _openLevelsFolderButton;
-    [SerializeField] private Button _backFromNoLevelsButton;
+        [Header("No Levels Window")]
+        [SerializeField] private GameObject _noLevelsWindow;
+        [SerializeField] private Button _openLevelsFolderButton;
+        [SerializeField] private Button _backFromNoLevelsButton;
 
-    [Header("Delete Confirmation Window")]
-    [SerializeField] private GameObject _deleteConfirmationWindow;
-    [SerializeField] private Button _confirmDeleteButton;
-    [SerializeField] private Button _cancelDeleteButton;
+        [Header("Delete Confirmation Window")]
+        [SerializeField] private GameObject _deleteConfirmationWindow;
+        [SerializeField] private Button _confirmDeleteButton;
+        [SerializeField] private Button _cancelDeleteButton;
 
-    [Header("Settings")]
-    [SerializeField] private string _editorSceneName = "IsLevelEditorScene";
-    [SerializeField] private string _gameSceneName = "IsGameScene";
-    [SerializeField] private float _animDuration = 0.5f;
+        [Header("Settings")]
+        [SerializeField] private string _editorSceneName = "IsLevelEditorScene";
+        [SerializeField] private string _gameSceneName = "IsGameScene";
+        [SerializeField] private float _animDuration = 0.5f;
 
     #endregion
 
     #region Private Fields
 
-    private readonly List<string> _foundPaths = new();
-    private string _selectedLevelPath;
-    private float _lastClickTime;
-    private const float DoubleClickThreshold = 0.35f;
+        private readonly List<string> _foundPaths = new();
+        private string _selectedLevelPath;
+        private float _lastClickTime;
+        private const float DoubleClickThreshold = 0.35f;
 
-    private bool _isTransitioning = false;
+        private bool _isTransitioning = false;
 
-    private Sequence _transitionSequence;
+        private Sequence _transitionSequence;
 
-    private readonly Dictionary<GameObject, Vector2> _originalPositions = new();
+        private readonly Dictionary<GameObject, Vector2> _originalPositions = new();
+
+        [InjectOptional] public LevelTransfer transfer;
 
     #endregion
 
     #region Compatibility Shims
 
-    public bool IsMenuActive => (_mainMenuRoot != null && _mainMenuRoot.activeSelf) ||
-                                (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf) ||
-                                (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf) ||
-                                (_noLevelsWindow != null && _noLevelsWindow.activeSelf);
+        public bool IsMenuActive => (_mainMenuRoot != null && _mainMenuRoot.activeSelf) ||
+                                    (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf) ||
+                                    (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf) ||
+                                    (_noLevelsWindow != null && _noLevelsWindow.activeSelf);
 
-    public void ShowMenu() => ShowMainMenu();
-    public GameObject MenuPanel => _mainMenuRoot;
+        public void ShowMenu() => ShowMainMenu();
+        public GameObject MenuPanel => _mainMenuRoot;
 
     #endregion
 
     #region Unity Lifecycle
 
-    private void Awake()
-    {
-        ValidateReferences();
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-        UpdateDetailsButtonsState();
+        protected override void OnInjected()
+        {
+            ValidateReferences();
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            UpdateDetailsButtonsState();
 
-        CacheOriginalPosition(_mainMenuRoot);
-        CacheOriginalPosition(_levelListMenuRoot);
-        CacheOriginalPosition(_levelDetailsRoot);
-        CacheOriginalPosition(_noLevelsWindow);
-        CacheOriginalPosition(_deleteConfirmationWindow);
-        if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
-        if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
-    }
+            CacheOriginalPosition(_mainMenuRoot);
+            CacheOriginalPosition(_levelListMenuRoot);
+            CacheOriginalPosition(_levelDetailsRoot);
+            CacheOriginalPosition(_noLevelsWindow);
+            CacheOriginalPosition(_deleteConfirmationWindow);
+            if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
+            if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
+        }
 
-    private void Start()
-    {
-        SetupBindings();
-        HideAllMenusImmediate();
-        _mainMenuRoot.SetActive(true);
-        PlayStartupAnimations();
-    }
+        protected override void OnReady()
+        {
+            SetupBindings();
+            HideAllMenusImmediate();
+            if (_mainMenuRoot != null) _mainMenuRoot.SetActive(true);
+            PlayStartupAnimations();
+        }
 
-    private void OnDestroy()
-    {
-        DOTween.Kill(this);
-        _transitionSequence?.Kill(true);
-        UnbindButtons();
-    }
+        protected override void OnDisposed()
+        {
+            DOTween.Kill(this);
+            _transitionSequence?.Kill(true);
+            UnbindButtons();
+        }
 
     #endregion
 
     #region Initialization & Bindings
 
-    private void CacheOriginalPosition(GameObject obj)
-    {
-        if (obj != null)
+        private void CacheOriginalPosition(GameObject obj)
         {
-            var rt = obj.GetComponent<RectTransform>();
-            if (rt != null) _originalPositions[obj] = rt.anchoredPosition;
+            if (obj != null)
+            {
+                var rt = obj.GetComponent<RectTransform>();
+                if (rt != null) _originalPositions[obj] = rt.anchoredPosition;
+            }
         }
-    }
 
-    private void ValidateReferences()
-    {
-        if (_mainMenuRoot == null || _levelListContainer == null || _levelButtonPrefab == null)
-            Debug.LogError("[MenuController] Критические ссылки UI не назначены в инспекторе!", this);
-    }
+        private void ValidateReferences()
+        {
+            if (_mainMenuRoot == null || _levelListContainer == null || _levelButtonPrefab == null)
+                Debug.LogError("[MenuController] Критические ссылки UI не назначены в инспекторе!", this);
+        }
 
-    private void SetupBindings()
-    {
-        if (_playButton != null) _playButton.onClick.AddListener(ShowLevelList);
-        if (_editorButton != null) _editorButton.onClick.AddListener(OpenNewLevelInEditor);
-        if (_backFromListButton != null) _backFromListButton.onClick.AddListener(ShowMainMenu);
-        if (_editLevelButton != null) _editLevelButton.onClick.AddListener(EditSelectedLevel);
-        if (_deleteLevelButton != null) _deleteLevelButton.onClick.AddListener(DeleteSelectedLevel);
+        private void SetupBindings()
+        {
+            if (_playButton != null) _playButton.onClick.AddListener(ShowLevelList);
+            if (_editorButton != null) _editorButton.onClick.AddListener(OpenNewLevelInEditor);
+            if (_backFromListButton != null) _backFromListButton.onClick.AddListener(ShowMainMenu);
+            if (_editLevelButton != null) _editLevelButton.onClick.AddListener(EditSelectedLevel);
+            if (_deleteLevelButton != null) _deleteLevelButton.onClick.AddListener(DeleteSelectedLevel);
 
-        if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.AddListener(OpenLevelsFolder);
-        if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.AddListener(ShowMainMenu);
-        if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.AddListener(ConfirmDelete);
-        if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.AddListener(HideDeleteConfirmation);
-    }
+            if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.AddListener(OpenLevelsFolder);
+            if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.AddListener(ShowMainMenu);
+            if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.AddListener(ConfirmDelete);
+            if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.AddListener(HideDeleteConfirmation);
+        }
 
-    private void UnbindButtons()
-    {
-        if (_playButton != null) _playButton.onClick.RemoveListener(ShowLevelList);
-        if (_editorButton != null) _editorButton.onClick.RemoveListener(OpenNewLevelInEditor);
-        if (_backFromListButton != null) _backFromListButton.onClick.RemoveListener(ShowMainMenu);
-        if (_editLevelButton != null) _editLevelButton.onClick.RemoveListener(EditSelectedLevel);
-        if (_deleteLevelButton != null) _deleteLevelButton.onClick.RemoveListener(DeleteSelectedLevel);
+        private void UnbindButtons()
+        {
+            if (_playButton != null) _playButton.onClick.RemoveListener(ShowLevelList);
+            if (_editorButton != null) _editorButton.onClick.RemoveListener(OpenNewLevelInEditor);
+            if (_backFromListButton != null) _backFromListButton.onClick.RemoveListener(ShowMainMenu);
+            if (_editLevelButton != null) _editLevelButton.onClick.RemoveListener(EditSelectedLevel);
+            if (_deleteLevelButton != null) _deleteLevelButton.onClick.RemoveListener(DeleteSelectedLevel);
 
-        if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.RemoveListener(OpenLevelsFolder);
-        if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.RemoveListener(ShowMainMenu);
-        if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.RemoveListener(ConfirmDelete);
-        if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.RemoveListener(HideDeleteConfirmation);
-    }
+            if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.RemoveListener(OpenLevelsFolder);
+            if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.RemoveListener(ShowMainMenu);
+            if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.RemoveListener(ConfirmDelete);
+            if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.RemoveListener(HideDeleteConfirmation);
+        }
 
-    private float GetScreenOffsetX() => Screen.width + 100f;
-    private float GetScreenOffsetY() => Screen.height + 100f;
+        private float GetScreenOffsetX() => Screen.width + 100f;
+        private float GetScreenOffsetY() => Screen.height + 100f;
 
-    private void PlayStartupAnimations()
-    {
-        if (_logoTransform == null || _mainMenuButtonsContainer == null) return;
+        private void PlayStartupAnimations()
+        {
+            if (_logoTransform == null || _mainMenuButtonsContainer == null) return;
 
-        _logoTransform.DOKill(true);
-        _mainMenuButtonsContainer.DOKill(true);
+            _logoTransform.DOKill(true);
+            _mainMenuButtonsContainer.DOKill(true);
 
-        Vector2 origLogoPos = _originalPositions.TryGetValue(_logoTransform.gameObject, out var oL) ? oL : _logoTransform.anchoredPosition;
-        Vector2 origBtnsPos = _originalPositions.TryGetValue(_mainMenuButtonsContainer.gameObject, out var oB) ? oB : _mainMenuButtonsContainer.anchoredPosition;
+            Vector2 origLogoPos = _originalPositions.TryGetValue(_logoTransform.gameObject, out var oL) ? oL : _logoTransform.anchoredPosition;
+            Vector2 origBtnsPos = _originalPositions.TryGetValue(_mainMenuButtonsContainer.gameObject, out var oB) ? oB : _mainMenuButtonsContainer.anchoredPosition;
 
-        _logoTransform.anchoredPosition = origLogoPos + new Vector2(-GetScreenOffsetX(), 0f);
-        _logoTransform.localScale = Vector3.one * 0.98f;
-        _logoTransform.localRotation = Quaternion.Euler(0, 0, -1.5f);
+            _logoTransform.anchoredPosition = origLogoPos + new Vector2(-GetScreenOffsetX(), 0f);
+            _logoTransform.localScale = Vector3.one * 0.98f;
+            _logoTransform.localRotation = Quaternion.Euler(0, 0, -1.5f);
 
-        var logoSeq = DOTween.Sequence()
-            .Join(_logoTransform.DOAnchorPosX(origLogoPos.x, _animDuration * 1.6f).SetEase(Ease.OutQuint))
-            .Join(_logoTransform.DORotate(Vector3.zero, _animDuration * 1.6f, RotateMode.Fast))
-            .Join(_logoTransform.DOScale(1f, _animDuration * 1.6f).SetEase(Ease.OutBack))
-            .SetTarget(this);
+            var logoSeq = DOTween.Sequence()
+                .Join(_logoTransform.DOAnchorPosX(origLogoPos.x, _animDuration * 1.6f).SetEase(Ease.OutQuint))
+                .Join(_logoTransform.DORotate(Vector3.zero, _animDuration * 1.6f, RotateMode.Fast))
+                .Join(_logoTransform.DOScale(1f, _animDuration * 1.6f).SetEase(Ease.OutBack))
+                .SetTarget(this);
 
-        _mainMenuButtonsContainer.anchoredPosition = origBtnsPos + new Vector2(GetScreenOffsetX(), 0f);
-        _mainMenuButtonsContainer.localScale = Vector3.one * 0.98f;
-        _mainMenuButtonsContainer.localRotation = Quaternion.Euler(0, 0, 1.5f);
+            _mainMenuButtonsContainer.anchoredPosition = origBtnsPos + new Vector2(GetScreenOffsetX(), 0f);
+            _mainMenuButtonsContainer.localScale = Vector3.one * 0.98f;
+            _mainMenuButtonsContainer.localRotation = Quaternion.Euler(0, 0, 1.5f);
 
-        var btnsSeq = DOTween.Sequence()
-            .Join(_mainMenuButtonsContainer.DOAnchorPosX(origBtnsPos.x, _animDuration * 1.6f).SetEase(Ease.OutQuint).SetDelay(0.2f))
-            .Join(_mainMenuButtonsContainer.DORotate(Vector3.zero, _animDuration * 1.6f, RotateMode.Fast).SetDelay(0.2f))
-            .Join(_mainMenuButtonsContainer.DOScale(1f, _animDuration * 1.6f).SetEase(Ease.OutBack).SetDelay(0.2f))
-            .SetTarget(this);
+            var btnsSeq = DOTween.Sequence()
+                .Join(_mainMenuButtonsContainer.DOAnchorPosX(origBtnsPos.x, _animDuration * 1.6f).SetEase(Ease.OutQuint).SetDelay(0.2f))
+                .Join(_mainMenuButtonsContainer.DORotate(Vector3.zero, _animDuration * 1.6f, RotateMode.Fast).SetDelay(0.2f))
+                .Join(_mainMenuButtonsContainer.DOScale(1f, _animDuration * 1.6f).SetEase(Ease.OutBack).SetDelay(0.2f))
+                .SetTarget(this);
 
-        Sequence startupSeq = DOTween.Sequence();
-        startupSeq.Join(logoSeq);
-        startupSeq.Join(btnsSeq);
-    }
+            Sequence startupSeq = DOTween.Sequence();
+            startupSeq.Join(logoSeq);
+            startupSeq.Join(btnsSeq);
+        }
 
-    private void HideAllMenusImmediate()
-    {
-        if (_mainMenuRoot != null) _mainMenuRoot.SetActive(false);
-        if (_levelListMenuRoot != null) _levelListMenuRoot.SetActive(false);
-        if (_levelDetailsRoot != null) _levelDetailsRoot.SetActive(false);
-        if (_noLevelsWindow != null) _noLevelsWindow.SetActive(false);
-        if (_deleteConfirmationWindow != null) _deleteConfirmationWindow.SetActive(false);
-    }
+        private void HideAllMenusImmediate()
+        {
+            if (_mainMenuRoot != null) _mainMenuRoot.SetActive(false);
+            if (_levelListMenuRoot != null) _levelListMenuRoot.SetActive(false);
+            if (_levelDetailsRoot != null) _levelDetailsRoot.SetActive(false);
+            if (_noLevelsWindow != null) _noLevelsWindow.SetActive(false);
+            if (_deleteConfirmationWindow != null) _deleteConfirmationWindow.SetActive(false);
+        }
 
     #endregion
 
     #region Navigation & Transitions
 
-    private void TransitionTo(GameObject targetWindow)
-    {
-        if (_isTransitioning || targetWindow == null || targetWindow.activeSelf) return;
-
-        _isTransitioning = true;
-        _transitionSequence?.Kill(true);
-        _transitionSequence = DOTween.Sequence().SetTarget(this);
-
-        List<GameObject> windowsToHide = new List<GameObject>();
-
-        bool isDetails = targetWindow == _levelDetailsRoot;
-
-        if (isDetails && _levelListMenuRoot != null && !_levelListMenuRoot.activeSelf)
+        private void TransitionTo(GameObject targetWindow)
         {
-            var listRt = _levelListMenuRoot.GetComponent<RectTransform>();
-            listRt.DOKill(true);
-            Vector2 listOrig = _originalPositions.TryGetValue(_levelListMenuRoot, out var lo) ? lo : listRt.anchoredPosition;
+            if (_isTransitioning || targetWindow == null || targetWindow.activeSelf) return;
 
-            listRt.anchoredPosition = listOrig + new Vector2(GetScreenOffsetX(), 0f);
-            listRt.localScale = Vector3.one * 0.97f;
-            listRt.localRotation = Quaternion.Euler(0, 0, 1.5f);
-            _levelListMenuRoot.SetActive(true);
+            _isTransitioning = true;
+            _transitionSequence?.Kill(true);
+            _transitionSequence = DOTween.Sequence().SetTarget(this);
 
-            var listAppearSeq = DOTween.Sequence()
-                .Join(listRt.DOAnchorPos(listOrig, _animDuration * 1.2f).SetEase(Ease.OutQuint))
-                .Join(listRt.DORotate(Vector3.zero, _animDuration * 1.2f, RotateMode.Fast))
-                .Join(listRt.DOScale(1f, _animDuration * 1.2f).SetEase(Ease.OutBack))
-                .SetTarget(_levelListMenuRoot);
+            List<GameObject> windowsToHide = new List<GameObject>();
 
-            _transitionSequence.Join(listAppearSeq);
-        }
+            bool isDetails = targetWindow == _levelDetailsRoot;
 
-        if (_mainMenuRoot != null && _mainMenuRoot.activeSelf && _mainMenuRoot != targetWindow)
-            windowsToHide.Add(_mainMenuRoot);
-
-        if (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf && _levelListMenuRoot != targetWindow && !isDetails)
-            windowsToHide.Add(_levelListMenuRoot);
-
-        if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf && _levelDetailsRoot != targetWindow)
-            windowsToHide.Add(_levelDetailsRoot);
-
-        if (_noLevelsWindow != null && _noLevelsWindow.activeSelf && _noLevelsWindow != targetWindow)
-            windowsToHide.Add(_noLevelsWindow);
-
-        if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf && _deleteConfirmationWindow != targetWindow)
-            windowsToHide.Add(_deleteConfirmationWindow);
-
-        foreach (var win in windowsToHide)
-        {
-            var rt = win.GetComponent<RectTransform>();
-            rt.DOKill(true);
-            Vector2 origPos = _originalPositions.TryGetValue(win, out var o) ? o : rt.anchoredPosition;
-
-            rt.anchoredPosition = origPos;
-            rt.localScale = Vector3.one;
-            rt.localRotation = Quaternion.identity;
-
-            Vector2 hideTarget = origPos;
-            float rotationZ = 0f;
-
-            if (win == _mainMenuRoot)
+            if (isDetails && _levelListMenuRoot != null && !_levelListMenuRoot.activeSelf)
             {
-                hideTarget = origPos + new Vector2(-GetScreenOffsetX(), 0f);
-                rotationZ = -1.5f;
-            }
-            else if (win == _levelListMenuRoot)
-            {
-                hideTarget = origPos + new Vector2(GetScreenOffsetX(), 0f);
-                rotationZ = 1.5f;
-            }
-            else if (win == _levelDetailsRoot)
-            {
-                hideTarget = origPos + new Vector2(0f, GetScreenOffsetY());
-                rotationZ = 1f;
-            }
-            else if (win == _noLevelsWindow)
-            {
-                hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
-                rotationZ = -1f;
-            }
-            else if (win == _deleteConfirmationWindow)
-            {
-                hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
-                rotationZ = -1f;
+                var listRt = _levelListMenuRoot.GetComponent<RectTransform>();
+                listRt.DOKill(true);
+                Vector2 listOrig = _originalPositions.TryGetValue(_levelListMenuRoot, out var lo) ? lo : listRt.anchoredPosition;
+
+                listRt.anchoredPosition = listOrig + new Vector2(GetScreenOffsetX(), 0f);
+                listRt.localScale = Vector3.one * 0.97f;
+                listRt.localRotation = Quaternion.Euler(0, 0, 1.5f);
+                _levelListMenuRoot.SetActive(true);
+
+                var listAppearSeq = DOTween.Sequence()
+                    .Join(listRt.DOAnchorPos(listOrig, _animDuration * 1.2f).SetEase(Ease.OutQuint))
+                    .Join(listRt.DORotate(Vector3.zero, _animDuration * 1.2f, RotateMode.Fast))
+                    .Join(listRt.DOScale(1f, _animDuration * 1.2f).SetEase(Ease.OutBack))
+                    .SetTarget(_levelListMenuRoot);
+
+                _transitionSequence.Join(listAppearSeq);
             }
 
-            var hideSeq = DOTween.Sequence()
-                .Join(rt.DOAnchorPos(hideTarget, _animDuration).SetEase(Ease.InQuart).SetTarget(win))
-                .Join(rt.DORotate(new Vector3(0, 0, rotationZ), _animDuration, RotateMode.Fast))
-                .Join(rt.DOScale(0.97f, _animDuration).SetEase(Ease.InQuart))
-                .SetTarget(win);
+            if (_mainMenuRoot != null && _mainMenuRoot.activeSelf && _mainMenuRoot != targetWindow)
+                windowsToHide.Add(_mainMenuRoot);
 
-            _transitionSequence.Append(hideSeq);
-        }
+            if (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf && _levelListMenuRoot != targetWindow && !isDetails)
+                windowsToHide.Add(_levelListMenuRoot);
 
-        var rtTarget = targetWindow.GetComponent<RectTransform>();
-        rtTarget.DOKill(true);
-        Vector2 origTarget = _originalPositions.TryGetValue(targetWindow, out var ot) ? ot : rtTarget.anchoredPosition;
+            if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf && _levelDetailsRoot != targetWindow)
+                windowsToHide.Add(_levelDetailsRoot);
 
-        Vector2 startPos = origTarget;
-        float startRotZ = 0f;
+            if (_noLevelsWindow != null && _noLevelsWindow.activeSelf && _noLevelsWindow != targetWindow)
+                windowsToHide.Add(_noLevelsWindow);
 
-        if (targetWindow == _mainMenuRoot)
-        {
-            startPos = origTarget + new Vector2(-GetScreenOffsetX(), 0f);
-            startRotZ = -1.5f;
-        }
-        else if (targetWindow == _levelListMenuRoot)
-        {
-            startPos = origTarget + new Vector2(GetScreenOffsetX(), 0f);
-            startRotZ = 1.5f;
-        }
-        else if (targetWindow == _levelDetailsRoot)
-        {
-            startPos = origTarget + new Vector2(0f, GetScreenOffsetY());
-            startRotZ = 1f;
-        }
-        else if (targetWindow == _noLevelsWindow)
-        {
-            startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
-            startRotZ = -1f;
-        }
-        else if (targetWindow == _deleteConfirmationWindow)
-        {
-            startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
-            startRotZ = -1f;
-        }
+            if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf && _deleteConfirmationWindow != targetWindow)
+                windowsToHide.Add(_deleteConfirmationWindow);
 
-        rtTarget.anchoredPosition = startPos;
-        rtTarget.localScale = Vector3.one * 0.97f;
-        rtTarget.localRotation = Quaternion.Euler(0, 0, startRotZ);
-
-        targetWindow.SetActive(true);
-
-        var appearSeq = DOTween.Sequence()
-            .Join(rtTarget.DOAnchorPos(origTarget, _animDuration * 1.2f).SetEase(Ease.OutQuint).SetTarget(targetWindow))
-            .Join(rtTarget.DORotate(Vector3.zero, _animDuration * 1.2f, RotateMode.Fast))
-            .Join(rtTarget.DOScale(1f, _animDuration * 1.2f).SetEase(Ease.OutBack))
-            .SetTarget(targetWindow);
-
-        _transitionSequence.Append(appearSeq);
-
-        _transitionSequence.AppendCallback(() =>
-        {
             foreach (var win in windowsToHide)
             {
-                win.SetActive(false);
+                var rt = win.GetComponent<RectTransform>();
+                rt.DOKill(true);
+                Vector2 origPos = _originalPositions.TryGetValue(win, out var o) ? o : rt.anchoredPosition;
+
+                rt.anchoredPosition = origPos;
+                rt.localScale = Vector3.one;
+                rt.localRotation = Quaternion.identity;
+
+                Vector2 hideTarget = origPos;
+                float rotationZ = 0f;
+
+                if (win == _mainMenuRoot)
+                {
+                    hideTarget = origPos + new Vector2(-GetScreenOffsetX(), 0f);
+                    rotationZ = -1.5f;
+                }
+                else if (win == _levelListMenuRoot)
+                {
+                    hideTarget = origPos + new Vector2(GetScreenOffsetX(), 0f);
+                    rotationZ = 1.5f;
+                }
+                else if (win == _levelDetailsRoot)
+                {
+                    hideTarget = origPos + new Vector2(0f, GetScreenOffsetY());
+                    rotationZ = 1f;
+                }
+                else if (win == _noLevelsWindow)
+                {
+                    hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
+                    rotationZ = -1f;
+                }
+                else if (win == _deleteConfirmationWindow)
+                {
+                    hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
+                    rotationZ = -1f;
+                }
+
+                var hideSeq = DOTween.Sequence()
+                    .Join(rt.DOAnchorPos(hideTarget, _animDuration).SetEase(Ease.InQuart).SetTarget(win))
+                    .Join(rt.DORotate(new Vector3(0, 0, rotationZ), _animDuration, RotateMode.Fast))
+                    .Join(rt.DOScale(0.97f, _animDuration).SetEase(Ease.InQuart))
+                    .SetTarget(win);
+
+                _transitionSequence.Append(hideSeq);
             }
-        });
 
-        _transitionSequence.OnComplete(() =>
-        {
-            _isTransitioning = false;
-            if (targetWindow == _levelListMenuRoot) RefreshLevelList();
-        });
-    }
+            var rtTarget = targetWindow.GetComponent<RectTransform>();
+            rtTarget.DOKill(true);
+            Vector2 origTarget = _originalPositions.TryGetValue(targetWindow, out var ot) ? ot : rtTarget.anchoredPosition;
 
-    private void ShowMainMenu()
-    {
-        if (_isTransitioning) return;
-        _selectedLevelPath = null;
-        UpdateDetailsButtonsState();
-        HideDeleteConfirmationImmediate();
-        TransitionTo(_mainMenuRoot);
-    }
+            Vector2 startPos = origTarget;
+            float startRotZ = 0f;
 
-    private void ShowLevelList()
-    {
-        if (_isTransitioning) return;
-        _selectedLevelPath = null;
-        UpdateDetailsButtonsState();
-        HideDeleteConfirmationImmediate();
+            if (targetWindow == _mainMenuRoot)
+            {
+                startPos = origTarget + new Vector2(-GetScreenOffsetX(), 0f);
+                startRotZ = -1.5f;
+            }
+            else if (targetWindow == _levelListMenuRoot)
+            {
+                startPos = origTarget + new Vector2(GetScreenOffsetX(), 0f);
+                startRotZ = 1.5f;
+            }
+            else if (targetWindow == _levelDetailsRoot)
+            {
+                startPos = origTarget + new Vector2(0f, GetScreenOffsetY());
+                startRotZ = 1f;
+            }
+            else if (targetWindow == _noLevelsWindow)
+            {
+                startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
+                startRotZ = -1f;
+            }
+            else if (targetWindow == _deleteConfirmationWindow)
+            {
+                startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
+                startRotZ = -1f;
+            }
 
-        _foundPaths.Clear();
-        _foundPaths.AddRange(RkslFile.FindAllRkslFiles());
+            rtTarget.anchoredPosition = startPos;
+            rtTarget.localScale = Vector3.one * 0.97f;
+            rtTarget.localRotation = Quaternion.Euler(0, 0, startRotZ);
 
-        if (_foundPaths.Count == 0)
-            TransitionTo(_noLevelsWindow);
-        else
-            TransitionTo(_levelListMenuRoot);
-    }
+            targetWindow.SetActive(true);
 
-    private void ShowLevelDetails(string path)
-    {
-        if (_isTransitioning) return;
-        _selectedLevelPath = path;
-        UpdateDetailsButtonsState();
-        PopulateDetails(path);
-        TransitionTo(_levelDetailsRoot);
-    }
+            var appearSeq = DOTween.Sequence()
+                .Join(rtTarget.DOAnchorPos(origTarget, _animDuration * 1.2f).SetEase(Ease.OutQuint).SetTarget(targetWindow))
+                .Join(rtTarget.DORotate(Vector3.zero, _animDuration * 1.2f, RotateMode.Fast))
+                .Join(rtTarget.DOScale(1f, _animDuration * 1.2f).SetEase(Ease.OutBack))
+                .SetTarget(targetWindow);
 
-    private void HideLevelDetails()
-    {
-        if (_isTransitioning) return;
-        if (_levelDetailsRoot == null || !_levelDetailsRoot.activeSelf) return;
+            _transitionSequence.Append(appearSeq);
 
-        _isTransitioning = true;
-        _selectedLevelPath = null;
-        UpdateDetailsButtonsState();
+            _transitionSequence.AppendCallback(() =>
+            {
+                foreach (var win in windowsToHide)
+                {
+                    win.SetActive(false);
+                }
+            });
 
-        var rt = _levelDetailsRoot.GetComponent<RectTransform>();
-        rt.DOKill(true);
-        Vector2 origPos = _originalPositions.TryGetValue(_levelDetailsRoot, out var o) ? o : rt.anchoredPosition;
-
-        Sequence hideSeq = DOTween.Sequence()
-            .Join(rt.DOAnchorPos(origPos + new Vector2(0f, GetScreenOffsetY()), _animDuration * 1.2f).SetEase(Ease.InQuart).SetTarget(_levelDetailsRoot))
-            .Join(rt.DORotate(new Vector3(0, 0, 1f), _animDuration * 1.2f, RotateMode.Fast))
-            .Join(rt.DOScale(0.97f, _animDuration * 1.2f).SetEase(Ease.InQuart))
-            .SetTarget(_levelDetailsRoot);
-
-        hideSeq.OnComplete(() =>
-        {
-            _levelDetailsRoot.SetActive(false);
-            rt.anchoredPosition = origPos;
-            rt.localScale = Vector3.one;
-            rt.localRotation = Quaternion.identity;
-            _isTransitioning = false;
-        });
-    }
-
-    private void HideDeleteConfirmationImmediate()
-    {
-        if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf)
-        {
-            _deleteConfirmationWindow.GetComponent<RectTransform>()?.DOKill(true);
-            _deleteConfirmationWindow.SetActive(false);
+            _transitionSequence.OnComplete(() =>
+            {
+                _isTransitioning = false;
+                if (targetWindow == _levelListMenuRoot) RefreshLevelList();
+            });
         }
-    }
 
-    private void HideLevelDetailsImmediate()
-    {
-        if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf)
+        private void ShowMainMenu()
         {
-            _levelDetailsRoot.GetComponent<RectTransform>()?.DOKill(true);
-            _levelDetailsRoot.SetActive(false);
+            if (_isTransitioning) return;
+            _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
+            HideDeleteConfirmationImmediate();
+            TransitionTo(_mainMenuRoot);
         }
-    }
+
+        private void ShowLevelList()
+        {
+            if (_isTransitioning) return;
+            _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
+            HideDeleteConfirmationImmediate();
+
+            _foundPaths.Clear();
+            _foundPaths.AddRange(RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
+
+            if (_foundPaths.Count == 0)
+                TransitionTo(_noLevelsWindow);
+            else
+                TransitionTo(_levelListMenuRoot);
+        }
+
+        private void ShowLevelDetails(string path)
+        {
+            if (_isTransitioning) return;
+            _selectedLevelPath = path;
+            UpdateDetailsButtonsState();
+            PopulateDetails(path);
+            TransitionTo(_levelDetailsRoot);
+        }
+
+        private void HideLevelDetails()
+        {
+            if (_isTransitioning) return;
+            if (_levelDetailsRoot == null || !_levelDetailsRoot.activeSelf) return;
+
+            _isTransitioning = true;
+            _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
+
+            var rt = _levelDetailsRoot.GetComponent<RectTransform>();
+            rt.DOKill(true);
+            Vector2 origPos = _originalPositions.TryGetValue(_levelDetailsRoot, out var o) ? o : rt.anchoredPosition;
+
+            Sequence hideSeq = DOTween.Sequence()
+                .Join(rt.DOAnchorPos(origPos + new Vector2(0f, GetScreenOffsetY()), _animDuration * 1.2f).SetEase(Ease.InQuart).SetTarget(_levelDetailsRoot))
+                .Join(rt.DORotate(new Vector3(0, 0, 1f), _animDuration * 1.2f, RotateMode.Fast))
+                .Join(rt.DOScale(0.97f, _animDuration * 1.2f).SetEase(Ease.InQuart))
+                .SetTarget(_levelDetailsRoot);
+
+            hideSeq.OnComplete(() =>
+            {
+                _levelDetailsRoot.SetActive(false);
+                rt.anchoredPosition = origPos;
+                rt.localScale = Vector3.one;
+                rt.localRotation = Quaternion.identity;
+                _isTransitioning = false;
+            });
+        }
+
+        private void HideDeleteConfirmationImmediate()
+        {
+            if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf)
+            {
+                _deleteConfirmationWindow.GetComponent<RectTransform>()?.DOKill(true);
+                _deleteConfirmationWindow.SetActive(false);
+            }
+        }
+
+        private void HideLevelDetailsImmediate()
+        {
+            if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf)
+            {
+                _levelDetailsRoot.GetComponent<RectTransform>()?.DOKill(true);
+                _levelDetailsRoot.SetActive(false);
+            }
+        }
 
     #endregion
 
     #region Level List Logic
 
-    private void RefreshLevelList()
-    {
-        if (_levelListContainer == null) return;
-
-        for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
+        private void RefreshLevelList()
         {
-            DOTween.Kill(_levelListContainer.GetChild(i).gameObject);
-            Destroy(_levelListContainer.GetChild(i).gameObject);
+            if (_levelListContainer == null) return;
+
+            for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
+            {
+                DOTween.Kill(_levelListContainer.GetChild(i).gameObject);
+                Destroy(_levelListContainer.GetChild(i).gameObject);
+            }
+
+            _foundPaths.Clear();
+            _foundPaths.AddRange(RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
+
+            if (_foundPaths.Count == 0) return;
+
+            foreach (string path in _foundPaths) CreateLevelListItem(path);
+
+            var containerRT = _levelListContainer as RectTransform;
+            if (containerRT != null)
+            {
+                LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
+            }
         }
 
-        _foundPaths.Clear();
-        _foundPaths.AddRange(RkslFile.FindAllRkslFiles());
-
-        if (_foundPaths.Count == 0) return;
-
-        foreach (string path in _foundPaths) CreateLevelListItem(path);
-
-        var containerRT = _levelListContainer as RectTransform;
-        if (containerRT != null)
+        private void CreateLevelListItem(string path)
         {
-            LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
-        }
-    }
+            RkslManifest man = null;
+            RkslFile.LoadManifestOnly(path, out man);
 
-    private void CreateLevelListItem(string path)
-    {
-        RkslManifest man = null;
-        RkslFile.LoadManifestOnly(path, out man);
+            string title = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
+            if (string.IsNullOrEmpty(title)) title = "Без названия";
 
-        string title = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
-        if (string.IsNullOrEmpty(title)) title = "Без названия";
+            var btnGO = Instantiate(_levelButtonPrefab, _levelListContainer);
 
-        var btnGO = Instantiate(_levelButtonPrefab, _levelListContainer);
+            var rect = btnGO.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.localScale = Vector3.one;
+                rect.localPosition = new Vector3(rect.localPosition.x, rect.localPosition.y, 0f);
 
-        var rect = btnGO.GetComponent<RectTransform>();
-        if (rect != null)
-        {
-            rect.localScale = Vector3.one;
-            rect.localPosition = new Vector3(rect.localPosition.x, rect.localPosition.y, 0f);
+                var le = btnGO.GetComponent<LayoutElement>();
+                if (le == null) le = btnGO.AddComponent<LayoutElement>();
+                le.minHeight = 80f;
+                le.flexibleWidth = 1f;
+            }
 
-            var le = btnGO.GetComponent<LayoutElement>();
-            if (le == null) le = btnGO.AddComponent<LayoutElement>();
-            le.minHeight = 80f;
-            le.flexibleWidth = 1f;
+            btnGO.SetActive(true);
+
+            TextMeshProUGUI btnText = btnGO.GetComponentInChildren<TextMeshProUGUI>();
+            if (btnText != null) btnText.text = title;
+
+            Button btn = btnGO.GetComponent<Button>();
+            if (btn != null) btn.onClick.AddListener(() => HandleLevelClick(path));
         }
 
-        btnGO.SetActive(true);
-
-        TextMeshProUGUI btnText = btnGO.GetComponentInChildren<TextMeshProUGUI>();
-        if (btnText != null) btnText.text = title;
-
-        Button btn = btnGO.GetComponent<Button>();
-        if (btn != null) btn.onClick.AddListener(() => HandleLevelClick(path));
-    }
-
-    private void HandleLevelClick(string path)
-    {
-        if (_isTransitioning) return;
-
-        float timeSinceLastClick = Time.unscaledTime - _lastClickTime;
-
-        if (timeSinceLastClick < DoubleClickThreshold && _selectedLevelPath == path)
+        private void HandleLevelClick(string path)
         {
-            LoadAndPlay(path);
-        }
-        else
-        {
-            ShowLevelDetails(path);
-        }
+            if (_isTransitioning) return;
 
-        _lastClickTime = Time.unscaledTime;
-    }
+            float timeSinceLastClick = Time.unscaledTime - _lastClickTime;
+
+            if (timeSinceLastClick < DoubleClickThreshold && _selectedLevelPath == path)
+            {
+                LoadAndPlay(path);
+            }
+            else
+            {
+                ShowLevelDetails(path);
+            }
+
+            _lastClickTime = Time.unscaledTime;
+        }
 
     #endregion
 
     #region Level Details Logic
 
-    private void UpdateDetailsButtonsState()
-    {
-        bool hasSelection = !string.IsNullOrEmpty(_selectedLevelPath);
-        if (_editLevelButton != null) _editLevelButton.interactable = hasSelection;
-        if (_deleteLevelButton != null) _deleteLevelButton.interactable = hasSelection;
-    }
-
-    private void PopulateDetails(string path)
-    {
-        RkslManifest man = null;
-        RkslFile.LoadManifestOnly(path, out man);
-
-        if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0} BPM" : "N/A";
-        if (_detailDurationText) _detailDurationText.text = "N/A";
-        if (_detailNotesText) _detailNotesText.text = man != null ? $"{man.events.Count} нот" : "0 нот";
-        if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "Неизвестен";
-        if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "Неизвестен";
-        if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "Без названия";
-
-        LoadCoverImage(path);
-    }
-
-    private void LoadCoverImage(string rkslPath)
-    {
-        if (_levelCoverImage == null) return;
-
-        _levelCoverImage.sprite = null;
-
-        string extractDir = Path.Combine(Application.temporaryCachePath, "RkslCover_" + Path.GetFileNameWithoutExtension(rkslPath));
-
-        if (!RkslFile.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
-            return;
-
-        if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
-            return;
-
-        try
+        private void UpdateDetailsButtonsState()
         {
-            byte[] bytes = File.ReadAllBytes(coverPath);
-            Texture2D tex = new Texture2D(2, 2);
-            if (tex.LoadImage(bytes))
+            bool hasSelection = !string.IsNullOrEmpty(_selectedLevelPath);
+            if (_editLevelButton != null) _editLevelButton.interactable = hasSelection;
+            if (_deleteLevelButton != null) _deleteLevelButton.interactable = hasSelection;
+        }
+
+        private void PopulateDetails(string path)
+        {
+            RkslManifest man = null;
+            RkslFile.LoadManifestOnly(path, out man);
+
+            if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0} BPM" : "N/A";
+            if (_detailDurationText) _detailDurationText.text = "N/A";
+            if (_detailNotesText) _detailNotesText.text = man != null ? $"{man.events.Count} нот" : "0 нот";
+            if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "Неизвестен";
+            if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "Неизвестен";
+            if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "Без названия";
+
+            LoadCoverImage(path);
+        }
+
+        private void LoadCoverImage(string rkslPath)
+        {
+            if (_levelCoverImage == null) return;
+
+            _levelCoverImage.sprite = null;
+
+            string extractDir = Path.Combine(Application.temporaryCachePath, "RkslCover_" + Path.GetFileNameWithoutExtension(rkslPath));
+
+            if (!RkslFile.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+                return;
+
+            if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
+                return;
+
+            try
             {
-                Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
-                _levelCoverImage.sprite = sprite;
+                byte[] bytes = File.ReadAllBytes(coverPath);
+                Texture2D tex = new Texture2D(2, 2);
+                if (tex.LoadImage(bytes))
+                {
+                    Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
+                    _levelCoverImage.sprite = sprite;
+                }
+                else
+                {
+                    Destroy(tex);
+                }
             }
-            else
+            catch (System.Exception e)
             {
-                Destroy(tex);
+                Debug.LogWarning($"[MenuController] Не удалось загрузить обложку: {e.Message}");
             }
         }
-        catch (System.Exception e)
+
+        private void DeleteSelectedLevel()
         {
-            Debug.LogWarning($"[MenuController] Не удалось загрузить обложку: {e.Message}");
-        }
-    }
-
-    private void DeleteSelectedLevel()
-    {
-        if (_isTransitioning || string.IsNullOrEmpty(_selectedLevelPath)) return;
-        ShowDeleteConfirmation();
-    }
-
-    private void ShowDeleteConfirmation()
-    {
-        if (_isTransitioning) return;
-        TransitionTo(_deleteConfirmationWindow);
-    }
-
-    private void HideDeleteConfirmation()
-    {
-        if (_deleteConfirmationWindow == null || !_deleteConfirmationWindow.activeSelf) return;
-
-        _isTransitioning = true;
-        var rt = _deleteConfirmationWindow.GetComponent<RectTransform>();
-
-        rt.DOKill(true);
-        Vector2 origPos = _originalPositions.TryGetValue(_deleteConfirmationWindow, out var o) ? o : rt.anchoredPosition;
-
-        Sequence seq = DOTween.Sequence()
-            .Join(rt.DOAnchorPos(origPos + new Vector2(0f, -GetScreenOffsetY()), _animDuration * 0.5f).SetEase(Ease.InQuart))
-            .Join(rt.DORotate(new Vector3(0, 0, -1f), _animDuration * 0.5f, RotateMode.Fast))
-            .Join(rt.DOScale(0.97f, _animDuration * 0.5f).SetEase(Ease.InQuart))
-            .SetTarget(_deleteConfirmationWindow);
-
-        seq.OnComplete(() => {
-            _deleteConfirmationWindow.SetActive(false);
-            rt.anchoredPosition = origPos;
-            rt.localScale = Vector3.one;
-            rt.localRotation = Quaternion.identity;
-            _isTransitioning = false;
-
-            if (!string.IsNullOrEmpty(_selectedLevelPath))
-                TransitionTo(_levelDetailsRoot);
-            else
-                TransitionTo(_levelListMenuRoot);
-        });
-    }
-
-    private void ConfirmDelete()
-    {
-        if (string.IsNullOrEmpty(_selectedLevelPath)) return;
-
-        if (File.Exists(_selectedLevelPath))
-        {
-            File.Delete(_selectedLevelPath);
-            Debug.Log($"[MenuController] Уровень удален: {_selectedLevelPath}");
+            if (_isTransitioning || string.IsNullOrEmpty(_selectedLevelPath)) return;
+            ShowDeleteConfirmation();
         }
 
-        if (PlayerPrefs.GetString("SelectedLevelPath") == _selectedLevelPath)
+        private void ShowDeleteConfirmation()
         {
-            PlayerPrefs.DeleteKey("SelectedLevelPath");
-            PlayerPrefs.Save();
+            if (_isTransitioning) return;
+            TransitionTo(_deleteConfirmationWindow);
         }
 
-        _selectedLevelPath = null;
-        UpdateDetailsButtonsState();
-
-        HideDeleteConfirmationImmediate();
-        HideLevelDetailsImmediate();
-
-        _foundPaths.Clear();
-        _foundPaths.AddRange(RkslFile.FindAllRkslFiles());
-
-        if (_foundPaths.Count == 0)
-            TransitionTo(_noLevelsWindow);
-        else
-            TransitionTo(_levelListMenuRoot);
-    }
-
-    private void OpenLevelsFolder()
-    {
-        string folderPath = "";
-        string possiblePath1 = Path.Combine(Application.streamingAssetsPath, "Levels");
-        string possiblePath2 = Path.Combine(Application.persistentDataPath, "Levels");
-
-        if (Directory.Exists(possiblePath1)) folderPath = possiblePath1;
-        else if (Directory.Exists(possiblePath2)) folderPath = possiblePath2;
-
-        if (!Directory.Exists(folderPath))
+        private void HideDeleteConfirmation()
         {
-            Debug.LogWarning($"Папка с уровнями не найдена: {folderPath}");
-            return;
-        }
+            if (_deleteConfirmationWindow == null || !_deleteConfirmationWindow.activeSelf) return;
 
-        try
-        {
-            Process.Start(new ProcessStartInfo()
-            {
-                FileName = folderPath,
-                UseShellExecute = true,
-                Verb = "open"
+            _isTransitioning = true;
+            var rt = _deleteConfirmationWindow.GetComponent<RectTransform>();
+
+            rt.DOKill(true);
+            Vector2 origPos = _originalPositions.TryGetValue(_deleteConfirmationWindow, out var o) ? o : rt.anchoredPosition;
+
+            Sequence seq = DOTween.Sequence()
+                .Join(rt.DOAnchorPos(origPos + new Vector2(0f, -GetScreenOffsetY()), _animDuration * 0.5f).SetEase(Ease.InQuart))
+                .Join(rt.DORotate(new Vector3(0, 0, -1f), _animDuration * 0.5f, RotateMode.Fast))
+                .Join(rt.DOScale(0.97f, _animDuration * 0.5f).SetEase(Ease.InQuart))
+                .SetTarget(_deleteConfirmationWindow);
+
+            seq.OnComplete(() => {
+                _deleteConfirmationWindow.SetActive(false);
+                rt.anchoredPosition = origPos;
+                rt.localScale = Vector3.one;
+                rt.localRotation = Quaternion.identity;
+                _isTransitioning = false;
+
+                if (!string.IsNullOrEmpty(_selectedLevelPath))
+                    TransitionTo(_levelDetailsRoot);
+                else
+                    TransitionTo(_levelListMenuRoot);
             });
         }
-        catch (System.Exception e)
+
+        private void ConfirmDelete()
         {
-            Debug.LogError($"Не удалось открыть папку: {e.Message}");
+            if (string.IsNullOrEmpty(_selectedLevelPath)) return;
+
+            if (File.Exists(_selectedLevelPath))
+            {
+                File.Delete(_selectedLevelPath);
+                Debug.Log($"[MenuController] Уровень удален: {_selectedLevelPath}");
+            }
+
+            if (transfer != null) transfer.ClearSelectedPath(_selectedLevelPath);
+            else if (Save != null && Save.CurrentData != null && Save.CurrentData.selectedLevelPath == _selectedLevelPath)
+            {
+                Save.CurrentData.selectedLevelPath = "";
+                Save.Write();
+            }
+
+            _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
+
+            HideDeleteConfirmationImmediate();
+            HideLevelDetailsImmediate();
+
+            _foundPaths.Clear();
+            _foundPaths.AddRange(RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
+
+            if (_foundPaths.Count == 0)
+                TransitionTo(_noLevelsWindow);
+            else
+                TransitionTo(_levelListMenuRoot);
         }
-    }
+
+        private void OpenLevelsFolder()
+        {
+            string folderPath = "";
+            string possiblePath1 = Path.Combine(Application.streamingAssetsPath, "Levels");
+            string possiblePath2 = Path.Combine(Application.persistentDataPath, "Levels");
+
+            if (Directory.Exists(possiblePath1)) folderPath = possiblePath1;
+            else if (Directory.Exists(possiblePath2)) folderPath = possiblePath2;
+
+            if (!Directory.Exists(folderPath))
+            {
+                Debug.LogWarning($"Папка с уровнями не найдена: {folderPath}");
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo()
+                {
+                    FileName = folderPath,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"Не удалось открыть папку: {e.Message}");
+            }
+        }
 
     #endregion
 
     #region Actions (Play / Edit)
 
-    private void LoadAndPlay(string path)
-    {
-        LevelTransfer.SetRkslPath(path, "Menu");
-        PlayerPrefs.SetString("LastRkslPath", path);
-        PlayerPrefs.SetString("SelectedLevelPath", path);
-        PlayerPrefs.Save();
-
-        SceneManager.LoadScene(_gameSceneName);
-    }
-
-    private void EditSelectedLevel()
-    {
-        if (string.IsNullOrEmpty(_selectedLevelPath)) return;
-        StartCoroutine(LoadAndEditRoutine(_selectedLevelPath));
-    }
-
-    private void OpenNewLevelInEditor()
-    {
-        LevelTransfer.SetLevel(new RhythmLevelData { fullTitle = "New Level", bpm = 128f }, "Menu");
-        LevelTransfer.fromEditor = true;
-        LevelTransfer.sourceScene = _editorSceneName;
-        SceneManager.LoadScene(_editorSceneName);
-    }
-
-    private IEnumerator LoadAndEditRoutine(string path)
-    {
-        string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(path));
-
-        if (!RkslFile.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+        private void LoadAndPlay(string path)
         {
-            Debug.LogError("[MenuController] Ошибка извлечения .rksl");
-            yield break;
+            if (transfer != null) transfer.SetRkslPath(path, "Menu");
+            else if (Save != null)
+            {
+                if (Save.CurrentData == null) Save.Load();
+                Save.CurrentData.selectedLevelPath = path;
+                Save.CurrentData.lastRkslPath = path;
+                Save.Write();
+            }
+
+            if (Transition != null) Transition.LoadScene(_gameSceneName);
+            else SceneManager.LoadScene(_gameSceneName);
         }
 
-        AudioClip clip = null;
-        if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
+        private void EditSelectedLevel()
         {
-            using var uwr = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(
-                RkslFile.GetFileUri(audioPath), RkslFile.GetAudioType(audioPath));
-            yield return uwr.SendWebRequest();
-
-            if (uwr.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
-                clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(uwr);
+            if (string.IsNullOrEmpty(_selectedLevelPath)) return;
+            StartCoroutine(LoadAndEditRoutine(_selectedLevelPath));
         }
 
-        Sprite cover = null;
-        if (!string.IsNullOrEmpty(coverPath) && File.Exists(coverPath))
+        private void OpenNewLevelInEditor()
         {
-            var tex = new Texture2D(2, 2);
-            if (tex.LoadImage(File.ReadAllBytes(coverPath)))
-                cover = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
+            if (transfer != null)
+            {
+                transfer.SetLevel(new RhythmLevelData { fullTitle = "New Level", bpm = 128f }, "Menu");
+                transfer.fromEditor = true;
+                transfer.sourceScene = _editorSceneName;
+            }
+            if (Transition != null) Transition.LoadScene(_editorSceneName);
+            else SceneManager.LoadScene(_editorSceneName);
         }
 
-        var data = RkslFile.ToRuntimeData(man, clip, null, cover);
-        data.audioPath = audioPath;
-        data.videoPath = videoPath;
+        private IEnumerator LoadAndEditRoutine(string path)
+        {
+            string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(path));
 
-        LevelTransfer.SetLevel(data, "Menu");
-        LevelTransfer.fromEditor = true;
-        PlayerPrefs.SetString("SelectedLevelPath", path);
-        PlayerPrefs.Save();
+            if (!RkslFile.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+            {
+                Debug.LogError("[MenuController] Ошибка извлечения .rksl");
+                yield break;
+            }
 
-        SceneManager.LoadScene(_editorSceneName);
-    }
+            AudioClip clip = null;
+            if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
+            {
+                using var uwr = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(
+                    RkslFile.GetFileUri(audioPath), RkslFile.GetAudioType(audioPath));
+                yield return uwr.SendWebRequest();
+
+                if (uwr.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
+                    clip = UnityEngine.Networking.DownloadHandlerAudioClip.GetContent(uwr);
+            }
+
+            Sprite cover = null;
+            if (!string.IsNullOrEmpty(coverPath) && File.Exists(coverPath))
+            {
+                var tex = new Texture2D(2, 2);
+                if (tex.LoadImage(File.ReadAllBytes(coverPath)))
+                    cover = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
+            }
+
+            var data = RkslFile.ToRuntimeData(man, clip, null, cover);
+            data.audioPath = audioPath;
+            data.videoPath = videoPath;
+
+            if (transfer != null)
+            {
+                transfer.SetLevel(data, "Menu");
+                transfer.fromEditor = true;
+            }
+            if (Save != null)
+            {
+                if (Save.CurrentData == null) Save.Load();
+                Save.CurrentData.selectedLevelPath = path;
+                Save.Write();
+            }
+
+            if (Transition != null) Transition.LoadScene(_editorSceneName);
+            else SceneManager.LoadScene(_editorSceneName);
+        }
 
     #endregion
+    }
 }

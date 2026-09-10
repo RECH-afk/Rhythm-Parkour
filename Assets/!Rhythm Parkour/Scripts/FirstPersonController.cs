@@ -1,18 +1,26 @@
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 namespace EasyPeasyFirstPersonController
 {
     using System;
+    using RKS.RhythmParkour.Core;
     using UnityEngine;
     using DG.Tweening;
+    using Zenject;
 
-    /// <summary>Оценка ритм-действия игрока (прыжок/слайд/приземление в бит).</summary>
+
     public enum RhythmGrade { Perfect, Good, Miss }
 
-    public partial class FirstPersonController : MonoBehaviour
+    public partial class FirstPersonController : RKSBehaviour
     {
         [Header("Movement Settings")]
         [Range(0, 100)] public float mouseSensitivity = 50f;
         [Range(0f, 200f)] private float snappiness = 100f;
-        [Range(0f, 200f)] public float walkSpeed = 7f; // Увеличено для шустлости
+        [Range(0f, 200f)] public float walkSpeed = 7f;
         [Range(0f, 50f)] public float sprintSpeed = 12f;
         [Range(0f, 20f)] public float crouchSpeed = 4f;
         public float crouchHeight = 1f;
@@ -30,11 +38,11 @@ namespace EasyPeasyFirstPersonController
 
         [Header("Jump & Gravity")]
         [Range(0f, 20f)] public float jumpSpeed = 6f;
-        [Range(0f, 50f)] public float gravity = 19.62f; // Увеличена для более быстрого падения и чётких прыжков
+        [Range(0f, 50f)] public float gravity = 19.62f;
         [Range(0.01f, 0.3f)] public float coyoteTimeDuration = 0.15f;
 
         [Header("FOV Settings")]
-        public float normalFov = 70f; // Чуть шире для динамики
+        public float normalFov = 70f;
         public float sprintFov = 85f;
         public float fovChangeSpeed = 8f;
 
@@ -148,18 +156,18 @@ namespace EasyPeasyFirstPersonController
         public Transform playerCamera;
         public Transform cameraParent;
 
-        // Private variables
+
         private float rotX, rotY, xVelocity, yVelocity;
         private CharacterController characterController;
-        private CapsuleCollider playerCapsule; // дублирует CharacterController для честного хитбокса
+        private CapsuleCollider playerCapsule;
         private Vector3 moveDirection = Vector3.zero;
         private bool isGrounded, wasGrounded;
 
-        // Snappy input
+
         private Vector2 rawMoveInput;
         private Vector2 smoothMoveInput;
         private Vector2 moveInputVelocity;
-        private float moveSmoothTime = 0.03f; // Мгновенная, но сглаженная реакция
+        private float moveSmoothTime = 0.03f;
 
         public bool isSprinting, isCrouching, isSliding, isZooming;
         private float slideTimer, postSlideCrouchTimer;
@@ -175,13 +183,13 @@ namespace EasyPeasyFirstPersonController
         private float currentCameraHeight, currentBobOffsetY, currentBobOffsetX, currentFov, fovVelocity;
         private float currentSlideSpeed, slideSpeedVelocity, currentTiltAngle, tiltVelocity, bodyDip, bodyDipVelocity;
 
-        // Landing shake
+
         private Vector3 landingShakeOffset;
         private float currentShakeIntensity, shakePhase;
         private bool isShaking;
         private Tween shakeTween;
 
-        // Rhythm variables
+
         private float beatInterval;
         private float nextBeatTime;
         private float lastBeatTime;
@@ -192,21 +200,26 @@ namespace EasyPeasyFirstPersonController
         private float lastLandingTime = -1f;
         [Range(0.1f, 2f)] public float comboWindow = 0.5f;
 
-        // Связь с музыкой и игрой (источник бита — Conductor, очки — RhythmScoreManager)
+
+
         private Conductor beatConductor;
         private RhythmScoreManager scoreLink;
         private RhythmParkourManager parkourLink;
+
+        [InjectOptional] public Conductor injectedConductor;
+        [InjectOptional] public RhythmScoreManager injectedScore;
+        [InjectOptional] public RhythmParkourManager injectedParkour;
         private int lastMusicBeat = -1;
         private float beatFovKick;
         private float beatBobKick;
         private float jumpBufferTimer;
-        private bool jumpQueued; // нажат прыжок — ждём ближайший бит
+        private bool jumpQueued;
         private int jumpQueuedBeat = -1;
         private Vector3 baseCamLocalPos = Vector3.zero;
         private bool hasBaseCamPos;
         private Tween beatDashTween;
 
-        // Тряска камеры под музыку (кик на бит + энергия спектра трека)
+
         private float musicShakeKick;
         private float musicShakePhase;
         private float musicShakeSeed;
@@ -215,19 +228,19 @@ namespace EasyPeasyFirstPersonController
         private readonly float[] spectrumCache = new float[64];
         private bool spectrumSupported = true;
 
-        /// <summary>Энергия музыки 0..1 (бас текущего трека) — можно использовать для своих эффектов.</summary>
+
         public float MusicEnergy01 => IsMusicActive ? musicEnergyNorm : 0f;
 
-        /// <summary>Действие игрока оценено по ритму (прыжок/слайд). Подписка для UI/эффектов.</summary>
+
         public event Action<RhythmGrade> onRhythmAction;
 
-        /// <summary>Музыка играет и бит идёт из трека (а не из внутреннего метронома).</summary>
+
         public bool IsMusicActive => useConductor && beatConductor != null && beatConductor.isPlaying && beatConductor.songPositionBeats >= 0f;
-        /// <summary>Текущий BPM: из трека, если музыка играет, иначе внутренний.</summary>
+
         public float EffectiveBpm => IsMusicActive ? beatConductor.bpm : bpm;
-        /// <summary>Индекс текущего бита трека (-1 если музыки нет).</summary>
+
         public int CurrentBeatIndex => IsMusicActive ? Mathf.FloorToInt(beatConductor.songPositionBeats) : -1;
-        /// <summary>Прогресс текущего бита 0..1 (для пульсаций UI/эффектов).</summary>
+
         public float BeatProgress01
         {
             get
@@ -241,7 +254,7 @@ namespace EasyPeasyFirstPersonController
                 return 0f;
             }
         }
-        /// <summary>Секунд до ближайшего бита (0 = ровно в бит). Точность — по треку.</summary>
+
         public float BeatOffsetSeconds
         {
             get
@@ -260,9 +273,9 @@ namespace EasyPeasyFirstPersonController
 
         public float CurrentCameraHeight => isCrouching || isSliding ? crouchCameraHeight : originalCameraParentHeight;
         public int CurrentLandingCombo => landingCombo;
-        public float CurrentFlowMeter => flowMeter; // Для UI
+        public float CurrentFlowMeter => flowMeter;
 
-        private void Awake()
+        protected override void OnInjected()
         {
             characterController = GetComponent<CharacterController>();
             if (characterController == null)
@@ -311,39 +324,41 @@ namespace EasyPeasyFirstPersonController
             isShaking = false;
             landingCombo = 0;
 
-            // Init rhythm
+
             beatInterval = 60f / bpm;
             nextBeatTime = Time.time + beatInterval;
             lastBeatTime = Time.time;
             flowMeter = 0f;
+
+
+            if (injectedConductor != null) beatConductor = injectedConductor;
+            if (injectedParkour != null) parkourLink = injectedParkour;
+            if (injectedScore != null && scoreLink == null)
+            {
+                scoreLink = injectedScore;
+                scoreLink.onJudgement += OnScoreJudgement;
+            }
         }
 
-        private void OnDestroy()
+        protected override void OnDisposed()
         {
             if (shakeTween != null && shakeTween.IsActive()) shakeTween.Kill();
             if (beatDashTween != null && beatDashTween.IsActive()) beatDashTween.Kill();
             if (scoreLink != null) scoreLink.onJudgement -= OnScoreJudgement;
         }
 
-        /// <summary>Ленивая привязка к Conductor и счёту (могут появиться позже контроллера).</summary>
+
         private void EnsureLinks()
         {
-            if (useConductor && beatConductor == null) beatConductor = Conductor.Instance;
-            // BPM контроллера берём из BPM текущей песни
+
             if (syncBpmFromMusic && beatConductor != null && beatConductor.bpm > 1f
                 && Mathf.Abs(bpm - beatConductor.bpm) > 0.01f)
             {
                 SetBPM(beatConductor.bpm);
             }
-            if (scoreLink == null)
-            {
-                var sm = RhythmScoreManager.Instance;
-                if (sm != null) { scoreLink = sm; scoreLink.onJudgement += OnScoreJudgement; }
-            }
-            if (parkourLink == null) parkourLink = RhythmParkourManager.Instance;
         }
 
-        private void Update()
+        protected override void Update()
         {
             EnsureLinks();
 
@@ -352,7 +367,7 @@ namespace EasyPeasyFirstPersonController
             else if (characterController != null)
                 isGrounded = characterController.isGrounded;
 
-            // --- RHYTHM TICK: бит из трека, внутренний метроном — только запасной ---
+
             if (IsMusicActive)
             {
                 int beatIdx = Mathf.FloorToInt(beatConductor.songPositionBeats);
@@ -367,7 +382,7 @@ namespace EasyPeasyFirstPersonController
                 OnBeatHit();
             }
 
-            // очередь прыжка: музыка встала — прыгаем обычным буфером, протухла — сгорает
+
             if (!isMove) jumpQueued = false;
             else if (jumpQueued)
             {
@@ -375,7 +390,7 @@ namespace EasyPeasyFirstPersonController
                 else if (CurrentBeatIndex - jumpQueuedBeat > Mathf.Max(0.5f, jumpQueueTimeoutBeats)) jumpQueued = false;
             }
 
-            // затухание бит-пульса камеры
+
             float pulseDecay = Mathf.Exp(-7f * Time.deltaTime);
             beatFovKick *= pulseDecay;
             if (beatFovKick < 0.01f) beatFovKick = 0f;
@@ -384,14 +399,14 @@ namespace EasyPeasyFirstPersonController
 
             UpdateMusicShake();
 
-            // Flow decay
+
             if (flowMeter > 0)
             {
                 flowMeter -= flowDecayRate * Time.deltaTime;
                 if (flowMeter < 0) flowMeter = 0;
             }
 
-            // Beat dash timer
+
             if (isBeatDashing)
             {
                 beatDashTimer -= Time.deltaTime;
@@ -411,7 +426,7 @@ namespace EasyPeasyFirstPersonController
                 if (enableLandingShake && moveDirection.y < -2f)
                     TriggerLandingShake();
 
-                // очередь прыжка дожила до приземления — прыгаем сразу
+
                 if (jumpQueued && !isSliding) { jumpQueued = false; jumpBufferTimer = jumpBufferTime; }
 
                 coyoteTimer = coyoteTimeEnabled ? coyoteTimeDuration : 0f;
@@ -437,7 +452,7 @@ namespace EasyPeasyFirstPersonController
 
             if (isGrounded && moveDirection.y < 0)
             {
-                moveDirection.y = -2f; // Стабильное приземление
+                moveDirection.y = -2f;
             }
 
             HandleLook();
@@ -508,25 +523,25 @@ namespace EasyPeasyFirstPersonController
             if (isSliding)
             {
                 slideTimer -= Time.deltaTime;
-                if (slideTimer <= 0f) isSliding = false; // Убрано !isGrounded, чтобы можно было слетать с платформ в слайде (ритм-фишка)
+                if (slideTimer <= 0f) isSliding = false;
 
                 float slideProgress = slideTimer / slideDuration;
                 float targetSlideSpeed = slideSpeed * Mathf.Lerp(0.7f, 1f, slideProgress);
                 currentSlideSpeed = Mathf.SmoothDamp(currentSlideSpeed, targetSlideSpeed, ref slideSpeedVelocity, 0.1f);
 
-                // Интеграция слайда в moveDirection для корректной работы гравитации
+
                 moveDirection.x = slideDirection.x * currentSlideSpeed;
                 moveDirection.z = slideDirection.z * currentSlideSpeed;
             }
 
             float targetHeight = isCrouching || isSliding ? crouchHeight : originalHeight;
-            // коллайдеры — МГНОВЕННО (хитбокс честный сразу, без анимации)
+
             if (Mathf.Abs(characterController.height - targetHeight) > 0.001f)
             {
                 characterController.height = targetHeight;
                 characterController.center = new Vector3(0f, targetHeight * 0.5f, 0f);
             }
-            // CapsuleCollider дублирует CharacterController один в один (тоже мгновенно)
+
             if (playerCapsule != null)
             {
                 playerCapsule.height = characterController.height;
@@ -539,15 +554,15 @@ namespace EasyPeasyFirstPersonController
         private void HandleMovement()
         {
             if (characterController == null) return;
-            // Snappy input
+
             rawMoveInput.x = Input.GetAxisRaw("Horizontal");
             rawMoveInput.y = Input.GetAxisRaw("Vertical");
-            if (lockForwardBack) rawMoveInput.y = 0f; // только стрейфы — вперёд/назад выкл
+            if (lockForwardBack) rawMoveInput.y = 0f;
             smoothMoveInput = Vector2.SmoothDamp(smoothMoveInput, rawMoveInput, ref moveInputVelocity, moveSmoothTime);
 
             isSprinting = canSprint && Input.GetKey(KeyCode.LeftShift) && smoothMoveInput.y > 0.1f && isGrounded && !isCrouching && !isSliding && !isZooming;
 
-            // Flow Meter speed bonus (до +50% скорости)
+
             float flowSpeedMultiplier = 1f + (flowMeter / maxFlowMeter) * 0.5f;
 
             float currentSpeed = isCrouching ? crouchSpeed : (isSprinting ? sprintSpeed : walkSpeed);
@@ -566,7 +581,7 @@ namespace EasyPeasyFirstPersonController
                 moveDirection.z = moveVector.z;
             }
 
-            // Gravity & Jump. С квантованием нажатие превращается в прыжок ровно в бит
+
             if (canJump && isMove && Input.GetKeyDown(KeyCode.Space) && !isSliding)
             {
                 if (quantizeJumpToBeat && IsMusicActive)
@@ -575,14 +590,14 @@ namespace EasyPeasyFirstPersonController
                     float frac = beatConductor.songPositionBeats - Mathf.Floor(beatConductor.songPositionBeats);
                     float toNextBeat = (1f - frac) * secPerBeat;
                     if (BeatOffsetSeconds <= perfectWindow)
-                        jumpBufferTimer = jumpBufferTime; // и так в бит — сразу
+                        jumpBufferTimer = jumpBufferTime;
                     else if (toNextBeat <= Mathf.Max(0.05f, jumpCaptureBeats) * secPerBeat)
                     {
-                        jumpQueued = true; // в очередь на ближайший бит
+                        jumpQueued = true;
                         jumpQueuedBeat = CurrentBeatIndex;
                     }
                     else
-                        jumpBufferTimer = jumpBufferTime; // слишком рано — обычный прыжок со штрафом
+                        jumpBufferTimer = jumpBufferTime;
                 }
                 else
                     jumpBufferTimer = jumpBufferTime;
@@ -604,7 +619,7 @@ namespace EasyPeasyFirstPersonController
 
             if (clampToTrack) ClampToTrack();
 
-            // FOV Handling
+
             float targetFov = normalFov;
             if (isZooming) targetFov = zoomFov;
             else if (isSprinting) targetFov = sprintFov;
@@ -615,7 +630,7 @@ namespace EasyPeasyFirstPersonController
             }
 
             float fallFovBoost = (!isGrounded && moveDirection.y < -5f) ? Mathf.Clamp(Mathf.Abs(moveDirection.y) * 0.4f, 0f, 15f) : 0f;
-            targetFov += fallFovBoost + beatFovKick; // бит-пульс из OnMusicBeat
+            targetFov += fallFovBoost + beatFovKick;
 
             currentFov = Mathf.SmoothDamp(currentFov, targetFov, ref fovVelocity, 1f / fovChangeSpeed);
             if (cam != null) cam.fieldOfView = currentFov;
@@ -648,7 +663,7 @@ namespace EasyPeasyFirstPersonController
 
             if (IsMusicActive)
             {
-                // шаги строго в бит: фаза покачивания идёт от трека, а не от времени
+
                 bobTimer = beatConductor.songPositionBeats * Mathf.PI * 2f * Mathf.Max(0.05f, bobCyclesPerBeat);
             }
             else
@@ -656,7 +671,7 @@ namespace EasyPeasyFirstPersonController
                 bobTimer += Time.deltaTime * currentBobSpeed;
             }
 
-            // бит-пульс добавляется к амплитуде — камера «дышит» под музыку
+
             float pulseAmp = currentBobAmplitude + beatBobKick;
 
             currentBobOffsetY = Mathf.Sin(bobTimer) * pulseAmp;
@@ -671,7 +686,7 @@ namespace EasyPeasyFirstPersonController
             currentTilt.x = Mathf.Lerp(currentTilt.x, currentBobPitch, Time.deltaTime * 10f);
 
             float targetCameraHeight = isCrouching || isSliding ? crouchCameraHeight : originalCameraParentHeight;
-            // камера: вниз — резко, вверх — плавно (анимация остаётся, но присед чувствуется сразу)
+
             float camSpd = targetCameraHeight < currentCameraHeight ? crouchDownSpeed : crouchUpSpeed;
             currentCameraHeight = Mathf.MoveTowards(currentCameraHeight, targetCameraHeight, camSpd * Time.deltaTime);
 
@@ -683,16 +698,16 @@ namespace EasyPeasyFirstPersonController
             cameraParent.localRotation = Quaternion.Euler(currentTilt.x, 0f, currentTilt.z);
         }
 
-        // ================= RHYTHM MECHANICS (бит идёт из Conductor) =================
 
-        /// <summary>Тик запасного метронома — работает только когда нет музыки.</summary>
+
+
         private void OnBeatHit()
         {
             lastBeatTime = nextBeatTime;
             nextBeatTime += beatInterval;
         }
 
-        /// <summary>Пульс настоящего бита из трека: FOV-кик + покачивание + кик тряски.</summary>
+
         private void OnMusicBeat(int beatIndex)
         {
             Vector3 hv = characterController != null
@@ -701,10 +716,10 @@ namespace EasyPeasyFirstPersonController
             bool moving = hv.magnitude > 0.5f;
             beatFovKick = Mathf.Max(beatFovKick, beatFovPulse * (moving || isSliding ? 1f : 0.35f));
             beatBobKick = Mathf.Max(beatBobKick, beatBobPulse * (moving ? 1f : 0.4f));
-            // тряска: новый кик на бит + новая случайная фаза, чтобы дрожание не было механическим
+
             musicShakeKick = musicShakeAmount;
             musicShakeSeed = UnityEngine.Random.value * 100f;
-            // прыжок из очереди — ровно в бит
+
             if (jumpQueued && !isSliding && (isGrounded || coyoteTimer > 0f))
             {
                 jumpQueued = false;
@@ -712,7 +727,7 @@ namespace EasyPeasyFirstPersonController
             }
         }
 
-        /// <summary>Выполнить прыжок: оценка в ритм, буст за Perfect, сброс буферов.</summary>
+
         private void DoJump()
         {
             RhythmGrade g = CheckRhythmAction();
@@ -724,7 +739,7 @@ namespace EasyPeasyFirstPersonController
             bodyDip = -jumpDipAmount;
         }
 
-        /// <summary>Зажать игрока в границах дорожки (X — ширина, Z — от спавна до деспавна).</summary>
+
         private void ClampToTrack()
         {
             if (parkourLink == null) return;
@@ -744,9 +759,9 @@ namespace EasyPeasyFirstPersonController
             transform.position = p;
         }
 
-        /// <summary>
-        /// Тряска камеры под играющий трек: кик на бит, сила — от реальной энергии (бас) музыки.
-        /// </summary>
+
+
+
         private void UpdateMusicShake()
         {
             if (!musicShakeEnabled || !IsMusicActive)
@@ -772,7 +787,7 @@ namespace EasyPeasyFirstPersonController
                 0f);
         }
 
-        /// <summary>Энергия баса текущего трека через спектр AudioSource (быстрая атака, медленный спад).</summary>
+
         private void UpdateMusicEnergy()
         {
             var src = beatConductor != null ? beatConductor.musicSource : null;
@@ -786,7 +801,7 @@ namespace EasyPeasyFirstPersonController
             try
             {
                 src.GetSpectrumData(spectrumCache, 0, FFTWindow.BlackmanHarris);
-                int n = Mathf.Min(8, spectrumCache.Length); // бас-полоса
+                int n = Mathf.Min(8, spectrumCache.Length);
                 float bass = 0f;
                 for (int i = 0; i < n; i++) bass += spectrumCache[i];
                 bass /= Mathf.Max(1, n);
@@ -795,16 +810,16 @@ namespace EasyPeasyFirstPersonController
             }
             catch
             {
-                // платформа не отдаёт спектр — качаем просто по битам
+
                 spectrumSupported = false;
                 musicEnergyNorm = 0.65f;
             }
         }
 
-        /// <summary>
-        /// Вызывайте из Audio Manager для идеальной синхронизации запасного метронома.
-        /// При активной музыке бит всё равно берётся из Conductor.
-        /// </summary>
+
+
+
+
         public void ForceBeat()
         {
             lastBeatTime = Time.time;
@@ -819,7 +834,7 @@ namespace EasyPeasyFirstPersonController
             nextBeatTime = Time.time + beatInterval;
         }
 
-        /// <summary>Оценка действия по расстоянию до ближайшего бита (по треку, если музыка играет).</summary>
+
         private RhythmGrade CheckRhythmAction()
         {
             float off = BeatOffsetSeconds;
@@ -840,13 +855,13 @@ namespace EasyPeasyFirstPersonController
             }
             else
             {
-                flowMeter = Mathf.Max(0, flowMeter - 10f); // Штраф за действие вне ритма
+                flowMeter = Mathf.Max(0, flowMeter - 10f);
             }
             try { onRhythmAction?.Invoke(grade); } catch (Exception e) { Debug.LogWarning($"[FPC] onRhythmAction: {e.Message}"); }
             return grade;
         }
 
-        /// <summary>Реакция на джаджменты игры: Miss бьёт по Groove, чистый додж — растит.</summary>
+
         private void OnScoreJudgement(HitJudgement j, int combo)
         {
             if (j == HitJudgement.Miss)
@@ -860,7 +875,7 @@ namespace EasyPeasyFirstPersonController
             isBeatDashing = true;
             beatDashTimer = beatDashDuration;
 
-            // Короткий панч камеры с возвратом в исходную позицию (не в ноль!)
+
             if (playerCamera != null)
             {
                 if (!hasBaseCamPos) { baseCamLocalPos = playerCamera.localPosition; hasBaseCamPos = true; }
@@ -883,7 +898,7 @@ namespace EasyPeasyFirstPersonController
             }
             lastLandingTime = Time.time;
 
-            // Проверка, было ли приземление в ритм (по треку, если музыка играет)
+
             float minDiff = BeatOffsetSeconds;
 
             float rhythmBonus = 1f;
@@ -925,7 +940,7 @@ namespace EasyPeasyFirstPersonController
             });
         }
 
-        // ================= PUBLIC API =================
+
 
         public void SetControl(bool newState) { SetLookControl(newState); SetMoveControl(newState); }
         public void SetLookControl(bool newState) { isLook = newState; }

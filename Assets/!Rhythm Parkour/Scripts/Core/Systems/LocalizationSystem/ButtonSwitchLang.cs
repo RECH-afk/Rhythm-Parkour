@@ -1,30 +1,39 @@
-using RKS.HadalZone.Core;
+using RKS.RhythmParkour.Core;
 using UnityEngine;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-[DisallowMultipleComponent]
-public sealed class ButtonSwitchLang : RKSBehaviour
+namespace RKS.RhythmParkour.Core
 {
-    [SerializeField] private string languageCode;
-
-    public void OnButtonClick()
+    [DisallowMultipleComponent]
+    public sealed class ButtonSwitchLang : RKSBehaviour
     {
-        if (Localization == null)
+        [SerializeField] private string languageCode;
+
+        public void OnButtonClick()
         {
-            return;
+            if (Localization == null)
+            {
+                return;
+            }
+
+            string targetLang = string.IsNullOrWhiteSpace(languageCode) ? gameObject.name : languageCode;
+
+            if (string.IsNullOrWhiteSpace(targetLang))
+            {
+                return;
+            }
+
+            if (Localization.currentLanguage == targetLang)
+            {
+                return;
+            }
+
+            Localization.SetLanguage(targetLang);
         }
-
-        string targetLang = string.IsNullOrWhiteSpace(languageCode) ? gameObject.name : languageCode;
-
-        if (string.IsNullOrWhiteSpace(targetLang))
-        {
-            return;
-        }
-
-        if (Localization.currentLanguage == targetLang)
-        {
-            return;
-        }
-
-        Localization.SetLanguage(targetLang);
     }
 }

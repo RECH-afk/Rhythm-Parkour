@@ -3,208 +3,134 @@ using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-/// <summary>
-/// Глобальная библиотека объектов (как в Geometry Dash).
-/// Один список префабов на всю игру — используется всеми уровнями.
-/// Индекс префаба в ObstacleEvent теперь ссылается сюда, а не в levelData.obstaclePrefabs.
-/// </summary>
-[CreateAssetMenu(menuName = "Rhythm Parkour/Global Obstacle Catalog", fileName = "GlobalObstacleCatalog")]
-public class GlobalObstacleCatalog : ScriptableObject
+namespace RKS.RhythmParkour.Rhythm
 {
-    [Tooltip("Общий пул объектов для всех уровней (как в GD). Порядок важен — индекс сохраняется в .rksl")]
-    public List<GameObject> prefabs = new List<GameObject>();
-    [Tooltip("Доступные материалы для препятствий. Первый = дефолтный")]
-    public List<Material> obstacleMaterials = new List<Material>();
-
-    // ── Singleton via Resources ──
-    static GlobalObstacleCatalog _instance;
-    static bool _triedLoad;
-
-    public static GlobalObstacleCatalog Instance
+    [CreateAssetMenu(menuName = "Rhythm Parkour/Global Obstacle Catalog", fileName = "GlobalObstacleCatalog")]
+    public class GlobalObstacleCatalog : ScriptableObject
     {
-        get
-        {
-            if (_instance != null) return _instance;
-            if (_triedLoad && _instance == null) TryLoad();
-            else if (!_triedLoad) TryLoad();
-            return _instance;
-        }
-    }
+        [Tooltip("Общий пул объектов для всех уровней (как в GD). Порядок важен — индекс сохраняется в .rksl")]
+        public List<GameObject> prefabs = new List<GameObject>();
+        [Tooltip("Доступные материалы для препятствий. Первый = дефолтный")]
+        public List<Material> obstacleMaterials = new List<Material>();
 
-    static void TryLoad()
-    {
-        _triedLoad = true;
-        _instance = Resources.Load<GlobalObstacleCatalog>("GlobalObstacleCatalog");
 #if UNITY_EDITOR
-        if (_instance == null)
+        static void EnsureAssetExists()
         {
-            // fallback: поиск по AssetDatabase (удобно если лежит не в Resources)
             string[] guids = AssetDatabase.FindAssets("t:GlobalObstacleCatalog");
-            if (guids.Length > 0)
+            if (guids.Length > 0) return;
+
+            string resourcesDir = "Assets/Resources";
+            if (!AssetDatabase.IsValidFolder(resourcesDir))
             {
-                string path = AssetDatabase.GUIDToAssetPath(guids[0]);
-                _instance = AssetDatabase.LoadAssetAtPath<GlobalObstacleCatalog>(path);
+                AssetDatabase.CreateFolder("Assets", "Resources");
             }
-            // автосоздание если вообще нет
-            if (_instance == null)
+
+            string path = "Assets/Resources/GlobalObstacleCatalog.asset";
+            if (System.IO.File.Exists(path)) return;
+
+            var asset = CreateInstance<GlobalObstacleCatalog>();
+
+            TryAutoFill(asset);
+
+            AssetDatabase.CreateAsset(asset, path);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[GlobalCatalog] Создан {path} — перетащи туда префабы препятствий (порядок = ID)");
+        }
+
+        static void TryAutoFill(GlobalObstacleCatalog catalog)
+        {
+            string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/!Rhythm Parkour/Prefabs/Obstacles" });
+            if (guids.Length == 0) guids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/!Rhythm Parkour/Prefabs" });
+            List<GameObject> found = new List<GameObject>();
+            foreach (var g in guids)
             {
-                EnsureAssetExists();
-                if (_instance == null)
+                string p = AssetDatabase.GUIDToAssetPath(g);
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (go != null && go.GetComponent<Obstacle>() != null)
+                    found.Add(go);
+            }
+
+            found.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.Ordinal));
+            catalog.prefabs = found;
+            if (found.Count > 0)
+                Debug.Log($"[GlobalCatalog] Авто-заполнено {found.Count} префабов из Obstacles/");
+
+            var matGuids = AssetDatabase.FindAssets("t:Material", new[] { "Assets/!Rhythm Parkour/Materials/Obstacles" });
+            List<Material> mats = new List<Material>();
+            foreach (var g in matGuids)
+            {
+                string p = AssetDatabase.GUIDToAssetPath(g);
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(p);
+                if (mat != null) mats.Add(mat);
+            }
+            mats.Sort((a,b)=> string.Compare(a.name,b.name, System.StringComparison.Ordinal));
+            catalog.obstacleMaterials = mats;
+            if (mats.Count>0) Debug.Log($"[GlobalCatalog] Авто-заполнено {mats.Count} материалов");
+        }
+
+        [InitializeOnLoadMethod]
+        static void EditorInit()
+        {
+            EditorApplication.delayCall += () =>
+            {
+                var catalog = AssetDatabase.LoadAssetAtPath<GlobalObstacleCatalog>(
+                    "Assets/Resources/GlobalObstacleCatalog.asset");
+                if (catalog == null) return;
+
+                if (catalog.prefabs == null || catalog.prefabs.Count == 0)
                 {
-                    string[] guids2 = AssetDatabase.FindAssets("t:GlobalObstacleCatalog");
-                    if (guids2.Length > 0)
-                        _instance = AssetDatabase.LoadAssetAtPath<GlobalObstacleCatalog>(AssetDatabase.GUIDToAssetPath(guids2[0]));
+
+                    string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/!Rhythm Parkour/Prefabs/Obstacles" });
+                    if (guids.Length > 0)
+                        Debug.LogWarning("[GlobalCatalog] Каталог пуст! Открой Assets/Resources/GlobalObstacleCatalog и перетащи префабы (или они заполнятся автоматически при создании). Пока уровни будут показывать 'нет префабов'.");
                 }
-            }
+            };
         }
 #endif
-    }
 
-#if UNITY_EDITOR
-    static void EnsureAssetExists()
-    {
-        string[] guids = AssetDatabase.FindAssets("t:GlobalObstacleCatalog");
-        if (guids.Length > 0) return;
+public int Count => prefabs != null ? prefabs.Count : 0;
 
-        string resourcesDir = "Assets/Resources";
-        if (!AssetDatabase.IsValidFolder(resourcesDir))
+        public GameObject GetPrefab(int index)
         {
-            AssetDatabase.CreateFolder("Assets", "Resources");
+            if (prefabs == null || prefabs.Count == 0) return null;
+            if (index < 0 || index >= prefabs.Count) return prefabs[0];
+            return prefabs[index];
         }
 
-        string path = "Assets/Resources/GlobalObstacleCatalog.asset";
-        if (System.IO.File.Exists(path)) return;
-
-        var asset = CreateInstance<GlobalObstacleCatalog>();
-        // попробуем наполнить из папки Prefabs/Obstacles если пусто
-        TryAutoFill(asset);
-
-        AssetDatabase.CreateAsset(asset, path);
-        AssetDatabase.SaveAssets();
-        Debug.Log($"[GlobalCatalog] Создан {path} — перетащи туда префабы препятствий (порядок = ID)");
-    }
-
-    static void TryAutoFill(GlobalObstacleCatalog catalog)
-    {
-        string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/!Rhythm Parkour/Prefabs/Obstacles" });
-        if (guids.Length == 0) guids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/!Rhythm Parkour/Prefabs" });
-        List<GameObject> found = new List<GameObject>();
-        foreach (var g in guids)
+        public int ClampIndex(int index)
         {
-            string p = AssetDatabase.GUIDToAssetPath(g);
-            var go = AssetDatabase.LoadAssetAtPath<GameObject>(p);
-            if (go != null && go.GetComponent<Obstacle>() != null)
-                found.Add(go);
+            int c = Count;
+            if (c == 0) return 0;
+            return Mathf.Clamp(index, 0, c - 1);
         }
-        // сортируем по имени чтобы порядок был детерминирован (Obstacle1..9)
-        found.Sort((a, b) => string.Compare(a.name, b.name, System.StringComparison.Ordinal));
-        catalog.prefabs = found;
-        if (found.Count > 0)
-            Debug.Log($"[GlobalCatalog] Авто-заполнено {found.Count} префабов из Obstacles/");
-        // Материалы
-        var matGuids = AssetDatabase.FindAssets("t:Material", new[] { "Assets/!Rhythm Parkour/Materials/Obstacles" });
-        List<Material> mats = new List<Material>();
-        foreach (var g in matGuids)
-        {
-            string p = AssetDatabase.GUIDToAssetPath(g);
-            var mat = AssetDatabase.LoadAssetAtPath<Material>(p);
-            if (mat != null) mats.Add(mat);
-        }
-        mats.Sort((a,b)=> string.Compare(a.name,b.name, System.StringComparison.Ordinal));
-        catalog.obstacleMaterials = mats;
-        if (mats.Count>0) Debug.Log($"[GlobalCatalog] Авто-заполнено {mats.Count} материалов");
-    }
 
-    [InitializeOnLoadMethod]
-    static void EditorInit()
-    {
-        EditorApplication.delayCall += () =>
+        public static Color GetColor(int index)
         {
-            if (Instance == null) return;
-            // если каталог пустой но в проекте есть префабы — предложим автозаполнение
-            if (Instance.prefabs == null || Instance.prefabs.Count == 0)
+            float h = (index * 0.37f) % 1f;
+            return Color.HSVToRGB(h, 0.78f, 0.92f);
+        }
+
+        public List<GameObject> GetAll() => prefabs ?? new List<GameObject>();
+
+        public Material GetMaterial(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            if (obstacleMaterials != null)
             {
-                // не спамим, только если есть что заполнить
-                string[] guids = AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/!Rhythm Parkour/Prefabs/Obstacles" });
-                if (guids.Length > 0)
-                    Debug.LogWarning("[GlobalCatalog] Каталог пуст! Открой Assets/Resources/GlobalObstacleCatalog и перетащи префабы (или они заполнятся автоматически при создании). Пока уровни будут показывать 'нет префабов'.");
+                foreach (var m in obstacleMaterials)
+                    if (m != null && m.name == name) return m;
             }
-        };
-    }
-#endif
-
-    public static void InvalidateCache() { _instance = null; _triedLoad = false; }
-
-    // ── Удобные статик-хелперы (используй их везде вместо levelData.obstaclePrefabs) ──
-
-    public static int Count
-    {
-        get
-        {
-            var inst = Instance;
-            if (inst == null || inst.prefabs == null) return 0;
-            return inst.prefabs.Count;
+            return null;
         }
-    }
-
-    public static GameObject GetPrefab(int index)
-    {
-        var inst = Instance;
-        if (inst == null || inst.prefabs == null || inst.prefabs.Count == 0) return null;
-        if (index < 0 || index >= inst.prefabs.Count) return inst.prefabs[0];
-        return inst.prefabs[index];
-    }
-
-    public static int ClampIndex(int index)
-    {
-        int c = Count;
-        if (c == 0) return 0;
-        return Mathf.Clamp(index, 0, c - 1);
-    }
-
-    public static Color GetColor(int index)
-    {
-        float h = (index * 0.37f) % 1f;
-        return Color.HSVToRGB(h, 0.78f, 0.92f);
-    }
-
-    // Для совместимости: отдать список (только чтение)
-    public static List<GameObject> GetAll()
-    {
-        var inst = Instance;
-        if (inst == null) return new List<GameObject>();
-        return inst.prefabs;
-    }
-
-    public static Material GetMaterial(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return null;
-        var inst = Instance;
-        if (inst != null && inst.obstacleMaterials != null)
-        {
-            foreach (var m in inst.obstacleMaterials)
-                if (m != null && m.name == name) return m;
-        }
-        // Fallback: Resources
-        var res = Resources.Load<Material>(name);
-        if (res != null) return res;
-        // Try Find by name among all loaded materials
-        var allMats = Resources.FindObjectsOfTypeAll<Material>();
-        foreach (var m in allMats) if (m.name == name) return m;
-        return null;
-    }
-    public static List<Material> GetAllMaterials()
-    {
-        var inst = Instance;
-        if (inst == null || inst.obstacleMaterials == null) return new List<Material>();
-        return inst.obstacleMaterials;
-    }
-    public static Material GetDefaultMaterial()
-    {
-        var inst = Instance;
-        if (inst != null && inst.obstacleMaterials != null && inst.obstacleMaterials.Count>0)
-            return inst.obstacleMaterials[0];
-        return null;
+        public List<Material> GetAllMaterials() => obstacleMaterials ?? new List<Material>();
+        public Material GetDefaultMaterial() =>
+            obstacleMaterials != null && obstacleMaterials.Count > 0 ? obstacleMaterials[0] : null;
     }
 }

@@ -1,73 +1,103 @@
+using System.Collections.Generic;
 using UnityEngine;
+using Zenject;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-/// <summary>
-/// Статический перенос уровня между сценами без потери прогресса.
-/// Хранит клон данных уровня при переходе Редактор -> Игра и обратно.
-/// </summary>
-public static class LevelTransfer
+namespace RKS.RhythmParkour.Rhythm
 {
-    public static RhythmLevelData levelData;
-    public static string rkslPath = "";
-    public static string levelName = "";
-    public static string sourceScene = "";
-    public static bool fromEditor = false;
-    // hasLevel истинен только если есть валидный in-memory или существующий файл
-    public static bool hasLevel
+    [System.Serializable]
+    public class LevelTransfer
     {
-        get
+        [InjectOptional] public SaveManager save;
+
+        public RhythmLevelData levelData;
+        public string rkslPath = "";
+        public string levelName = "";
+        public string sourceScene = "";
+        public bool fromEditor = false;
+
+public bool hasLevel
         {
-            if (levelData != null) return true;
-            if (!string.IsNullOrEmpty(rkslPath) && System.IO.File.Exists(rkslPath)) return true;
-            // также проверяем PlayerPrefs как fallback (для перезапуска)
-            string sel = UnityEngine.PlayerPrefs.GetString("SelectedLevelPath", "");
-            if (!string.IsNullOrEmpty(sel) && System.IO.File.Exists(sel)) return true;
-            string last = UnityEngine.PlayerPrefs.GetString("LastRkslPath", "");
-            if (!string.IsNullOrEmpty(last) && System.IO.File.Exists(last)) return true;
-            return false;
+            get
+            {
+                if (levelData != null) return true;
+                if (!string.IsNullOrEmpty(rkslPath) && System.IO.File.Exists(rkslPath)) return true;
+                foreach (var p in GetSavedPaths())
+                    if (!string.IsNullOrEmpty(p) && System.IO.File.Exists(p)) return true;
+                return false;
+            }
         }
-    }
 
-    public static string GetEffectivePath()
-    {
-        if (!string.IsNullOrEmpty(rkslPath) && System.IO.File.Exists(rkslPath)) return rkslPath;
-        string sel = UnityEngine.PlayerPrefs.GetString("SelectedLevelPath", "");
-        if (!string.IsNullOrEmpty(sel) && System.IO.File.Exists(sel)) return sel;
-        string last = UnityEngine.PlayerPrefs.GetString("LastRkslPath", "");
-        if (!string.IsNullOrEmpty(last) && System.IO.File.Exists(last)) return last;
-        return rkslPath;
-    }
+        public List<string> GetSavedPaths()
+        {
+            var paths = new List<string>();
+            var data = save != null ? save.CurrentData : null;
+            if (data == null) return paths;
+            if (!string.IsNullOrEmpty(data.selectedLevelPath)) paths.Add(data.selectedLevelPath);
+            if (!string.IsNullOrEmpty(data.lastRkslPath)) paths.Add(data.lastRkslPath);
+            if (!string.IsNullOrEmpty(data.transferRkslPath)) paths.Add(data.transferRkslPath);
+            return paths;
+        }
 
-    public static void SetLevel(RhythmLevelData data, string srcScene)
-    {
-        if (data == null) { levelData = null; rkslPath = ""; return; }
-        levelData = data.CloneDeep();
-        levelName = string.IsNullOrEmpty(data.fullTitle) ? System.IO.Path.GetFileNameWithoutExtension(data.audioPath) : data.fullTitle;
-        sourceScene = srcScene;
-        fromEditor = srcScene == "LevelEditor" || srcScene == "IsLevelEditorScene";
-        rkslPath = ""; // in-memory имеет приоритет
-        UnityEngine.Debug.Log($"[LevelTransfer] SetLevel '{levelName}' from {srcScene} events={data.events?.Count ?? 0}");
-    }
+        public string GetEffectivePath()
+        {
+            if (!string.IsNullOrEmpty(rkslPath) && System.IO.File.Exists(rkslPath)) return rkslPath;
+            foreach (var p in GetSavedPaths())
+                if (!string.IsNullOrEmpty(p) && System.IO.File.Exists(p)) return p;
+            return rkslPath;
+        }
 
-    public static void SetRkslPath(string path, string srcScene)
-    {
-        rkslPath = path;
-        levelName = System.IO.Path.GetFileNameWithoutExtension(path);
-        sourceScene = srcScene;
-        fromEditor = false;
-        levelData = null; // будет загружен в IsGameSceneLoader
-        // Сохраняем сразу в PlayerPrefs чтобы пережить перезапуск
-        UnityEngine.PlayerPrefs.SetString("SelectedLevelPath", path);
-        UnityEngine.PlayerPrefs.SetString("LastRkslPath", path);
-        UnityEngine.PlayerPrefs.Save();
-        UnityEngine.Debug.Log($"[LevelTransfer] SetRkslPath '{path}' from {srcScene}");
-    }
+        public void SetLevel(RhythmLevelData data, string srcScene)
+        {
+            if (data == null) { levelData = null; rkslPath = ""; return; }
+            levelData = data.CloneDeep();
+            levelName = string.IsNullOrEmpty(data.fullTitle) ? System.IO.Path.GetFileNameWithoutExtension(data.audioPath) : data.fullTitle;
+            sourceScene = srcScene;
+            fromEditor = srcScene == "LevelEditor" || srcScene == "IsLevelEditorScene";
+            rkslPath = "";
+            UnityEngine.Debug.Log($"[LevelTransfer] SetLevel '{levelName}' from {srcScene} events={data.events?.Count ?? 0}");
+        }
 
-    public static void Clear()
-    {
-        levelData = null;
-        rkslPath = "";
-        levelName = "";
-        sourceScene = "";
-        fromEditor = false;
+        public void SetRkslPath(string path, string srcScene)
+        {
+            rkslPath = path;
+            levelName = System.IO.Path.GetFileNameWithoutExtension(path);
+            sourceScene = srcScene;
+            fromEditor = false;
+            levelData = null;
+            if (save != null)
+            {
+                if (save.CurrentData == null) save.Load();
+                save.CurrentData.selectedLevelPath = path;
+                save.CurrentData.lastRkslPath = path;
+                save.Write();
+            }
+            UnityEngine.Debug.Log($"[LevelTransfer] SetRkslPath '{path}' from {srcScene}");
+        }
+
+        public void ClearSelectedPath(string path)
+        {
+            if (save == null || string.IsNullOrEmpty(path)) return;
+            if (save.CurrentData == null) save.Load();
+            if (save.CurrentData.selectedLevelPath == path)
+            {
+                save.CurrentData.selectedLevelPath = "";
+                save.Write();
+            }
+        }
+
+        public void Clear()
+        {
+            levelData = null;
+            rkslPath = "";
+            levelName = "";
+            sourceScene = "";
+            fromEditor = false;
+        }
     }
 }

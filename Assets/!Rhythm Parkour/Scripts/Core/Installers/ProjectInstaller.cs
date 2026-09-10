@@ -1,11 +1,15 @@
-using RKS.HadalZone.Core.Dialogue;
-using RKS.HadalZone.Core.Managers;
+using RKS.RhythmParkour.Core.Managers;
 using UnityEngine;
 using Zenject;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-namespace RKS.HadalZone.Core.Installers
+namespace RKS.RhythmParkour.Core.Installers
 {
-    sealed class ProjectInstaller : MonoInstaller
+    public sealed class ProjectInstaller : MonoInstaller
     {
         [Header("Managers")]
         [SerializeField] private LocalizationManager localizationPrefab;
@@ -13,7 +17,9 @@ namespace RKS.HadalZone.Core.Installers
         [SerializeField] private DiscordManager discordPrefab;
         [SerializeField] private SaveManager savePrefab;
         [SerializeField] private TransitionManager transitionPrefab;
-        [SerializeField] private DialogueManager dialoguePrefab;
+
+        [Header("Rhythm shared")]
+        [SerializeField] private GlobalObstacleCatalog obstacleCatalog;
 
         public override void InstallBindings()
         {
@@ -22,7 +28,15 @@ namespace RKS.HadalZone.Core.Installers
             Container.Bind<DiscordManager>().FromComponentInNewPrefab(discordPrefab).AsSingle().NonLazy();
             Container.Bind<SaveManager>().FromComponentInNewPrefab(savePrefab).AsSingle().NonLazy();
             Container.Bind<TransitionManager>().FromComponentInNewPrefab(transitionPrefab).AsSingle().NonLazy();
-            Container.Bind<DialogueManager>().FromComponentInNewPrefab(dialoguePrefab).AsSingle().NonLazy();
+
+
+            Container.Bind<LevelTransfer>().AsSingle().NonLazy();
+            Container.Bind<LevelVisualApplier>().AsSingle();
+
+            if (obstacleCatalog != null)
+                Container.Bind<GlobalObstacleCatalog>().FromInstance(obstacleCatalog).AsSingle();
+            else
+                Container.Bind<GlobalObstacleCatalog>().FromResource("GlobalObstacleCatalog").AsSingle();
         }
     }
 }

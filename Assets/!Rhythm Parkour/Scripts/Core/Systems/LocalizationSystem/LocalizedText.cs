@@ -2,55 +2,41 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
-using RKS.HadalZone.Core.Managers;
-using RKS.HadalZone.Core;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-public class LocalizedText : RKSBehaviour
+namespace RKS.RhythmParkour.Core
 {
-    [SerializeField]
-    public string key;
-
-    private LocalizationManager localizationManager;
-    private TMP_Text text;
-
-    protected override void OnReady()
+    public class LocalizedText : RKSBehaviour
     {
-        // ищем объект с тегом LocalizationManager и берем у него компонент LocalizationManager, потом ищем текстмешпро у объекта к которому прикреплен данный скрипт и обновляем текст
+        [SerializeField]
+        public string key;
 
-        UpdateText();
+        private TMP_Text text;
 
-        if (localizationManager == null)
+        protected override void OnInjected()
         {
-            localizationManager = GameObject.FindGameObjectWithTag("LocalizationManager").GetComponent<LocalizationManager>();
+            if (text == null) text = GetComponent<TMP_Text>();
+            UpdateText();
+            if (Localization != null) Localization.OnLanguageChanged += UpdateText;
         }
-        if(text == null)
+
+        protected override void OnDisposed()
         {
-            text = GetComponent<TMP_Text>();
+            if (Localization != null) Localization.OnLanguageChanged -= UpdateText;
         }
-        localizationManager.OnLanguageChanged += UpdateText;
-    }
 
-    protected override void OnDisposed()
-    {
-        // вызывается при удалении объекта LocalizationManager
-
-        localizationManager.OnLanguageChanged -= UpdateText;
-    }
-
-    public virtual void UpdateText()
-    {
-        // метод для обновления текста
-
-        if (gameObject == null) return;
-
-        if(localizationManager == null)
+        public virtual void UpdateText()
         {
-            localizationManager = GameObject.FindGameObjectWithTag("LocalizationManager").GetComponent<LocalizationManager>();
+            if (gameObject == null) return;
+            if (text == null) text = GetComponent<TMP_Text>();
+            if (Localization == null || text == null) return;
+            text.text = Localization.GetLocalizedValue(key);
         }
-        if (text == null)
-        {
-            text = GetComponent<TMP_Text>();
-        }
-        text.text = localizationManager.GetLocalizedValue(key);
     }
 }

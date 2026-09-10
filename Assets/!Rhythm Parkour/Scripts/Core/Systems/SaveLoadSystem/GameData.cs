@@ -1,6 +1,12 @@
 using UnityEngine;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-namespace RKS.HadalZone.Core
+namespace RKS.RhythmParkour.Core
 {
     [System.Serializable]
     public class GameData
@@ -15,6 +21,9 @@ namespace RKS.HadalZone.Core
             public int windowModeIndex = 0;
             public float volumeValue = 1.0f;
             public bool isVisualMoverEnabled = true;
+            public string selectedLevelPath = "";
+            public string lastRkslPath = "";
+            public string transferRkslPath = "";
         }
     }
 }

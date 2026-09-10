@@ -1,18 +1,23 @@
-using RKS.HadalZone.Core;
+using RKS.RhythmParkour.Core;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEngine.Networking;
 using Zenject;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-namespace RKS.HadalZone.Core.Managers 
+namespace RKS.RhythmParkour.Core.Managers
 {
     public class LocalizationManager : RKSBehaviour
     {
         public string currentLanguage { get; private set; }
         private Dictionary<string, string> localizedText = new Dictionary<string, string>();
-        public static bool isReady = false;
+        public bool isReady { get; private set; }
 
         public delegate void ChangeLangText();
         public event ChangeLangText OnLanguageChanged;

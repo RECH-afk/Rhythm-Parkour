@@ -1,108 +1,118 @@
 using UnityEngine;
 using UnityEngine.Video;
+using Zenject;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-/// <summary>
-/// Применяет визуальные настройки уровня (партиклы, цвета, сфера, видео).
-/// Вызывается из IsGameSceneLoader / RhythmParkourManager после загрузки уровня.
-/// </summary>
-public static class LevelVisualApplier
+namespace RKS.RhythmParkour.Rhythm
 {
-    public static void Apply(RhythmLevelData data, VideoPlayer vp = null, bool isEditorPreview = false)
+    [System.Serializable]
+    public class LevelVisualApplier
     {
-        if (data == null) return;
-        // Партиклы
-        var allPs = Object.FindObjectsOfType<ParticleSystem>(true);
-        foreach (var ps in allPs)
+        readonly GlobalObstacleCatalog _catalog;
+
+        [Inject]
+        public LevelVisualApplier(GlobalObstacleCatalog catalog)
         {
-            // Не трогаем партиклы которые на препятствиях (они в префабах, но в пуле)
-            // Простой фильтр: если объект в сцене Environment или Particle System
-            var main = ps.main;
-            try
-            {
-                // Цвет
-                if (data.particleColor != default)
-                    main.startColor = data.particleColor;
-            }
-            catch {}
-            // Вкл/выкл
-            if (ps.gameObject.scene.IsValid())
-            {
-                // Не трогаем префабы в Project, только сценовые
-                bool isSceneObj = ps.gameObject.scene.name != null;
-                if (isSceneObj)
-                    ps.gameObject.SetActive(data.particlesEnabled);
-            }
+            _catalog = catalog;
         }
-        // Пробуем найти через GameObject.Find если FindObjects не нашёл (неактивные)
-        // Дорожка
-        Transform ground = GameObject.Find("Ground")?.transform;
-        if (ground == null)
+
+        public void Apply(
+            RhythmLevelData data,
+            VideoPlayer vp = null,
+            bool isEditorPreview = false,
+            Transform groundOverride = null,
+            SphereBeatRotator sphereOverride = null)
         {
-            var mgr = Object.FindObjectOfType<RhythmParkourManager>();
-            if (mgr != null) ground = mgr.trackFloor;
-        }
-        if (ground != null)
-        {
-            var rend = ground.GetComponent<Renderer>();
-            if (rend != null)
+            if (data == null) return;
+
+            var allPs = Object.FindObjectsOfType<ParticleSystem>(true);
+            foreach (var ps in allPs)
             {
-                // Используем MaterialPropertyBlock чтобы не плодить инстансы
-                var block = new MaterialPropertyBlock();
-                rend.GetPropertyBlock(block);
-                if (rend.sharedMaterial != null && rend.sharedMaterial.HasProperty("_Color"))
-                    block.SetColor("_Color", data.trackColor);
-                else if (rend.sharedMaterial != null && rend.sharedMaterial.HasProperty("_BaseColor"))
-                    block.SetColor("_BaseColor", data.trackColor);
+
+var main = ps.main;
+                try
+                {
+
+                    if (data.particleColor != default)
+                        main.startColor = data.particleColor;
+                }
+                catch {}
+
+                if (ps.gameObject.scene.IsValid())
+                {
+
+                    bool isSceneObj = ps.gameObject.scene.name != null;
+                    if (isSceneObj)
+                        ps.gameObject.SetActive(data.particlesEnabled);
+                }
+            }
+
+Transform ground = groundOverride;
+            if (ground != null)
+            {
+                var rend = ground.GetComponent<Renderer>();
+                if (rend != null)
+                {
+
+                    var block = new MaterialPropertyBlock();
+                    rend.GetPropertyBlock(block);
+                    if (rend.sharedMaterial != null && rend.sharedMaterial.HasProperty("_Color"))
+                        block.SetColor("_Color", data.trackColor);
+                    else if (rend.sharedMaterial != null && rend.sharedMaterial.HasProperty("_BaseColor"))
+                        block.SetColor("_BaseColor", data.trackColor);
+                    else
+                    {
+
+                        try { rend.material.color = data.trackColor; } catch {}
+                    }
+                    rend.SetPropertyBlock(block);
+                }
+            }
+
+            var sphere = sphereOverride;
+            if (sphere != null) sphere.enabled = data.sphereRotates;
+
+VideoPlayer player = vp;
+            if (player != null)
+            {
+                if (!string.IsNullOrEmpty(data.videoPath) && System.IO.File.Exists(data.videoPath))
+                {
+                    string url = RkslFile.GetFileUri(data.videoPath);
+                    player.source = VideoSource.Url;
+                    player.url = url;
+                    player.isLooping = false;
+                    player.playOnAwake = false;
+                    Debug.Log($"[VisualApplier] Video url set {url}", player);
+                }
+                else if (data.video != null)
+                {
+                    player.source = VideoSource.VideoClip;
+                    player.clip = data.video;
+                }
                 else
                 {
-                    // fallback: создаём инстанс
-                    try { rend.material.color = data.trackColor; } catch {}
-                }
-                rend.SetPropertyBlock(block);
-            }
-        }
-        // Сфера
-        var sphere = Object.FindObjectOfType<SphereBeatRotator>();
-        if (sphere != null) sphere.enabled = data.sphereRotates;
 
-        // Видео
-        VideoPlayer player = vp;
-        if (player == null)
-            player = Object.FindObjectOfType<VideoPlayer>();
-        if (player != null)
-        {
-            if (!string.IsNullOrEmpty(data.videoPath) && System.IO.File.Exists(data.videoPath))
-            {
-                string url = RkslFile.GetFileUri(data.videoPath);
-                player.source = VideoSource.Url;
-                player.url = url;
-                player.isLooping = false;
-                player.playOnAwake = false;
-                Debug.Log($"[VisualApplier] Video url set {url}", player);
+                    player.Stop();
+                    player.url = "";
+                    player.clip = null;
+                }
             }
-            else if (data.video != null)
+
+            if (!string.IsNullOrEmpty(data.defaultObstacleMaterialName))
             {
-                player.source = VideoSource.VideoClip;
-                player.clip = data.video;
+                var mat = _catalog != null ? _catalog.GetMaterial(data.defaultObstacleMaterialName) : null;
+                if (mat != null)
+                {
+                    data.defaultObstacleMaterial = mat;
+                    Debug.Log($"[VisualApplier] Default material resolved '{mat.name}'");
+                }
+                else Debug.LogWarning($"[VisualApplier] Material '{data.defaultObstacleMaterialName}' не найден в каталоге");
             }
-            else
-            {
-                // нет видео — стопаем
-                player.Stop();
-                player.url = "";
-                player.clip = null;
-            }
-        }
-        // Материал по умолчанию — резолвим
-        if (!string.IsNullOrEmpty(data.defaultObstacleMaterialName))
-        {
-            var mat = GlobalObstacleCatalog.GetMaterial(data.defaultObstacleMaterialName);
-            if (mat != null)
-            {
-                data.defaultObstacleMaterial = mat;
-                Debug.Log($"[VisualApplier] Default material resolved '{mat.name}'");
-            }
-            else Debug.LogWarning($"[VisualApplier] Material '{data.defaultObstacleMaterialName}' не найден в каталоге");
         }
     }
 }

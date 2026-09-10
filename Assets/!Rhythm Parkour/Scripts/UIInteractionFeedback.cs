@@ -1,73 +1,89 @@
+using RKS.RhythmParkour.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using DG.Tweening;
+using Zenject;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
 
-[RequireComponent(typeof(RectTransform))]
-public class UIInteractionFeedback : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
+namespace RKS.RhythmParkour
 {
-    [Header("Sounds")]
-    [SerializeField] private string onPointerEnterSoundName = "Bubble";
-    [SerializeField] private string onClickSoundName = "TrickleClicker";
-
-    [Header("Scale")]
-    [SerializeField] private float hoverScale = 1.2f;
-    [SerializeField] private float pressScale = 0.9f;
-    [SerializeField] private float duration = 0.15f;
-
-    [Header("Ease")]
-    [SerializeField] private Ease hoverEase = Ease.OutBack;
-    [SerializeField] private Ease pressEase = Ease.OutQuad;
-
-    private Vector3 startScale;
-    private Tween scaleTween;
-
-    void Awake()
+    [RequireComponent(typeof(RectTransform))]
+    public class UIInteractionFeedback : RKSBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerDownHandler, IPointerUpHandler
     {
-        startScale = transform.localScale;
-    }
+        [Header("Sounds")]
+        [SerializeField] private string onPointerEnterSoundName = "Bubble";
+        [SerializeField] private string onClickSoundName = "TrickleClicker";
 
-    private void OnEnable()
-    {
-        ResetState();
-    }
+        [Header("Scale")]
+        [SerializeField] private float hoverScale = 1.2f;
+        [SerializeField] private float pressScale = 0.9f;
+        [SerializeField] private float duration = 0.15f;
 
-    private void OnDisable()
-    {
-        scaleTween?.Kill();
-    }
+        [Header("Ease")]
+        [SerializeField] private Ease hoverEase = Ease.OutBack;
+        [SerializeField] private Ease pressEase = Ease.OutQuad;
 
-    private void ResetState()
-    {
-        transform.localScale = startScale;
-    }
+        private Vector3 startScale;
+        private Tween scaleTween;
 
-    public void OnPointerEnter(PointerEventData eventData)
-    {
-        ScaleTo(startScale * hoverScale, duration, hoverEase);
-    }
+        protected override void OnInjected()
+        {
+            startScale = transform.localScale;
+            if (Audio != null)
+            {
 
-    public void OnPointerExit(PointerEventData eventData)
-    {
-        ScaleTo(startScale, duration, Ease.OutQuad);
-    }
+            }
+        }
 
-    public void OnPointerDown(PointerEventData eventData)
-    {
-        ScaleTo(startScale * pressScale, duration * 0.8f, pressEase);
-    }
+        private void OnEnable()
+        {
+            ResetState();
+        }
 
-    public void OnPointerUp(PointerEventData eventData)
-    {
+        private void OnDisable()
+        {
+            scaleTween?.Kill();
+        }
 
-        ScaleTo(startScale * hoverScale, duration, hoverEase);
-    }
+        private void ResetState()
+        {
+            transform.localScale = startScale;
+        }
 
-    private void ScaleTo(Vector3 target, float time, Ease ease)
-    {
-        scaleTween?.Kill();
-        scaleTween = transform
-            .DOScale(target, time)
-            .SetEase(ease);
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (!string.IsNullOrEmpty(onPointerEnterSoundName) && Audio != null) Audio.Play(onPointerEnterSoundName);
+            ScaleTo(startScale * hoverScale, duration, hoverEase);
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            ScaleTo(startScale, duration, Ease.OutQuad);
+        }
+
+        public void OnPointerDown(PointerEventData eventData)
+        {
+            if (!string.IsNullOrEmpty(onClickSoundName) && Audio != null) Audio.Play(onClickSoundName);
+            ScaleTo(startScale * pressScale, duration * 0.8f, pressEase);
+        }
+
+        public void OnPointerUp(PointerEventData eventData)
+        {
+
+            ScaleTo(startScale * hoverScale, duration, hoverEase);
+        }
+
+        private void ScaleTo(Vector3 target, float time, Ease ease)
+        {
+            scaleTween?.Kill();
+            scaleTween = transform
+                .DOScale(target, time)
+                .SetEase(ease);
+        }
     }
 }

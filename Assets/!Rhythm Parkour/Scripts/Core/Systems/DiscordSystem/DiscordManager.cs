@@ -1,8 +1,13 @@
 using Discord;
 using UnityEngine;
-using RKS.HadalZone.Core;
+using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour;
+using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.UI.Timeline;
 
-namespace RKS.HadalZone.Core.Managers
+namespace RKS.RhythmParkour.Core.Managers
 {
     public class DiscordManager : RKSBehaviour
     {
