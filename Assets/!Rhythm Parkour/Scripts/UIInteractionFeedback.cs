@@ -28,16 +28,26 @@ namespace RKS.RhythmParkour
         [SerializeField] private Ease hoverEase = Ease.OutBack;
         [SerializeField] private Ease pressEase = Ease.OutQuad;
 
-        private Vector3 startScale;
+        private Vector3 startScale = Vector3.one;
         private Tween scaleTween;
+
+        protected override void Awake()
+        {
+            base.Awake();
+            CacheStartScale();
+        }
 
         protected override void OnInjected()
         {
-            startScale = transform.localScale;
-            if (Audio != null)
-            {
+            CacheStartScale();
+        }
 
-            }
+        private void CacheStartScale()
+        {
+            if (transform.localScale != Vector3.zero)
+                startScale = transform.localScale;
+            else if (startScale == Vector3.zero)
+                startScale = Vector3.one;
         }
 
         private void OnEnable()

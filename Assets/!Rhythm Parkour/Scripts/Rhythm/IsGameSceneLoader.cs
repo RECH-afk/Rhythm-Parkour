@@ -29,6 +29,8 @@ namespace RKS.RhythmParkour.Rhythm
         [InjectOptional] public IRkslStore rksl;
         bool hasLoaded;
 
+        private IRkslStore Store => rksl ?? RkslStore.Shared;
+
         protected override void OnInjected()
         {
             Debug.Log($"[IsGameSceneLoader] Injected scene={SceneManager.GetActiveScene().name} manager={(manager ? manager.name : "null")} hasLevel={(transfer != null && transfer.hasLevel)} rkslPath='{transfer?.rkslPath}' Sel='{transfer?.GetEffectivePath()}'", this);
@@ -62,7 +64,7 @@ namespace RKS.RhythmParkour.Rhythm
                 return;
             }
 
-            var all = rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : new System.Collections.Generic.List<string>();
+            var all = Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null);
             if (all.Count > 0)
             {
                 Debug.Log($"[IsGameSceneLoader] Нашел {all.Count} rksl, беру первый: {all[0]}", this);
@@ -213,7 +215,7 @@ namespace RKS.RhythmParkour.Rhythm
             Debug.Log($"[IsGameSceneLoader] Extract {rkslPath}", this);
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslGame_" + Path.GetFileNameWithoutExtension(rkslPath));
             try { if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true); } catch {}
-            if (rksl == null || !rksl.Extract(rkslPath, extractDir, out var man, out var audioPath, out var videoPath, out var coverPath))
+            if (!Store.Extract(rkslPath, extractDir, out var man, out var audioPath, out var videoPath, out var coverPath))
             {
                 Debug.LogError($"[IsGameSceneLoader] Extract failed {rkslPath}");
                 yield break;
@@ -250,7 +252,7 @@ namespace RKS.RhythmParkour.Rhythm
                 }
                 catch (System.Exception e) { Debug.LogWarning($"[IsGameSceneLoader] cover load failed {e.Message}"); }
             }
-            var data = rksl.ToRuntimeData(man, clip, null, cover);
+            var data = Store.ToRuntimeData(man, clip, null, cover);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
             if (transfer != null)

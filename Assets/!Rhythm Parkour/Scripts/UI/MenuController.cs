@@ -81,6 +81,8 @@ namespace RKS.RhythmParkour.UI
         [HideInInspector]
         [InjectOptional] public IRkslStore rksl;
 
+        private IRkslStore Store => rksl ?? RkslStore.Shared;
+
         #endregion
 
         #region Compatibility Shims
@@ -399,7 +401,7 @@ namespace RKS.RhythmParkour.UI
             HideQuitConfirmationImmediate();
 
             _foundPaths.Clear();
-            _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
+            _foundPaths.AddRange(Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
 
             if (_foundPaths.Count == 0)
                 TransitionTo(_noLevelsWindow);
@@ -531,7 +533,7 @@ namespace RKS.RhythmParkour.UI
             }
 
             _foundPaths.Clear();
-            _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
+            _foundPaths.AddRange(Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
 
             if (_foundPaths.Count == 0) return;
 
@@ -547,11 +549,17 @@ namespace RKS.RhythmParkour.UI
         private void CreateLevelListItem(string path)
         {
             RkslManifest man = null;
-            if (rksl != null) rksl.LoadManifestOnly(path, out man);
+            if (!Store.LoadManifestOnly(path, out man) || man == null)
+                Debug.LogWarning($"[MenuController] Не удалось прочитать манифест уровня: {path}", this);
 
             string title = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
             if (string.IsNullOrEmpty(title)) title = "Без названия";
 
+            if (_levelButtonPrefab == null)
+            {
+                Debug.LogError("[MenuController] _levelButtonPrefab не назначен — кнопка уровня не создана.", this);
+                return;
+            }
             var btnGO = Instantiate(_levelButtonPrefab, _levelListContainer);
 
             var rect = btnGO.GetComponent<RectTransform>();
@@ -572,7 +580,14 @@ namespace RKS.RhythmParkour.UI
             if (btnText != null) btnText.text = title;
 
             Button btn = btnGO.GetComponent<Button>();
-            if (btn != null) btn.onClick.AddListener(() => HandleLevelClick(path));
+            if (btn == null) btn = btnGO.GetComponentInChildren<Button>(true);
+            if (btn == null)
+            {
+                Debug.LogError("[MenuController] В префабе кнопки уровня нет компонента Button.", btnGO);
+                return;
+            }
+            btn.interactable = true;
+            btn.onClick.AddListener(() => HandleLevelClick(path));
         }
 
         private void HandleLevelClick(string path)
@@ -600,16 +615,23 @@ namespace RKS.RhythmParkour.UI
         private void PopulateDetails(string path)
         {
             RkslManifest man = null;
-            if (rksl != null) rksl.LoadManifestOnly(path, out man);
+            if (!Store.LoadManifestOnly(path, out man) || man == null)
+                Debug.LogWarning($"[MenuController] Не удалось прочитать манифест уровня: {path}", this);
 
             if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0} BPM" : "N/A";
-            if (_detailDurationText) _detailDurationText.text = "N/A";
+            if (_detailDurationText) _detailDurationText.text = man != null && man.duration > 0f ? FormatDuration(man.duration) : "N/A";
             if (_detailNotesText) _detailNotesText.text = man != null ? $"{man.events.Count} нот" : "0 нот";
             if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "Неизвестен";
             if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "Неизвестен";
             if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "Без названия";
 
             LoadCoverImage(path);
+        }
+
+        private static string FormatDuration(float seconds)
+        {
+            int total = Mathf.RoundToInt(Mathf.Max(0f, seconds));
+            return $"{total / 60:0}:{total % 60:00}";
         }
 
         private void LoadCoverImage(string rkslPath)
@@ -620,7 +642,7 @@ namespace RKS.RhythmParkour.UI
 
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslCover_" + Path.GetFileNameWithoutExtension(rkslPath));
 
-            if (rksl == null || !rksl.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+            if (!Store.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
                 return;
 
             if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
@@ -711,7 +733,7 @@ namespace RKS.RhythmParkour.UI
             HideLevelDetailsImmediate();
 
             _foundPaths.Clear();
-            _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
+            _foundPaths.AddRange(Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
 
             if (_foundPaths.Count == 0)
                 TransitionTo(_noLevelsWindow);
@@ -790,7 +812,7 @@ namespace RKS.RhythmParkour.UI
         {
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(path));
 
-            if (rksl == null || !rksl.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+            if (!Store.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
             {
                 Debug.LogError("[MenuController] Ошибка извлечения .rksl");
                 yield break;
@@ -815,7 +837,7 @@ namespace RKS.RhythmParkour.UI
                     cover = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
             }
 
-            var data = rksl.ToRuntimeData(man, clip, null, cover);
+            var data = Store.ToRuntimeData(man, clip, null, cover);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
 

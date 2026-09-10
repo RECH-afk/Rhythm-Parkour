@@ -22,6 +22,8 @@ namespace RKS.RhythmParkour.Rhythm
         public const string LegacyManifestName = "level.json";
         public const int ManifestVersion = 2;
 
+        public static IRkslStore Shared { get; } = new RkslStore(new RechCodec());
+
         private readonly IDataCodec _codec;
 
         [Inject]
@@ -274,6 +276,7 @@ namespace RKS.RhythmParkour.Rhythm
                 creator = data.mapAuthor,
                 bpm = data.bpm,
                 offset = data.offset,
+                duration = data.music != null ? data.music.length : 0f,
                 events = new List<ObstacleEvent>(data.events),
                 particlesEnabled = data.particlesEnabled,
                 particleColor = data.particleColor,

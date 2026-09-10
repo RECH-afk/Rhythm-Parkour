@@ -19,7 +19,19 @@ namespace RKS.RhythmParkour.UI.Timeline
         public GameObject selectedHighlight;
         public CanvasGroup canvasGroup;
         RectTransform rect;
+
+        protected override void Awake()
+        {
+            base.Awake();
+            CacheRefs();
+        }
+
         protected override void OnInjected()
+        {
+            CacheRefs();
+        }
+
+        private void CacheRefs()
         {
             rect = GetComponent<RectTransform>();
             if (backgroundImage == null) backgroundImage = GetComponent<Image>();

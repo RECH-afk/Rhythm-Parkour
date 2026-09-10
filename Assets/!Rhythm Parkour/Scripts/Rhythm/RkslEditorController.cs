@@ -45,6 +45,8 @@ namespace RKS.RhythmParkour.Rhythm
         [InjectOptional] public LevelVisualApplier visual;
         [HideInInspector]
         [InjectOptional] public IRkslStore rksl;
+
+        private IRkslStore Store => rksl ?? RkslStore.Shared;
         [HideInInspector]
         [InjectOptional] public UnityEngine.Video.VideoPlayer previewVideo;
         [HideInInspector]
@@ -258,8 +260,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, defaultName + ".rksl");
 #endif
-            if (rksl == null) { UpdateStatus("Хранилище уровней не подключено"); return; }
-            var manifest = rksl.FromRuntimeData(levelData);
+            var manifest = Store.FromRuntimeData(levelData);
             manifest.title = levelData.fullTitle;
             manifest.artist = levelData.songAuthor;
             manifest.creator = levelData.mapAuthor;
@@ -267,7 +268,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             string audioSrc = !string.IsNullOrEmpty(currentAudioPath) ? currentAudioPath : levelData.audioPath;
             string videoSrc = !string.IsNullOrEmpty(currentVideoPath) ? currentVideoPath : levelData.videoPath;
             string coverSrc = !string.IsNullOrEmpty(currentCoverPath) ? currentCoverPath : null;
-            bool ok = rksl.Save(path, manifest, audioSrc, videoSrc, coverSrc, currentCoverSprite ?? levelData.cover);
+            bool ok = Store.Save(path, manifest, audioSrc, videoSrc, coverSrc, currentCoverSprite ?? levelData.cover);
             if (ok) UpdateStatus($"Сохранено: {Path.GetFileName(path)}");
             else UpdateStatus("Ошибка сохранения");
         }
@@ -292,7 +293,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
         {
             if (!File.Exists(rkslPath)) { UpdateStatus("Файл не найден"); yield break; }
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(rkslPath));
-            if (rksl == null || !rksl.Extract(rkslPath, extractDir, out var manifest, out var audioPath, out var videoPath, out var coverPath))
+            if (!Store.Extract(rkslPath, extractDir, out var manifest, out var audioPath, out var videoPath, out var coverPath))
             {
                 UpdateStatus("Ошибка распаковки .rksl");
                 yield break;
@@ -322,7 +323,7 @@ AudioClip clip = null;
                 }
             }
 
-var data = rksl.ToRuntimeData(manifest, clip, null, coverSpr);
+var data = Store.ToRuntimeData(manifest, clip, null, coverSpr);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
 

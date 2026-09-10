@@ -19,6 +19,7 @@ namespace RKS.RhythmParkour.Rhythm
         public string creator = "";
         public float bpm = 128f;
         public float offset = 0f;
+        public float duration = 0f;
         public List<ObstacleEvent> events = new List<ObstacleEvent>();
         public string audioFile = "";
         public string videoFile = "";
