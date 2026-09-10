@@ -47,6 +47,4 @@ MonoBehaviour:
   poolSize: 30
   masterVolume: 1
   libraries:
-  - {fileID: 11400000, guid: 6813de3a19c66d14eaf2a2266baeb212, type: 2}
-  - {fileID: 11400000, guid: fab99e16449ed1445ac85aa40d25b7b1, type: 2}
-  - {fileID: 11400000, guid: 010503314a3612b4484ddf7431fc1098, type: 2}
+  - {fileID: 11400000, guid: 6c98434316960034f8f26accabe6f8dd, type: 2}

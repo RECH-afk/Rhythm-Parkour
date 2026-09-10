@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35cfb561744568547b4a86cdb735f7be, type: 3}
+  m_Name: UI
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.Core.SoundLibrary
+  sounds:
+  - {fileID: 11400000, guid: 13cdf57cc6a3a4d47ade1c3eb8edd764, type: 2}
+  - {fileID: 11400000, guid: 02b06a70f354200439cba814a88bb2c7, type: 2}

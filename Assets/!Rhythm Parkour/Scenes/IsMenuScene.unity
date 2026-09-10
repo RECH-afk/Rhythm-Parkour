@@ -4055,6 +4055,7 @@ MonoBehaviour:
   _detailTrackText: {fileID: 2102024305}
   _noLevelsWindow: {fileID: 738478585}
   _deleteConfirmationWindow: {fileID: 25354367}
+  _quitConfirmationWindow: {fileID: 1408760450}
   _editorSceneName: IsLevelEditorScene
   _gameSceneName: IsGameScene
   _animDuration: 0.4
@@ -4907,7 +4908,6 @@ RectTransform:
   m_Children:
   - {fileID: 498915265}
   - {fileID: 302931595}
-  - {fileID: 1408760451}
   m_Father: {fileID: 1444323773}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -5303,7 +5303,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 820601936}
         m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.MenuController, Assembly-CSharp
-        m_MethodName: HideDeleteConfirmation
+        m_MethodName: HideQuitConfirmation
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -5326,7 +5326,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 2100000, guid: 7b44536292583494ab27842bee1780cd, type: 2}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.5818176, g: 1, b: 0, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -6374,7 +6374,7 @@ RectTransform:
   m_Children:
   - {fileID: 1761539071}
   - {fileID: 39866819}
-  m_Father: {fileID: 1020865519}
+  m_Father: {fileID: 1444323773}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
@@ -6811,6 +6811,7 @@ RectTransform:
   - {fileID: 1053851177}
   - {fileID: 738478586}
   - {fileID: 25354368}
+  - {fileID: 1408760451}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -7311,7 +7312,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1701249906}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 820601936}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.MenuController, Assembly-CSharp
+        m_MethodName: ShowQuitConfirmation
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1701249906
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7687,8 +7700,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u0423\u0416\u0415 \u0423\u0425\u041E\u0414\u0418\u0428\u042C? ( \u2022
-    \u1D16 \u2022 ) "
+  m_text: "\u042D\u0419, \u0423\u0416\u0415 \u0423\u0425\u041E\u0414\u0418\u0428\u042C? "
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c13cfca6da12dc44a86e690fa81e25d5, type: 2}
   m_sharedMaterial: {fileID: -6220101661779451932, guid: c13cfca6da12dc44a86e690fa81e25d5,
@@ -8199,7 +8211,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 820601936}
         m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.MenuController, Assembly-CSharp
-        m_MethodName: ConfirmDelete
+        m_MethodName: ConfirmQuit
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}

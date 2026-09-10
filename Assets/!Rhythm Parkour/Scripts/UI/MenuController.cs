@@ -25,7 +25,7 @@ namespace RKS.RhythmParkour.UI
 {
     public class MenuController : RKSBehaviour
     {
-    #region Inspector References
+        #region Inspector References
 
         [Header("Main Menu")]
         [SerializeField] private GameObject _mainMenuRoot;
@@ -53,14 +53,17 @@ namespace RKS.RhythmParkour.UI
         [Header("Delete Confirmation Window")]
         [SerializeField] private GameObject _deleteConfirmationWindow;
 
+        [Header("Quit Confirmation Window")]
+        [SerializeField] private GameObject _quitConfirmationWindow;
+
         [Header("Settings")]
         [SerializeField] private string _editorSceneName = "IsLevelEditorScene";
         [SerializeField] private string _gameSceneName = "IsGameScene";
         [SerializeField] private float _animDuration = 0.5f;
 
-    #endregion
+        #endregion
 
-    #region Private Fields
+        #region Private Fields
 
         private readonly List<string> _foundPaths = new();
         private string _selectedLevelPath;
@@ -78,9 +81,9 @@ namespace RKS.RhythmParkour.UI
         [HideInInspector]
         [InjectOptional] public IRkslStore rksl;
 
-    #endregion
+        #endregion
 
-    #region Compatibility Shims
+        #region Compatibility Shims
 
         public bool IsMenuActive => (_mainMenuRoot != null && _mainMenuRoot.activeSelf) ||
                                     (_levelListMenuRoot != null && _levelListMenuRoot.activeSelf) ||
@@ -90,9 +93,9 @@ namespace RKS.RhythmParkour.UI
         public void ShowMenu() => ShowMainMenu();
         public GameObject MenuPanel => _mainMenuRoot;
 
-    #endregion
+        #endregion
 
-    #region Unity Lifecycle
+        #region Unity Lifecycle
 
         protected override void OnInjected()
         {
@@ -105,6 +108,7 @@ namespace RKS.RhythmParkour.UI
             CacheOriginalPosition(_levelDetailsRoot);
             CacheOriginalPosition(_noLevelsWindow);
             CacheOriginalPosition(_deleteConfirmationWindow);
+            CacheOriginalPosition(_quitConfirmationWindow);
             if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
             if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
         }
@@ -116,15 +120,30 @@ namespace RKS.RhythmParkour.UI
             PlayStartupAnimations();
         }
 
+        protected override void Update()
+        {
+            if (Input.GetKeyDown(KeyCode.Escape))
+            {
+                if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf)
+                {
+                    HideQuitConfirmation();
+                }
+                else if (_mainMenuRoot != null && _mainMenuRoot.activeSelf && !_isTransitioning)
+                {
+                    ShowQuitConfirmation();
+                }
+            }
+        }
+
         protected override void OnDisposed()
         {
             DOTween.Kill(this);
             _transitionSequence?.Kill(true);
         }
 
-    #endregion
+        #endregion
 
-    #region Initialization & Bindings
+        #region Initialization & Bindings
 
         private void CacheOriginalPosition(GameObject obj)
         {
@@ -186,11 +205,12 @@ namespace RKS.RhythmParkour.UI
             if (_levelDetailsRoot != null) _levelDetailsRoot.SetActive(false);
             if (_noLevelsWindow != null) _noLevelsWindow.SetActive(false);
             if (_deleteConfirmationWindow != null) _deleteConfirmationWindow.SetActive(false);
+            if (_quitConfirmationWindow != null) _quitConfirmationWindow.SetActive(false);
         }
 
-    #endregion
+        #endregion
 
-    #region Navigation & Transitions
+        #region Navigation & Transitions
 
         private void TransitionTo(GameObject targetWindow)
         {
@@ -239,6 +259,9 @@ namespace RKS.RhythmParkour.UI
             if (_deleteConfirmationWindow != null && _deleteConfirmationWindow.activeSelf && _deleteConfirmationWindow != targetWindow)
                 windowsToHide.Add(_deleteConfirmationWindow);
 
+            if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf && _quitConfirmationWindow != targetWindow)
+                windowsToHide.Add(_quitConfirmationWindow);
+
             foreach (var win in windowsToHide)
             {
                 var rt = win.GetComponent<RectTransform>();
@@ -273,6 +296,11 @@ namespace RKS.RhythmParkour.UI
                     rotationZ = -1f;
                 }
                 else if (win == _deleteConfirmationWindow)
+                {
+                    hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
+                    rotationZ = -1f;
+                }
+                else if (win == _quitConfirmationWindow)
                 {
                     hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
                     rotationZ = -1f;
@@ -319,6 +347,11 @@ namespace RKS.RhythmParkour.UI
                 startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
                 startRotZ = -1f;
             }
+            else if (targetWindow == _quitConfirmationWindow)
+            {
+                startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
+                startRotZ = -1f;
+            }
 
             rtTarget.anchoredPosition = startPos;
             rtTarget.localScale = Vector3.one * 0.97f;
@@ -354,6 +387,7 @@ namespace RKS.RhythmParkour.UI
             if (_isTransitioning) return;
             _selectedLevelPath = null;
             HideDeleteConfirmationImmediate();
+            HideQuitConfirmationImmediate();
             TransitionTo(_mainMenuRoot);
         }
 
@@ -362,6 +396,7 @@ namespace RKS.RhythmParkour.UI
             if (_isTransitioning) return;
             _selectedLevelPath = null;
             HideDeleteConfirmationImmediate();
+            HideQuitConfirmationImmediate();
 
             _foundPaths.Clear();
             _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
@@ -426,9 +461,64 @@ namespace RKS.RhythmParkour.UI
             }
         }
 
-    #endregion
+        #endregion
 
-    #region Level List Logic
+        #region Quit Confirmation
+
+        public void ShowQuitConfirmation()
+        {
+            if (_isTransitioning) return;
+            TransitionTo(_quitConfirmationWindow);
+        }
+
+        public void HideQuitConfirmation()
+        {
+            if (_quitConfirmationWindow == null || !_quitConfirmationWindow.activeSelf) return;
+
+            _isTransitioning = true;
+            var rt = _quitConfirmationWindow.GetComponent<RectTransform>();
+
+            rt.DOKill(true);
+            Vector2 origPos = _originalPositions.TryGetValue(_quitConfirmationWindow, out var o) ? o : rt.anchoredPosition;
+
+            Sequence seq = DOTween.Sequence()
+                .Join(rt.DOAnchorPos(origPos + new Vector2(0f, -GetScreenOffsetY()), _animDuration * 0.5f).SetEase(Ease.InQuart))
+                .Join(rt.DORotate(new Vector3(0, 0, -1f), _animDuration * 0.5f, RotateMode.Fast))
+                .Join(rt.DOScale(0.97f, _animDuration * 0.5f).SetEase(Ease.InQuart))
+                .SetTarget(_quitConfirmationWindow);
+
+            seq.OnComplete(() => {
+                _quitConfirmationWindow.SetActive(false);
+                rt.anchoredPosition = origPos;
+                rt.localScale = Vector3.one;
+                rt.localRotation = Quaternion.identity;
+                _isTransitioning = false;
+
+                TransitionTo(_mainMenuRoot);
+            });
+        }
+
+        private void HideQuitConfirmationImmediate()
+        {
+            if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf)
+            {
+                _quitConfirmationWindow.GetComponent<RectTransform>()?.DOKill(true);
+                _quitConfirmationWindow.SetActive(false);
+            }
+        }
+
+        public void ConfirmQuit()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        #endregion
+
+        #region Level List Logic
 
         private void RefreshLevelList()
         {
@@ -503,9 +593,9 @@ namespace RKS.RhythmParkour.UI
             _lastClickTime = Time.unscaledTime;
         }
 
-    #endregion
+        #endregion
 
-    #region Level Details Logic
+        #region Level Details Logic
 
         private void PopulateDetails(string path)
         {
@@ -659,9 +749,9 @@ namespace RKS.RhythmParkour.UI
             }
         }
 
-    #endregion
+        #endregion
 
-    #region Actions (Play / Edit)
+        #region Actions (Play / Edit)
 
         private void LoadAndPlay(string path)
         {
@@ -745,6 +835,6 @@ namespace RKS.RhythmParkour.UI
             else SceneManager.LoadScene(_editorSceneName);
         }
 
-    #endregion
+        #endregion
     }
 }
