@@ -11,6 +11,7 @@ namespace RKS.RhythmParkour.Rhythm
 {
     public class SphereBeatRotator : RKSBehaviour
     {
+        [HideInInspector]
         [InjectOptional] public Conductor conductor;
         public Vector3 axis = Vector3.up;
         public float degreesPerBeat = 90f;

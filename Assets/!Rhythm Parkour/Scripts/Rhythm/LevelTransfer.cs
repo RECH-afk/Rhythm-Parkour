@@ -5,6 +5,7 @@ using RKS.RhythmParkour;
 using RKS.RhythmParkour.Core;
 using RKS.RhythmParkour.Core.Managers;
 using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Core.Storage;
 using RKS.RhythmParkour.UI;
 using RKS.RhythmParkour.UI.Timeline;
 
@@ -13,7 +14,8 @@ namespace RKS.RhythmParkour.Rhythm
     [System.Serializable]
     public class LevelTransfer
     {
-        [InjectOptional] public SaveManager save;
+        [HideInInspector]
+        [InjectOptional] public ISaveStore save;
 
         public RhythmLevelData levelData;
         public string rkslPath = "";

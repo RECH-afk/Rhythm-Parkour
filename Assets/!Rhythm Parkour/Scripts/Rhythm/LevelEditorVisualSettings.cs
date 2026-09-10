@@ -17,35 +17,37 @@ namespace RKS.RhythmParkour.Rhythm
     {
     #region Inspector References
 
-        [Header("Dependencies (инжект)")]
+        [Header("Dependencies")]
+        [HideInInspector]
         [InjectOptional] public RkslEditorController editorController;
+        [HideInInspector]
         [InjectOptional] public TimelineUI timelineUI;
+        [HideInInspector]
         [InjectOptional] public RhythmParkourManager previewManager;
+        [HideInInspector]
         [InjectOptional] public GlobalObstacleCatalog catalog;
+        [HideInInspector]
         [InjectOptional] public LevelVisualApplier visual;
+        [HideInInspector]
         [InjectOptional] public TimelinePreview preview;
 
-        [Header("Партиклы")]
+        [Header("Particles")]
         [SerializeField] private Toggle _particlesToggle;
         [SerializeField] private Image _particleColorPreview;
-        [SerializeField] private Button _particleColorButton;
 
-        [Header("Цвета")]
+        [Header("Colors")]
         [SerializeField] private Image _obstacleColorPreview;
-        [SerializeField] private Button _obstacleColorButton;
         [SerializeField] private Image _trackColorPreview;
-        [SerializeField] private Button _trackColorButton;
 
-        [Header("Сфера")]
+        [Header("Sphere")]
         [SerializeField] private Toggle _sphereToggle;
 
-        [Header("Материалы")]
-        [SerializeField] private Button _defaultMaterialButton;
+        [Header("Materials")]
         [SerializeField] private TextMeshProUGUI _defaultMaterialLabel;
         [SerializeField] private GameObject _materialGridPanel;
         [SerializeField] private Transform _materialGridContainer;
 
-        [Header("Настройки")]
+        [Header("Settings")]
         [SerializeField]
         private Color[] _presetColors = new Color[]
         {
@@ -121,38 +123,12 @@ namespace RKS.RhythmParkour.Rhythm
         {
             if (_particlesToggle != null) _particlesToggle.onValueChanged.AddListener(OnParticlesChanged);
             if (_sphereToggle != null) _sphereToggle.onValueChanged.AddListener(OnSphereChanged);
-
-            if (_particleColorButton != null)
-                _particleColorButton.onClick.AddListener(() => CycleColor(
-                    c => _levelData.particleColor = c,
-                    () => _levelData.particleColor,
-                    _particleColorPreview));
-
-            if (_obstacleColorButton != null)
-                _obstacleColorButton.onClick.AddListener(() => CycleColor(
-                    c => _levelData.obstacleColor = c,
-                    () => _levelData.obstacleColor,
-                    _obstacleColorPreview));
-
-            if (_trackColorButton != null)
-                _trackColorButton.onClick.AddListener(() => CycleColor(
-                    c => _levelData.trackColor = c,
-                    () => _levelData.trackColor,
-                    _trackColorPreview));
-
-            if (_defaultMaterialButton != null)
-                _defaultMaterialButton.onClick.AddListener(ToggleMaterialGrid);
         }
 
         private void Unsubscribe()
         {
             if (_particlesToggle != null) _particlesToggle.onValueChanged.RemoveListener(OnParticlesChanged);
             if (_sphereToggle != null) _sphereToggle.onValueChanged.RemoveListener(OnSphereChanged);
-
-            _particleColorButton?.onClick.RemoveAllListeners();
-            _obstacleColorButton?.onClick.RemoveAllListeners();
-            _trackColorButton?.onClick.RemoveAllListeners();
-            _defaultMaterialButton?.onClick.RemoveAllListeners();
         }
 
     #endregion
@@ -210,6 +186,10 @@ public void RefreshFromData()
 
     #region Color Cycling
 
+        public void CycleParticleColor() => CycleColor(c => _levelData.particleColor = c, () => _levelData.particleColor, _particleColorPreview);
+        public void CycleObstacleColor() => CycleColor(c => _levelData.obstacleColor = c, () => _levelData.obstacleColor, _obstacleColorPreview);
+        public void CycleTrackColor() => CycleColor(c => _levelData.trackColor = c, () => _levelData.trackColor, _trackColorPreview);
+
         private void CycleColor(Action<Color> setter, Func<Color> getter, Image preview)
         {
             if (_levelData == null || _presetColors.Length == 0) return;
@@ -251,7 +231,7 @@ public void RefreshFromData()
 
     #region Material Selection
 
-        private void ToggleMaterialGrid()
+        public void ToggleMaterialGrid()
         {
             if (_materialGridPanel == null) return;
 

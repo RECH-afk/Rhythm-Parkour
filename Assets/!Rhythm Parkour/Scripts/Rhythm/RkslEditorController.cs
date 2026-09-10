@@ -14,37 +14,43 @@ using RKS.RhythmParkour;
 using RKS.RhythmParkour.Core.Managers;
 using RKS.RhythmParkour.Core.Installers;
 using RKS.RhythmParkour.UI;
+using RKS.RhythmParkour.Core.Storage;
 using RKS.RhythmParkour.UI.Timeline;
 
 namespace RKS.RhythmParkour.Rhythm
 {
     public class RkslEditorController : RKSBehaviour
     {
-        [Header("Ссылки UI Метаданные")]
+        [Header("Metadata UI")]
         public TMP_InputField titleInput;
         public TMP_InputField artistInput;
         public TMP_InputField creatorInput;
 
-        [Header("Загрузчики файлов")]
+        [Header("File Loaders")]
         public FileLoader audioLoader;
         public FileLoader videoLoader;
         public FileLoader coverLoader;
 
-        [Header("Таймлайн и данные")]
+        [Header("Timeline & Data")]
+        [HideInInspector]
         [InjectOptional] public TimelineUI timelineUI;
         [HideInInspector] public RhythmLevelData levelData;
 
-        [Header("Превью сцены (инжект)")]
+        [Header("Scene Preview")]
+        [HideInInspector]
         [InjectOptional] public RhythmParkourManager previewManager;
+        [HideInInspector]
         [InjectOptional] public LevelTransfer transfer;
+        [HideInInspector]
         [InjectOptional] public LevelVisualApplier visual;
+        [HideInInspector]
+        [InjectOptional] public IRkslStore rksl;
+        [HideInInspector]
         [InjectOptional] public UnityEngine.Video.VideoPlayer previewVideo;
+        [HideInInspector]
         [InjectOptional] public LevelEditorVisualSettings visualSettings;
 
-        [Header("Кнопка Сохранения — только SAVE")]
-        public Button saveRkslButton;
-
-        [Header("Превью")]
+        [Header("Preview")]
         public Image coverPreviewImage;
         public TextMeshProUGUI statusText;
 
@@ -69,9 +75,6 @@ namespace RKS.RhythmParkour.Rhythm
 
 if (titleInput == null || artistInput == null || creatorInput == null)
                 Debug.LogWarning("[RkslEditor] InputFields не назначены — задай в инспекторе.", this);
-            if (audioLoader == null && Container != null) audioLoader = Container.TryResolveId<FileLoader>(AllowedFileTypes.Audio);
-            if (videoLoader == null && Container != null) videoLoader = Container.TryResolveId<FileLoader>(AllowedFileTypes.Video);
-            if (coverLoader == null && Container != null) coverLoader = Container.TryResolveId<FileLoader>(AllowedFileTypes.Photo);
             if (audioLoader == null || videoLoader == null || coverLoader == null)
                 Debug.LogWarning("[RkslEditor] FileLoaders не назначены — задай в инспекторе.", this);
             ValidateLoader(audioLoader, AllowedFileTypes.Audio, nameof(audioLoader));
@@ -92,10 +95,7 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             if (videoLoader != null) videoLoader.onFileLoaded.AddListener((p, c) => { currentVideoPath = p; UpdateStatus($"Видео: {Path.GetFileName(p)}"); if (levelData != null) levelData.videoPath = p; PreviewVideo(p); });
             if (coverLoader != null) coverLoader.onFileLoaded.AddListener((p, c) => { currentCoverPath = p; UpdateStatus($"Обложка: {Path.GetFileName(p)}"); LoadCoverPreview(p); });
 
-            EnsureButtons();
             EnsureVisualSettings();
-
-            if (saveRkslButton != null) { saveRkslButton.onClick.RemoveAllListeners(); saveRkslButton.onClick.AddListener(SaveRksl); }
 
             if (levelData != null) PopulateUIFromData();
             else if (timelineUI != null && timelineUI.levelData != null) { levelData = timelineUI.levelData; PopulateUIFromData(); }
@@ -125,34 +125,9 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             var vp = previewVideo;
             if (vp == null) return;
             vp.source = UnityEngine.Video.VideoSource.Url;
-            vp.url = RkslFile.GetFileUri(path);
+            vp.url = RkslStore.GetFileUri(path);
             vp.prepareCompleted += (v) => Debug.Log($"[RkslEditor] Video preview ready {path}", v);
             vp.Prepare();
-        }
-
-        void EnsureButtons()
-        {
-            if (saveRkslButton != null) return;
-            Transform parent = null;
-            if (timelineUI != null && timelineUI.transform.parent != null) parent = timelineUI.transform.parent;
-            if (parent == null) parent = transform;
-            saveRkslButton = CreateButton(parent, "SaveRkslButton", "SAVE .RKSL", new Vector2(0, -520), new Vector2(220, 48), new Color(0.2f, 0.7f, 0.3f));
-        }
-
-        Button CreateButton(Transform parent, string name, string text, Vector2 anchoredPos, Vector2 size, Color col)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.anchoredPosition = anchoredPos; rt.sizeDelta = size;
-            var img = go.GetComponent<Image>(); img.color = col; img.raycastTarget = true;
-            var btn = go.GetComponent<Button>();
-            var txtGo = new GameObject("Text", typeof(RectTransform));
-            txtGo.transform.SetParent(go.transform, false);
-            var trt = txtGo.GetComponent<RectTransform>(); trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
-            var tmp = txtGo.AddComponent<TextMeshProUGUI>(); tmp.text = text; tmp.fontSize = 14; tmp.alignment = TextAlignmentOptions.Center; tmp.color = Color.white; tmp.raycastTarget = false;
-            return btn;
         }
 
         protected override void OnDestroy()
@@ -185,7 +160,7 @@ if (timelineUI.levelData.events.Count > 0 && string.IsNullOrEmpty(timelineUI.lev
         }
         IEnumerator LoadCoverCoroutine(string path)
         {
-            using (var uwr = UnityWebRequestTexture.GetTexture(RkslFile.GetFileUri(path)))
+                using (var uwr = UnityWebRequestTexture.GetTexture(RkslStore.GetFileUri(path)))
             {
                 yield return uwr.SendWebRequest();
                 if (uwr.result == UnityWebRequest.Result.Success)
@@ -283,7 +258,8 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, defaultName + ".rksl");
 #endif
-            var manifest = RkslFile.FromRuntimeData(levelData);
+            if (rksl == null) { UpdateStatus("Хранилище уровней не подключено"); return; }
+            var manifest = rksl.FromRuntimeData(levelData);
             manifest.title = levelData.fullTitle;
             manifest.artist = levelData.songAuthor;
             manifest.creator = levelData.mapAuthor;
@@ -291,7 +267,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             string audioSrc = !string.IsNullOrEmpty(currentAudioPath) ? currentAudioPath : levelData.audioPath;
             string videoSrc = !string.IsNullOrEmpty(currentVideoPath) ? currentVideoPath : levelData.videoPath;
             string coverSrc = !string.IsNullOrEmpty(currentCoverPath) ? currentCoverPath : null;
-            bool ok = RkslFile.Save(path, manifest, audioSrc, videoSrc, coverSrc, currentCoverSprite ?? levelData.cover);
+            bool ok = rksl.Save(path, manifest, audioSrc, videoSrc, coverSrc, currentCoverSprite ?? levelData.cover);
             if (ok) UpdateStatus($"Сохранено: {Path.GetFileName(path)}");
             else UpdateStatus("Ошибка сохранения");
         }
@@ -316,7 +292,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
         {
             if (!File.Exists(rkslPath)) { UpdateStatus("Файл не найден"); yield break; }
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(rkslPath));
-            if (!RkslFile.Extract(rkslPath, extractDir, out var manifest, out var audioPath, out var videoPath, out var coverPath))
+            if (rksl == null || !rksl.Extract(rkslPath, extractDir, out var manifest, out var audioPath, out var videoPath, out var coverPath))
             {
                 UpdateStatus("Ошибка распаковки .rksl");
                 yield break;
@@ -325,8 +301,8 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
 AudioClip clip = null;
             if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
             {
-                string url = RkslFile.GetFileUri(audioPath);
-                AudioType type = RkslFile.GetAudioType(audioPath);
+                string url = RkslStore.GetFileUri(audioPath);
+                AudioType type = RkslStore.GetAudioType(audioPath);
                 using (var uwr = UnityWebRequestMultimedia.GetAudioClip(url, type))
                 {
                     yield return uwr.SendWebRequest();
@@ -346,7 +322,7 @@ AudioClip clip = null;
                 }
             }
 
-var data = RkslFile.ToRuntimeData(manifest, clip, null, coverSpr);
+var data = rksl.ToRuntimeData(manifest, clip, null, coverSpr);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
 
@@ -383,7 +359,7 @@ levelData = data;
             }
         }
 
-        AudioType GetAudioType(string path) => RkslFile.GetAudioType(path);
+        AudioType GetAudioType(string path) => RkslStore.GetAudioType(path);
 
         void UpdateStatus(string msg) { if (statusText != null) statusText.text = msg; Debug.Log($"[RkslEditor] {msg}"); }
     }

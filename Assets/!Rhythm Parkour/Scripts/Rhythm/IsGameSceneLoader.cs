@@ -9,6 +9,7 @@ using Zenject;
 using RKS.RhythmParkour;
 using RKS.RhythmParkour.Core.Managers;
 using RKS.RhythmParkour.Core.Installers;
+using RKS.RhythmParkour.Core.Storage;
 using RKS.RhythmParkour.UI;
 using RKS.RhythmParkour.UI.Timeline;
 
@@ -16,10 +17,16 @@ namespace RKS.RhythmParkour.Rhythm
 {
     public class IsGameSceneLoader : RKSBehaviour
     {
+        [HideInInspector]
         [InjectOptional] public RhythmParkourManager manager;
+        [HideInInspector]
         [InjectOptional] public LevelTransfer transfer;
+        [HideInInspector]
         [InjectOptional] public LevelVisualApplier visual;
+        [HideInInspector]
         [InjectOptional] public MusicInfoUI musicInfo;
+        [HideInInspector]
+        [InjectOptional] public IRkslStore rksl;
         bool hasLoaded;
 
         protected override void OnInjected()
@@ -55,7 +62,7 @@ namespace RKS.RhythmParkour.Rhythm
                 return;
             }
 
-            var all = RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null);
+            var all = rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : new System.Collections.Generic.List<string>();
             if (all.Count > 0)
             {
                 Debug.Log($"[IsGameSceneLoader] Нашел {all.Count} rksl, беру первый: {all[0]}", this);
@@ -130,8 +137,8 @@ namespace RKS.RhythmParkour.Rhythm
             }
 
             AudioClip clip = null;
-            string url = RkslFile.GetFileUri(mp3Path);
-            AudioType type = RkslFile.GetAudioType(mp3Path);
+            string url = RkslStore.GetFileUri(mp3Path);
+            AudioType type = RkslStore.GetAudioType(mp3Path);
             Debug.Log($"[IsGameSceneLoader] Loading fallback audio {url}", this);
             using (var uwr = UnityWebRequestMultimedia.GetAudioClip(url, type))
             {
@@ -206,7 +213,7 @@ namespace RKS.RhythmParkour.Rhythm
             Debug.Log($"[IsGameSceneLoader] Extract {rkslPath}", this);
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslGame_" + Path.GetFileNameWithoutExtension(rkslPath));
             try { if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true); } catch {}
-            if (!RkslFile.Extract(rkslPath, extractDir, out var man, out var audioPath, out var videoPath, out var coverPath))
+            if (rksl == null || !rksl.Extract(rkslPath, extractDir, out var man, out var audioPath, out var videoPath, out var coverPath))
             {
                 Debug.LogError($"[IsGameSceneLoader] Extract failed {rkslPath}");
                 yield break;
@@ -215,8 +222,8 @@ namespace RKS.RhythmParkour.Rhythm
             AudioClip clip = null;
             if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
             {
-                string url = RkslFile.GetFileUri(audioPath);
-                AudioType type = RkslFile.GetAudioType(audioPath);
+            string url = RkslStore.GetFileUri(audioPath);
+            AudioType type = RkslStore.GetAudioType(audioPath);
                 Debug.Log($"[IsGameSceneLoader] Loading audio {url} type={type}", this);
                 using (var uwr = UnityWebRequestMultimedia.GetAudioClip(url, type))
                 {
@@ -243,7 +250,7 @@ namespace RKS.RhythmParkour.Rhythm
                 }
                 catch (System.Exception e) { Debug.LogWarning($"[IsGameSceneLoader] cover load failed {e.Message}"); }
             }
-            var data = RkslFile.ToRuntimeData(man, clip, null, cover);
+            var data = rksl.ToRuntimeData(man, clip, null, cover);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
             if (transfer != null)

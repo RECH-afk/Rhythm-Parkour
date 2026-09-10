@@ -14,22 +14,23 @@ namespace RKS.RhythmParkour.Rhythm
 {
     public class TimelinePreview : RKSBehaviour
     {
-        [Header("Ссылки (инжект)")]
+        [Header("References")]
+        [HideInInspector]
         [InjectOptional] public TimelineUI timelineUI;
+        [HideInInspector]
         [InjectOptional] public RhythmParkourManager manager;
+        [HideInInspector]
         [InjectOptional] public GlobalObstacleCatalog catalog;
         [Tooltip("Куда спавнить гостов. Если пусто — создастся автоматически под manager.spawnParent")]
         public Transform previewRoot;
 
-        [Header("Настройки превью")]
+        [Header("Preview Settings")]
         [Tooltip("Включено ли превью сразу при старте (можно включить кнопкой)")]
         public bool previewEnabled = false;
-        [Header("Кнопка")]
-        public Button previewToggleButton;
+        [Header("Indicator")]
         public TextMeshProUGUI previewToggleLabel;
         public Color enabledColor = new Color(0.2f, 0.7f, 0.3f, 1f);
         public Color disabledColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-        bool buttonSetupDone = false;
         [Tooltip("Показывать препятствия за N секунд до хита и после")]
         public float visibleAhead = 10f;
         public float visibleBehind = 2f;
@@ -60,9 +61,6 @@ List<GameObject> ghosts = new List<GameObject>();
 
         protected override void OnReady()
         {
-            SetupButton();
-
-            if (previewToggleButton == null) StartCoroutine(SetupButtonDelayed());
             UpdateToggleVisual();
 
             if (!previewEnabled) SetAllVisible(false);
@@ -71,37 +69,6 @@ List<GameObject> ghosts = new List<GameObject>();
         protected override void OnDisposed()
         {
             if (hideWhenPlaying) ClearGhosts();
-            if (previewToggleButton != null) previewToggleButton.onClick.RemoveListener(TogglePreview);
-        }
-
-        void SetupButton()
-        {
-            if (buttonSetupDone && previewToggleButton != null) return;
-
-            if (previewToggleButton == null)
-            {
-                Debug.LogWarning("[Preview] previewToggleButton не назначен — задай в инспекторе.", this);
-                return;
-            }
-            if (previewToggleButton != null && previewToggleLabel == null)
-                previewToggleLabel = previewToggleButton.GetComponentInChildren<TextMeshProUGUI>();
-            if (previewToggleButton != null)
-            {
-                previewToggleButton.onClick.RemoveListener(TogglePreview);
-                previewToggleButton.onClick.AddListener(TogglePreview);
-                buttonSetupDone = true;
-                UpdateToggleVisual();
-                Debug.Log($"[Preview] Кнопка подключена: {previewToggleButton.name} -> TogglePreview", previewToggleButton);
-            }
-            if (previewToggleLabel == null && previewToggleButton != null)
-                previewToggleLabel = previewToggleButton.GetComponentInChildren<TextMeshProUGUI>();
-        }
-
-        System.Collections.IEnumerator SetupButtonDelayed()
-        {
-            yield return null;
-            yield return new WaitForEndOfFrame();
-            if (previewToggleButton == null) { SetupButton(); UpdateToggleVisual(); }
         }
 
         public void TogglePreview()
@@ -133,8 +100,6 @@ List<GameObject> ghosts = new List<GameObject>();
         {
             if (previewToggleLabel != null)
                 previewToggleLabel.text = previewEnabled ? "Preview ON" : "Preview OFF";
-            if (previewToggleButton != null && previewToggleButton.image != null)
-                previewToggleButton.image.color = previewEnabled ? enabledColor : disabledColor;
         }
 
         public void ForceRefresh()
@@ -147,7 +112,7 @@ List<GameObject> ghosts = new List<GameObject>();
         void OnValidate()
         {
 
-            if (previewToggleButton != null && previewToggleLabel != null)
+            if (previewToggleLabel != null)
                 UpdateToggleVisual();
         }
 

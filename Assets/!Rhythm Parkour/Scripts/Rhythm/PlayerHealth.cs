@@ -12,7 +12,7 @@ namespace RKS.RhythmParkour.Rhythm
 {
     public class PlayerHealth : RKSBehaviour
     {
-        [Header("Здоровье")]
+        [Header("Health")]
         public int maxHealth = 100;
         [Min(1)] public int currentHealth = 100;
         [Tooltip("Неуязвимость после получения урона (сек)")]
@@ -20,17 +20,17 @@ namespace RKS.RhythmParkour.Rhythm
         [Tooltip("Урон по умолчанию, если у Obstacle не задан damage")]
         public int defaultDamage = 20;
 
-        [Header("События (для своего UI в инспекторе)")]
+        [Header("Events")]
         public UnityEvent<int,int> onHealthChanged;
         public UnityEvent onDamage;
         public UnityEvent onDeath;
 
-        [Header("Флеш при попадании (не HUD, просто вспышка)")]
+        [Header("Damage Flash")]
         public bool flashOnDamage = true;
         public Color damageFlashColor = new Color(1,0.2f,0.2f,0.35f);
         public float flashDuration = 0.18f;
 
-        [Header("Показ хитбокса в игре")]
+        [Header("Hitbox Display")]
         [Tooltip("Рисовать рамку коллайдера тела прямо в игре — видны реальные размеры для уворота")]
         public bool showHitbox = true;
         public Color hitboxColor = new Color(0.3f, 0.6f, 1f, 0.9f);
@@ -49,8 +49,11 @@ namespace RKS.RhythmParkour.Rhythm
         CharacterController controller;
         Vector3 lastSafePos;
 
+        [HideInInspector]
         [InjectOptional] public RhythmParkourManager parkour;
+        [HideInInspector]
         [InjectOptional] public RhythmScoreManager score;
+        [HideInInspector]
         [InjectOptional] public EasyPeasyFirstPersonController.FirstPersonController fpc;
 
         protected override void OnInjected()

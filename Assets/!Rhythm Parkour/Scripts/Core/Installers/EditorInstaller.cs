@@ -18,9 +18,6 @@ public sealed class EditorInstaller : MonoInstaller
         [SerializeField] private LevelEditorVisualSettings visualSettings;
         [SerializeField] private RhythmParkourManager parkourManager;
         [SerializeField] private Conductor conductor;
-        [SerializeField] private FileLoader audioLoader;
-        [SerializeField] private FileLoader videoLoader;
-        [SerializeField] private FileLoader coverLoader;
 
         public override void InstallBindings()
         {
@@ -30,9 +27,6 @@ public sealed class EditorInstaller : MonoInstaller
             BindFromHierarchyOrInstance(visualSettings);
             BindFromHierarchyOrInstance(parkourManager);
             BindFromHierarchyOrInstance(conductor);
-            BindLoader(audioLoader, AllowedFileTypes.Audio);
-            BindLoader(videoLoader, AllowedFileTypes.Video);
-            BindLoader(coverLoader, AllowedFileTypes.Photo);
         }
 
         void BindFromHierarchyOrInstance<T>(T instance) where T : Component
@@ -41,12 +35,6 @@ public sealed class EditorInstaller : MonoInstaller
                 Container.Bind<T>().FromInstance(instance).AsSingle();
             else
                 Container.Bind<T>().FromComponentInHierarchy().AsSingle();
-        }
-
-        void BindLoader(FileLoader loader, AllowedFileTypes id)
-        {
-            if (loader != null)
-                Container.Bind<FileLoader>().WithId(id).FromInstance(loader).AsSingle();
         }
     }
 }

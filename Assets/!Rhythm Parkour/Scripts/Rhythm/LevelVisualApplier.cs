@@ -82,7 +82,7 @@ VideoPlayer player = vp;
             {
                 if (!string.IsNullOrEmpty(data.videoPath) && System.IO.File.Exists(data.videoPath))
                 {
-                    string url = RkslFile.GetFileUri(data.videoPath);
+                    string url = RkslStore.GetFileUri(data.videoPath);
                     player.source = VideoSource.Url;
                     player.url = url;
                     player.isLooping = false;

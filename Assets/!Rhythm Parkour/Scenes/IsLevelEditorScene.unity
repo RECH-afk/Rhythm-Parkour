@@ -1689,9 +1689,6 @@ MonoBehaviour:
   visualSettings: {fileID: 1442854770}
   parkourManager: {fileID: 820601937}
   conductor: {fileID: 820601936}
-  audioLoader: {fileID: 0}
-  videoLoader: {fileID: 0}
-  coverLoader: {fileID: 0}
 --- !u!114 &195696690
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2871,7 +2868,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 276650056}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 276650054}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.FileLoader, Assembly-CSharp
+        m_MethodName: OpenFileSelectionDialog
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &276650056
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3013,7 +3022,20 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 287668756}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 484157968}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.Rhythm.RkslEditorController,
+          Assembly-CSharp
+        m_MethodName: SaveRksl
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &287668756
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3192,7 +3214,6 @@ MonoBehaviour:
   manager: {fileID: 820601937}
   fileLoader: {fileID: 396459465}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -3231,7 +3252,6 @@ MonoBehaviour:
   playheadHeader: {fileID: 1260821908}
   warningObject: {fileID: 1028149422}
   timelineObject: {fileID: 0}
-  playPauseButton: {fileID: 1996136016}
   playPauseLabel: {fileID: 308370643}
   timeLabel: {fileID: 214478477}
   statusLabel: {fileID: 0}
@@ -3271,10 +3291,8 @@ MonoBehaviour:
   autoScrollMargin: 0.3
   autoscrollKeepCurrentPosition: 1
   followSlider: 1
-  autoscrollToggleButton: {fileID: 1329688503}
   autoscrollToggleLabel: {fileID: 1547214014}
   preview: {fileID: 295294848}
-  previewToggleButton: {fileID: 2111672150}
   previewToggleLabel: {fileID: 1318490046}
   enableScrubAudio: 1
   scrubVolume: 0.85
@@ -3287,14 +3305,10 @@ MonoBehaviour:
   notePropertiesPanel: {fileID: 426744812}
   propPrefabIndexInput: {fileID: 0}
   propPrefabDropdown: {fileID: 0}
-  propApplyButton: {fileID: 0}
-  propDeleteButton: {fileID: 0}
-  propCloseButton: {fileID: 0}
   propTitleLabel: {fileID: 0}
   prefabGridPanel: {fileID: 0}
   prefabGridContainer: {fileID: 0}
   prefabThumbPrefab: {fileID: 0}
-  choosePrefabButton: {fileID: 1767314866}
   closeGridOnSelect: 1
   bpmOutputText: {fileID: 1591112299}
   showBpmAfterLoad: 1
@@ -3319,7 +3333,6 @@ MonoBehaviour:
   catalog: {fileID: 11400000, guid: c31b00e2c10bc6b409a1b04044debf1b, type: 2}
   previewRoot: {fileID: 0}
   previewEnabled: 0
-  previewToggleButton: {fileID: 2111672150}
   previewToggleLabel: {fileID: 1318490046}
   enabledColor: {r: 0.85660374, g: 0.74755734, b: 0.28284076, a: 1}
   disabledColor: {r: 0.16862746, g: 0.16862746, b: 0.16862746, a: 1}
@@ -4116,7 +4129,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 396459463}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 396459465}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.FileLoader, Assembly-CSharp
+        m_MethodName: OpenFileSelectionDialog
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &396459463
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4828,7 +4853,6 @@ MonoBehaviour:
     events: []
   previewManager: {fileID: 820601937}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -4855,7 +4879,6 @@ MonoBehaviour:
     fromEditor: 0
   previewVideo: {fileID: 0}
   visualSettings: {fileID: 1442854770}
-  saveRkslButton: {fileID: 287668755}
   coverPreviewImage: {fileID: 766676911}
   statusText: {fileID: 0}
 --- !u!1 &485273176
@@ -5482,7 +5505,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 599648313}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 599648311}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.FileLoader, Assembly-CSharp
+        m_MethodName: OpenFileSelectionDialog
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &599648313
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7329,7 +7364,6 @@ MonoBehaviour:
   score: {fileID: 0}
   catalog: {fileID: 11400000, guid: c31b00e2c10bc6b409a1b04044debf1b, type: 2}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -8539,7 +8573,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 980542491}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2008266319}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.Timeline.TabsUI, Assembly-CSharp
+        m_MethodName: Show
+        m_Mode: 3
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 1
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &980542491
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10341,7 +10387,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1329688504}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 295294847}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.Timeline.TimelineUI, Assembly-CSharp
+        m_MethodName: ToggleAutoscroll
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1329688504
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10542,18 +10600,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1349627293}
   m_CullTransparentMesh: 1
---- !u!114 &1379953098 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 9156347144040445544, guid: c82236c16aae9d34fbd437f8dea6e2c9,
-    type: 3}
-  m_PrefabInstance: {fileID: 944670466}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2922308556bc98e4898cb3309250e781, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!1 &1383701769
 GameObject:
   m_ObjectHideFlags: 0
@@ -11153,13 +11199,9 @@ MonoBehaviour:
   preview: {fileID: 0}
   _particlesToggle: {fileID: 2082965231}
   _particleColorPreview: {fileID: 1633078922}
-  _particleColorButton: {fileID: 2091518795}
   _obstacleColorPreview: {fileID: 0}
-  _obstacleColorButton: {fileID: 0}
   _trackColorPreview: {fileID: 0}
-  _trackColorButton: {fileID: 0}
   _sphereToggle: {fileID: 0}
-  _defaultMaterialButton: {fileID: 0}
   _defaultMaterialLabel: {fileID: 0}
   _materialGridPanel: {fileID: 0}
   _materialGridContainer: {fileID: 0}
@@ -11184,7 +11226,6 @@ GameObject:
   - component: {fileID: 1444323772}
   - component: {fileID: 1444323771}
   - component: {fileID: 1444323770}
-  - component: {fileID: 1444323774}
   m_Layer: 5
   m_Name: Canvas
   m_TagString: Untagged
@@ -11276,28 +11317,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
---- !u!114 &1444323774
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1444323769}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5b7cc92e2b5a199498de40f9840d11ef, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: '::'
-  uiSwayObject: {fileID: 0}
-  targetCamera: {fileID: 1986885094}
-  player: {fileID: 1379953098}
-  swayClock: {fileID: 0}
-  swayAmount: 50
-  smoothTime: 8
-  returnSpeed: 3
-  bobSpeed: 10
-  bobAmountX: 4
-  bobAmountY: 2.5
 --- !u!1 &1498068761
 GameObject:
   m_ObjectHideFlags: 0
@@ -19549,7 +19568,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1899284616}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 2008266319}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.Timeline.TabsUI, Assembly-CSharp
+        m_MethodName: Show
+        m_Mode: 3
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1899284616
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -19935,12 +19966,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1967655341}
   m_CullTransparentMesh: 1
---- !u!4 &1986885094 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 9156347144824098802, guid: c82236c16aae9d34fbd437f8dea6e2c9,
-    type: 3}
-  m_PrefabInstance: {fileID: 944670466}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1991173651
 GameObject:
   m_ObjectHideFlags: 0
@@ -20136,7 +20161,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1996136017}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 295294847}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.Timeline.TimelineUI, Assembly-CSharp
+        m_MethodName: TogglePlayPause
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!114 &1996136017
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -20326,9 +20363,6 @@ MonoBehaviour:
   panels:
   - {fileID: 484157966}
   - {fileID: 1806125367}
-  buttons:
-  - {fileID: 1899284615}
-  - {fileID: 980542490}
   defaultIndex: 0
 --- !u!1 &2064206155
 GameObject:
@@ -21263,8 +21297,8 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 295294847}
-        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.Timeline.TimelineUI, Assembly-CSharp
+      - m_Target: {fileID: 295294848}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.Rhythm.TimelinePreview, Assembly-CSharp
         m_MethodName: TogglePreview
         m_Mode: 1
         m_Arguments:

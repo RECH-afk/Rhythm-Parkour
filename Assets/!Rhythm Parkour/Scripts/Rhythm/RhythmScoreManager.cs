@@ -42,7 +42,7 @@ namespace RKS.RhythmParkour.Rhythm
 public class RhythmScoreManager : RKSBehaviour
     {
 
-        [Header("Поток (вместо очков): 0–100, живёт всю карту")]
+        [Header("Flow")]
         [Tooltip("Стартовое значение потока")]
         [Range(0, 100)] public float flowStart = 50f;
         [Tooltip("Прирост за Perfect")]
@@ -58,16 +58,16 @@ public class RhythmScoreManager : RKSBehaviour
         [Tooltip("Поток за действие около бита")]
         public float grooveFlowGood = 1f;
 
-        [Header("Серия битов без урона (вместо комбо по нотам)")]
+        [Header("Beat Streak")]
         [Tooltip("Каждые N битов серии — событие для попапа/звука")]
         public int milestoneStep = 25;
 
-        [Header("Вес джаджментов для точности (Miss всегда 0)")]
+        [Header("Judgement Weights")]
         [Range(0, 100)] public float perfectWeight = 100f;
         [Range(0, 100)] public float greatWeight = 65f;
         [Range(0, 100)] public float goodWeight = 35f;
 
-        [Header("Пороги рангов (точность 0..1)")]
+        [Header("Rank Thresholds")]
         [Range(0, 1)] public float godlikeMin = 0.95f;
         [Range(0, 1)] public float awesomeMin = 0.80f;
         [Range(0, 1)] public float soSoMin = 0.60f;
@@ -75,7 +75,7 @@ public class RhythmScoreManager : RKSBehaviour
         [Tooltip("GODLIKE! только без единого мисса")]
         public bool godlikeRequiresNoMiss = true;
 
-        [Header("Состояние (только чтение)")]
+        [Header("State")]
         public string levelTitle = "";
         public int totalNotes;
         public int count300;
@@ -108,6 +108,7 @@ public event Action<HitJudgement, int> onJudgement;
 
         int maxMissStreakRuntime;
 
+        [HideInInspector]
         [InjectOptional] public Conductor injectedBeatSource;
         Conductor beatSrc;
 

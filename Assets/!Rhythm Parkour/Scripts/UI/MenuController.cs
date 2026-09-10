@@ -13,6 +13,7 @@ using RKS.RhythmParkour;
 using RKS.RhythmParkour.Core.Managers;
 using RKS.RhythmParkour.Core.Installers;
 using RKS.RhythmParkour.Rhythm;
+using RKS.RhythmParkour.Core.Storage;
 using RKS.RhythmParkour.UI.Timeline;
 
 using Debug = UnityEngine.Debug;
@@ -31,11 +32,6 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private RectTransform _logoTransform;
         [SerializeField] private RectTransform _mainMenuButtonsContainer;
 
-        [Header("Buttons")]
-        [SerializeField] private Button _playButton;
-        [SerializeField] private Button _editorButton;
-        [SerializeField] private Button _backFromListButton;
-
         [Header("Level List Menu")]
         [SerializeField] private GameObject _levelListMenuRoot;
         [SerializeField] private Transform _levelListContainer;
@@ -51,19 +47,11 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private TextMeshProUGUI _detailArtistText;
         [SerializeField] private TextMeshProUGUI _detailTrackText;
 
-        [Header("Details Actions")]
-        [SerializeField] private Button _editLevelButton;
-        [SerializeField] private Button _deleteLevelButton;
-
         [Header("No Levels Window")]
         [SerializeField] private GameObject _noLevelsWindow;
-        [SerializeField] private Button _openLevelsFolderButton;
-        [SerializeField] private Button _backFromNoLevelsButton;
 
         [Header("Delete Confirmation Window")]
         [SerializeField] private GameObject _deleteConfirmationWindow;
-        [SerializeField] private Button _confirmDeleteButton;
-        [SerializeField] private Button _cancelDeleteButton;
 
         [Header("Settings")]
         [SerializeField] private string _editorSceneName = "IsLevelEditorScene";
@@ -85,7 +73,10 @@ namespace RKS.RhythmParkour.UI
 
         private readonly Dictionary<GameObject, Vector2> _originalPositions = new();
 
+        [HideInInspector]
         [InjectOptional] public LevelTransfer transfer;
+        [HideInInspector]
+        [InjectOptional] public IRkslStore rksl;
 
     #endregion
 
@@ -108,7 +99,6 @@ namespace RKS.RhythmParkour.UI
             ValidateReferences();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
-            UpdateDetailsButtonsState();
 
             CacheOriginalPosition(_mainMenuRoot);
             CacheOriginalPosition(_levelListMenuRoot);
@@ -121,7 +111,6 @@ namespace RKS.RhythmParkour.UI
 
         protected override void OnReady()
         {
-            SetupBindings();
             HideAllMenusImmediate();
             if (_mainMenuRoot != null) _mainMenuRoot.SetActive(true);
             PlayStartupAnimations();
@@ -131,7 +120,6 @@ namespace RKS.RhythmParkour.UI
         {
             DOTween.Kill(this);
             _transitionSequence?.Kill(true);
-            UnbindButtons();
         }
 
     #endregion
@@ -151,34 +139,6 @@ namespace RKS.RhythmParkour.UI
         {
             if (_mainMenuRoot == null || _levelListContainer == null || _levelButtonPrefab == null)
                 Debug.LogError("[MenuController] Критические ссылки UI не назначены в инспекторе!", this);
-        }
-
-        private void SetupBindings()
-        {
-            if (_playButton != null) _playButton.onClick.AddListener(ShowLevelList);
-            if (_editorButton != null) _editorButton.onClick.AddListener(OpenNewLevelInEditor);
-            if (_backFromListButton != null) _backFromListButton.onClick.AddListener(ShowMainMenu);
-            if (_editLevelButton != null) _editLevelButton.onClick.AddListener(EditSelectedLevel);
-            if (_deleteLevelButton != null) _deleteLevelButton.onClick.AddListener(DeleteSelectedLevel);
-
-            if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.AddListener(OpenLevelsFolder);
-            if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.AddListener(ShowMainMenu);
-            if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.AddListener(ConfirmDelete);
-            if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.AddListener(HideDeleteConfirmation);
-        }
-
-        private void UnbindButtons()
-        {
-            if (_playButton != null) _playButton.onClick.RemoveListener(ShowLevelList);
-            if (_editorButton != null) _editorButton.onClick.RemoveListener(OpenNewLevelInEditor);
-            if (_backFromListButton != null) _backFromListButton.onClick.RemoveListener(ShowMainMenu);
-            if (_editLevelButton != null) _editLevelButton.onClick.RemoveListener(EditSelectedLevel);
-            if (_deleteLevelButton != null) _deleteLevelButton.onClick.RemoveListener(DeleteSelectedLevel);
-
-            if (_openLevelsFolderButton != null) _openLevelsFolderButton.onClick.RemoveListener(OpenLevelsFolder);
-            if (_backFromNoLevelsButton != null) _backFromNoLevelsButton.onClick.RemoveListener(ShowMainMenu);
-            if (_confirmDeleteButton != null) _confirmDeleteButton.onClick.RemoveListener(ConfirmDelete);
-            if (_cancelDeleteButton != null) _cancelDeleteButton.onClick.RemoveListener(HideDeleteConfirmation);
         }
 
         private float GetScreenOffsetX() => Screen.width + 100f;
@@ -393,20 +353,18 @@ namespace RKS.RhythmParkour.UI
         {
             if (_isTransitioning) return;
             _selectedLevelPath = null;
-            UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             TransitionTo(_mainMenuRoot);
         }
 
-        private void ShowLevelList()
+        public void ShowLevelList()
         {
             if (_isTransitioning) return;
             _selectedLevelPath = null;
-            UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
 
             _foundPaths.Clear();
-            _foundPaths.AddRange(RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
+            _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
 
             if (_foundPaths.Count == 0)
                 TransitionTo(_noLevelsWindow);
@@ -418,7 +376,6 @@ namespace RKS.RhythmParkour.UI
         {
             if (_isTransitioning) return;
             _selectedLevelPath = path;
-            UpdateDetailsButtonsState();
             PopulateDetails(path);
             TransitionTo(_levelDetailsRoot);
         }
@@ -430,7 +387,6 @@ namespace RKS.RhythmParkour.UI
 
             _isTransitioning = true;
             _selectedLevelPath = null;
-            UpdateDetailsButtonsState();
 
             var rt = _levelDetailsRoot.GetComponent<RectTransform>();
             rt.DOKill(true);
@@ -485,7 +441,7 @@ namespace RKS.RhythmParkour.UI
             }
 
             _foundPaths.Clear();
-            _foundPaths.AddRange(RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
+            _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
 
             if (_foundPaths.Count == 0) return;
 
@@ -501,7 +457,7 @@ namespace RKS.RhythmParkour.UI
         private void CreateLevelListItem(string path)
         {
             RkslManifest man = null;
-            RkslFile.LoadManifestOnly(path, out man);
+            if (rksl != null) rksl.LoadManifestOnly(path, out man);
 
             string title = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
             if (string.IsNullOrEmpty(title)) title = "Без названия";
@@ -551,17 +507,10 @@ namespace RKS.RhythmParkour.UI
 
     #region Level Details Logic
 
-        private void UpdateDetailsButtonsState()
-        {
-            bool hasSelection = !string.IsNullOrEmpty(_selectedLevelPath);
-            if (_editLevelButton != null) _editLevelButton.interactable = hasSelection;
-            if (_deleteLevelButton != null) _deleteLevelButton.interactable = hasSelection;
-        }
-
         private void PopulateDetails(string path)
         {
             RkslManifest man = null;
-            RkslFile.LoadManifestOnly(path, out man);
+            if (rksl != null) rksl.LoadManifestOnly(path, out man);
 
             if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0} BPM" : "N/A";
             if (_detailDurationText) _detailDurationText.text = "N/A";
@@ -581,7 +530,7 @@ namespace RKS.RhythmParkour.UI
 
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslCover_" + Path.GetFileNameWithoutExtension(rkslPath));
 
-            if (!RkslFile.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+            if (rksl == null || !rksl.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
                 return;
 
             if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
@@ -607,7 +556,7 @@ namespace RKS.RhythmParkour.UI
             }
         }
 
-        private void DeleteSelectedLevel()
+        public void DeleteSelectedLevel()
         {
             if (_isTransitioning || string.IsNullOrEmpty(_selectedLevelPath)) return;
             ShowDeleteConfirmation();
@@ -619,7 +568,7 @@ namespace RKS.RhythmParkour.UI
             TransitionTo(_deleteConfirmationWindow);
         }
 
-        private void HideDeleteConfirmation()
+        public void HideDeleteConfirmation()
         {
             if (_deleteConfirmationWindow == null || !_deleteConfirmationWindow.activeSelf) return;
 
@@ -649,7 +598,7 @@ namespace RKS.RhythmParkour.UI
             });
         }
 
-        private void ConfirmDelete()
+        public void ConfirmDelete()
         {
             if (string.IsNullOrEmpty(_selectedLevelPath)) return;
 
@@ -667,13 +616,12 @@ namespace RKS.RhythmParkour.UI
             }
 
             _selectedLevelPath = null;
-            UpdateDetailsButtonsState();
 
             HideDeleteConfirmationImmediate();
             HideLevelDetailsImmediate();
 
             _foundPaths.Clear();
-            _foundPaths.AddRange(RkslFile.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
+            _foundPaths.AddRange(rksl != null ? rksl.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null) : (transfer != null ? transfer.GetSavedPaths() : new List<string>()));
 
             if (_foundPaths.Count == 0)
                 TransitionTo(_noLevelsWindow);
@@ -681,7 +629,7 @@ namespace RKS.RhythmParkour.UI
                 TransitionTo(_levelListMenuRoot);
         }
 
-        private void OpenLevelsFolder()
+        public void OpenLevelsFolder()
         {
             string folderPath = "";
             string possiblePath1 = Path.Combine(Application.streamingAssetsPath, "Levels");
@@ -730,13 +678,13 @@ namespace RKS.RhythmParkour.UI
             else SceneManager.LoadScene(_gameSceneName);
         }
 
-        private void EditSelectedLevel()
+        public void EditSelectedLevel()
         {
             if (string.IsNullOrEmpty(_selectedLevelPath)) return;
             StartCoroutine(LoadAndEditRoutine(_selectedLevelPath));
         }
 
-        private void OpenNewLevelInEditor()
+        public void OpenNewLevelInEditor()
         {
             if (transfer != null)
             {
@@ -752,7 +700,7 @@ namespace RKS.RhythmParkour.UI
         {
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(path));
 
-            if (!RkslFile.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
+            if (rksl == null || !rksl.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
             {
                 Debug.LogError("[MenuController] Ошибка извлечения .rksl");
                 yield break;
@@ -762,7 +710,7 @@ namespace RKS.RhythmParkour.UI
             if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
             {
                 using var uwr = UnityEngine.Networking.UnityWebRequestMultimedia.GetAudioClip(
-                    RkslFile.GetFileUri(audioPath), RkslFile.GetAudioType(audioPath));
+                    RkslStore.GetFileUri(audioPath), RkslStore.GetAudioType(audioPath));
                 yield return uwr.SendWebRequest();
 
                 if (uwr.result == UnityEngine.Networking.UnityWebRequest.Result.Success)
@@ -777,7 +725,7 @@ namespace RKS.RhythmParkour.UI
                     cover = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
             }
 
-            var data = RkslFile.ToRuntimeData(man, clip, null, cover);
+            var data = rksl.ToRuntimeData(man, clip, null, cover);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
 
