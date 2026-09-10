@@ -10,7 +10,6 @@ Shader "UI/UIBackgroundPattern"
         _StencilOp ("Stencil Operation", Float) = 0
         _StencilWriteMask ("Stencil Write Mask", Float) = 255
         _StencilReadMask ("Stencil Read Mask", Float) = 255
-
         _ColorMask ("Color Mask", Float) = 15
 
         [Toggle(UNITY_UI_CLIP_RECT)] _UseUIRectClip ("Use Rectangle Clip", Float) = 0
@@ -19,6 +18,15 @@ Shader "UI/UIBackgroundPattern"
         [Space(10)]
         _Speed ("Master Anim Speed", Float) = 1
         [HideInInspector] _Phase ("Phase Offset", Float) = 0
+
+        [Space(10)]
+        [Header(Base Image and Video)]
+        _BaseTex ("Background Photo Video", 2D) = "white" {}
+        _BaseColor ("Base Tint", Color) = (1,1,1,1)
+        _BaseTiling ("Base Tiling", Vector) = (1,1,0,0)
+        
+        [Toggle] _LinkBaseAndGradient ("Link Base and Gradient crossfade", Float) = 0
+        _BaseStrength ("Base Blend Strength", Range(0, 1)) = 0.5
 
         [Space(10)]
         [Header(Gradient)]
@@ -40,7 +48,7 @@ Shader "UI/UIBackgroundPattern"
 
         [Space(10)]
         [Header(Pattern From Texture)]
-        [NoScaleOffset] _PatternTex ("Pattern Image (Wrap: Repeat!)", 2D) = "white" {}
+        [NoScaleOffset] _PatternTex ("Pattern Image", 2D) = "white" {}
         _PatternColor ("Pattern Tint", Color) = (0.55, 0.75, 1.0, 0.28)
         _PatternTiling ("Tiling (XY)", Vector) = (6, 6, 0, 0)
         _PatternSize ("Icon Size in Cell", Range(0.05, 1)) = 0.8
@@ -55,7 +63,8 @@ Shader "UI/UIBackgroundPattern"
         [Space(10)]
         [Header(Vignette And Blur)]
         _Vignette ("Vignette", Range(0, 1)) = 0.15
-        _BlurRadius ("Blur Radius (UV)", Range(0, 0.05)) = 0.003
+        _BlurRadius ("Blur Radius UV", Range(0, 0.05)) = 0.003
+        [Toggle] _BlurPattern ("Apply Blur To Pattern", Float) = 1
     }
 
     SubShader
@@ -87,9 +96,8 @@ Shader "UI/UIBackgroundPattern"
 
         Pass
         {
-            Name "BrawlPatternBackground"
-
-            CGPROGRAM
+            Name "UIPatternBackground"
+            HLSLPROGRAM 
             #pragma vertex vert
             #pragma fragment frag
             #pragma target 3.0
@@ -111,23 +119,30 @@ Shader "UI/UIBackgroundPattern"
             struct v2f
             {
                 float4 vertex        : SV_POSITION;
-                fixed4 color         : COLOR;
+                float4 color         : COLOR;
                 float2 texcoord      : TEXCOORD0;
                 float4 worldPosition : TEXCOORD1;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
             sampler2D _MainTex;
-            fixed4 _Color;
-            fixed4 _TextureSampleAdd;
-            float4 _ClipRect;
             float4 _MainTex_ST;
+            float4 _Color; 
+            
+            float4 _TextureSampleAdd; 
+            float4 _ClipRect;
 
             float _Speed;
             float _Phase;
 
-            fixed4 _GradientColorA;
-            fixed4 _GradientColorB;
+            sampler2D _BaseTex;
+            float4 _BaseColor;
+            float4 _BaseTiling;
+            float _LinkBaseAndGradient;
+            float _BaseStrength;
+
+            float4 _GradientColorA;
+            float4 _GradientColorB;
             float  _GradientAngle;
             float  _GradientOffset;
             float  _GradientSoftness;
@@ -135,13 +150,13 @@ Shader "UI/UIBackgroundPattern"
             float  _GradientOffsetAmp;
             float  _GradientOffsetSpeed;
 
-            fixed4 _GlowColor;
+            float4 _GlowColor;
             float  _GlowSize;
             float  _GlowMoveAmp;
             float  _GlowSpeed;
 
             sampler2D _PatternTex;
-            fixed4 _PatternColor;
+            float4 _PatternColor;
             float4 _PatternTiling;
             float  _PatternSize;
             float  _BrickOffset;
@@ -154,6 +169,7 @@ Shader "UI/UIBackgroundPattern"
 
             float _Vignette;
             float _BlurRadius;
+            float _BlurPattern;
 
             static const float2 kPoisson[12] =
             {
@@ -177,7 +193,7 @@ Shader "UI/UIBackgroundPattern"
                 return OUT;
             }
 
-            half4 Composite(float2 uv, float t)
+            float4 GetBackground(float2 uv, float t)
             {
                 float ang = radians(_GradientAngle + t * _GradientAngleSpeed);
                 float2 dir = float2(cos(ang), sin(ang));
@@ -186,13 +202,40 @@ Shader "UI/UIBackgroundPattern"
                 float gs = _GradientSoftness * 0.5;
                 g = smoothstep(0.5 - gs, 0.5 + gs, g);
 
-                half3 gradRGB = lerp(_GradientColorA.rgb, _GradientColorB.rgb, g);
-                half  gradA   = lerp(_GradientColorA.a, _GradientColorB.a, g);
+                float3 gradRGB = lerp(_GradientColorA.rgb, _GradientColorB.rgb, g);
+                float gradA = lerp(_GradientColorA.a, _GradientColorB.a, g);
 
-                float2 gp = 0.5 + float2(sin(t * _GlowSpeed),
-                                         sin(t * _GlowSpeed * 0.7 + 1.7)) * _GlowMoveAmp;
+                float2 gp = 0.5 + float2(sin(t * _GlowSpeed), sin(t * _GlowSpeed * 0.7 + 1.7)) * _GlowMoveAmp;
                 float glow = 1.0 - smoothstep(0.0, _GlowSize, length(uv - gp));
                 gradRGB += _GlowColor.rgb * (glow * _GlowColor.a);
+
+                float4 baseCol = tex2D(_BaseTex, uv * _BaseTiling.xy) * _BaseColor;
+
+                float3 finalRGB;
+                float finalA;
+
+                if (_LinkBaseAndGradient > 0.5)
+                {
+                    finalRGB = lerp(gradRGB, baseCol.rgb, _BaseStrength);
+                    finalA = lerp(gradA, baseCol.a, _BaseStrength);
+                }
+                else
+                {
+                    finalRGB = lerp(gradRGB, gradRGB * baseCol.rgb, _BaseStrength);
+                    finalA = gradA * lerp(1.0, baseCol.a, _BaseStrength);
+                }
+
+                float vd = length(uv - 0.5) * 1.4142;
+                finalRGB *= 1.0 - _Vignette * smoothstep(0.4, 1.0, vd);
+
+                float4 col;
+                col.rgb = finalRGB;
+                col.a = finalA;
+                return col;
+            }
+
+            float4 GetPattern(float2 uv, float t)
+            {
                 float2 puv = uv - 0.5;
                 float ra = radians(t * _PatternRotateSpeed);
                 float rs, rc;
@@ -212,38 +255,55 @@ Shader "UI/UIBackgroundPattern"
                 float2 ed = 0.5 - abs(tuv - 0.5);
                 float inside = smoothstep(0.0, 0.02, min(ed.x, ed.y));
 
-                half4 pat = tex2D(_PatternTex, tuv);
+                float4 pat = tex2D(_PatternTex, tuv);
                 pat.rgb *= _PatternColor.rgb * lerp(1.0, _AltBrightness, chk);
-                pat.a   *= _PatternColor.a * inside;
+                pat.a *= _PatternColor.a * inside;
 
-                half3 rgb = lerp(gradRGB, pat.rgb, pat.a);
-
-                float vd = length(uv - 0.5) * 1.4142;
-                rgb *= 1.0 - _Vignette * smoothstep(0.4, 1.0, vd);
-
-                half4 col;
-                col.rgb = rgb;
-                col.a = max(gradA, pat.a);
+                float4 col;
+                col.rgb = pat.rgb;
+                col.a = pat.a;
                 return col;
             }
 
-            fixed4 frag(v2f IN) : SV_Target
+            float4 frag(v2f IN) : SV_Target
             {
                 float t = _Time.y * _Speed + _Phase;
+                float2 uv = IN.texcoord;
 
-                half4 color;
+                float4 bgCol, patCol;
+
                 if (_BlurRadius > 0.0)
                 {
-                    color = 0;
+                    bgCol = 0;
+                    patCol = 0;
+                    
                     [loop]
                     for (int i = 0; i < 12; i++)
-                        color += Composite(IN.texcoord + kPoisson[i] * _BlurRadius, t);
-                    color /= 12.0;
+                    {
+                        float2 offset = kPoisson[i] * _BlurRadius;
+                        bgCol += GetBackground(uv + offset, t);
+                        
+                        if (_BlurPattern > 0.5)
+                            patCol += GetPattern(uv + offset, t);
+                    }
+                    
+                    bgCol /= 12.0;
+                    
+                    if (_BlurPattern > 0.5)
+                        patCol /= 12.0;
+                    else
+                        patCol = GetPattern(uv, t);
                 }
                 else
                 {
-                    color = Composite(IN.texcoord, t);
+                    bgCol = GetBackground(uv, t);
+                    patCol = GetPattern(uv, t);
                 }
+
+                float3 rgb = lerp(bgCol.rgb, patCol.rgb, patCol.a);
+                float a = max(bgCol.a, patCol.a);
+
+                float4 color = float4(rgb, a);
 
                 color *= (tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd) * IN.color;
 
@@ -258,7 +318,7 @@ Shader "UI/UIBackgroundPattern"
                 color.rgb *= color.a;
                 return color;
             }
-            ENDCG
+            ENDHLSL 
         }
     }
 }

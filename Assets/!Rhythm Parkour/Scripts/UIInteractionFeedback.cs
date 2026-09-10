@@ -1,6 +1,7 @@
 using RKS.RhythmParkour.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
 using DG.Tweening;
 using Zenject;
 using RKS.RhythmParkour.Core.Managers;
@@ -30,10 +31,12 @@ namespace RKS.RhythmParkour
 
         private Vector3 startScale = Vector3.one;
         private Tween scaleTween;
+        private Button button;
 
         protected override void Awake()
         {
             base.Awake();
+            button = GetComponent<Button>();
             CacheStartScale();
         }
 
@@ -48,6 +51,11 @@ namespace RKS.RhythmParkour
                 startScale = transform.localScale;
             else if (startScale == Vector3.zero)
                 startScale = Vector3.one;
+        }
+
+        private bool EffectsAllowed()
+        {
+            return button == null || button.interactable;
         }
 
         private void OnEnable()
@@ -67,17 +75,20 @@ namespace RKS.RhythmParkour
 
         public void OnPointerEnter(PointerEventData eventData)
         {
+            if (!EffectsAllowed()) return;
             if (!string.IsNullOrEmpty(onPointerEnterSoundName) && Audio != null) Audio.Play(onPointerEnterSoundName);
             ScaleTo(startScale * hoverScale, duration, hoverEase);
         }
 
         public void OnPointerExit(PointerEventData eventData)
         {
+            if (!EffectsAllowed()) return;
             ScaleTo(startScale, duration, Ease.OutQuad);
         }
 
         public void OnPointerDown(PointerEventData eventData)
         {
+            if (!EffectsAllowed()) return;
             if (!string.IsNullOrEmpty(onClickSoundName) && Audio != null) Audio.Play(onClickSoundName);
             ScaleTo(startScale * pressScale, duration * 0.8f, pressEase);
         }
@@ -85,6 +96,7 @@ namespace RKS.RhythmParkour
         public void OnPointerUp(PointerEventData eventData)
         {
 
+            if (!EffectsAllowed()) return;
             ScaleTo(startScale * hoverScale, duration, hoverEase);
         }
 

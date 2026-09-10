@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using RKS.RhythmParkour.Core;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
@@ -46,6 +47,8 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private TextMeshProUGUI _detailAuthorText;
         [SerializeField] private TextMeshProUGUI _detailArtistText;
         [SerializeField] private TextMeshProUGUI _detailTrackText;
+        [SerializeField] private Button _editLevelButton;
+        [SerializeField] private Button _deleteLevelButton;
 
         [Header("No Levels Window")]
         [SerializeField] private GameObject _noLevelsWindow;
@@ -104,6 +107,7 @@ namespace RKS.RhythmParkour.UI
             ValidateReferences();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+            UpdateDetailsButtonsState();
 
             CacheOriginalPosition(_mainMenuRoot);
             CacheOriginalPosition(_levelListMenuRoot);
@@ -388,6 +392,7 @@ namespace RKS.RhythmParkour.UI
         {
             if (_isTransitioning) return;
             _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             HideQuitConfirmationImmediate();
             TransitionTo(_mainMenuRoot);
@@ -397,6 +402,7 @@ namespace RKS.RhythmParkour.UI
         {
             if (_isTransitioning) return;
             _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             HideQuitConfirmationImmediate();
 
@@ -412,7 +418,9 @@ namespace RKS.RhythmParkour.UI
         private void ShowLevelDetails(string path)
         {
             if (_isTransitioning) return;
+            if (_selectedLevelPath == path && _levelDetailsRoot != null && _levelDetailsRoot.activeSelf) return;
             _selectedLevelPath = path;
+            UpdateDetailsButtonsState();
             PopulateDetails(path);
             TransitionTo(_levelDetailsRoot);
         }
@@ -424,6 +432,7 @@ namespace RKS.RhythmParkour.UI
 
             _isTransitioning = true;
             _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
 
             var rt = _levelDetailsRoot.GetComponent<RectTransform>();
             rt.DOKill(true);
@@ -528,8 +537,10 @@ namespace RKS.RhythmParkour.UI
 
             for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
             {
-                DOTween.Kill(_levelListContainer.GetChild(i).gameObject);
-                Destroy(_levelListContainer.GetChild(i).gameObject);
+                var child = _levelListContainer.GetChild(i).gameObject;
+                DOTween.Kill(child);
+                child.SetActive(false);
+                Destroy(child);
             }
 
             _foundPaths.Clear();
@@ -537,16 +548,17 @@ namespace RKS.RhythmParkour.UI
 
             if (_foundPaths.Count == 0) return;
 
-            foreach (string path in _foundPaths) CreateLevelListItem(path);
+            for (int i = 0; i < _foundPaths.Count; i++) CreateLevelListItem(_foundPaths[i], i);
 
             var containerRT = _levelListContainer as RectTransform;
             if (containerRT != null)
             {
+                Canvas.ForceUpdateCanvases();
                 LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
             }
         }
 
-        private void CreateLevelListItem(string path)
+        private void CreateLevelListItem(string path, int order)
         {
             RkslManifest man = null;
             if (!Store.LoadManifestOnly(path, out man) || man == null)
@@ -560,13 +572,12 @@ namespace RKS.RhythmParkour.UI
                 Debug.LogError("[MenuController] _levelButtonPrefab не назначен — кнопка уровня не создана.", this);
                 return;
             }
-            var btnGO = Instantiate(_levelButtonPrefab, _levelListContainer);
+            var btnGO = Instantiate(_levelButtonPrefab, _levelListContainer, false);
 
             var rect = btnGO.GetComponent<RectTransform>();
             if (rect != null)
             {
                 rect.localScale = Vector3.one;
-                rect.localPosition = new Vector3(rect.localPosition.x, rect.localPosition.y, 0f);
 
                 var le = btnGO.GetComponent<LayoutElement>();
                 if (le == null) le = btnGO.AddComponent<LayoutElement>();
@@ -588,6 +599,37 @@ namespace RKS.RhythmParkour.UI
             }
             btn.interactable = true;
             btn.onClick.AddListener(() => HandleLevelClick(path));
+
+            AnimateLevelButtonIn(btnGO, order, man == null);
+        }
+
+        private void AnimateLevelButtonIn(GameObject btnGO, int order, bool invalid)
+        {
+            var feedback = btnGO.GetComponent<UIInteractionFeedback>();
+            if (feedback != null) feedback.enabled = false;
+            btnGO.transform.localScale = Vector3.zero;
+            btnGO.transform
+                .DOScale(Vector3.one, 0.35f)
+                .SetDelay(Mathf.Min(order * 0.06f, 0.6f))
+                .SetEase(Ease.OutBack)
+                .OnComplete(() =>
+                {
+                    if (feedback != null) feedback.enabled = !invalid;
+                });
+            if (invalid) AddCollapseOnHover(btnGO);
+        }
+
+        private void AddCollapseOnHover(GameObject btnGO)
+        {
+            var trigger = btnGO.GetComponent<EventTrigger>();
+            if (trigger == null) trigger = btnGO.AddComponent<EventTrigger>();
+            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
+            entry.callback.AddListener(_ =>
+            {
+                btnGO.transform.DOKill();
+                btnGO.transform.DOScale(Vector3.zero, 0.12f).SetEase(Ease.OutQuad);
+            });
+            trigger.triggers.Add(entry);
         }
 
         private void HandleLevelClick(string path)
@@ -611,6 +653,13 @@ namespace RKS.RhythmParkour.UI
         #endregion
 
         #region Level Details Logic
+
+        private void UpdateDetailsButtonsState()
+        {
+            bool hasSelection = !string.IsNullOrEmpty(_selectedLevelPath);
+            if (_editLevelButton != null) _editLevelButton.interactable = hasSelection;
+            if (_deleteLevelButton != null) _deleteLevelButton.interactable = hasSelection;
+        }
 
         private void PopulateDetails(string path)
         {
@@ -728,6 +777,7 @@ namespace RKS.RhythmParkour.UI
             }
 
             _selectedLevelPath = null;
+            UpdateDetailsButtonsState();
 
             HideDeleteConfirmationImmediate();
             HideLevelDetailsImmediate();
