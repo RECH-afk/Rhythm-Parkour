@@ -289,8 +289,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d15d6deeccba448488207f2831f22051, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIInteractionFeedback
-  onPointerEnterSoundName: Bubble
-  onClickSoundName: TrickleClicker
+  onPointerEnterSoundName: button_sfx
+  onClickSoundName: button_sfx
   hoverScale: 1.05
   pressScale: 0.9
   duration: 0.15

@@ -295,10 +295,36 @@ namespace RKS.RhythmParkour.Core.Managers
         #region Music System
         public void PlayMusic(AudioClip clip, float fadeTime = 1f)
         {
-            StartCoroutine(CrossfadeMusic(clip, fadeTime));
+            PlayMusic(clip, fadeTime, 0f);
         }
 
-        private IEnumerator CrossfadeMusic(AudioClip newClip, float fadeTime)
+        public void PlayMusic(AudioClip clip, float fadeTime, float startTime)
+        {
+            StartCoroutine(CrossfadeMusic(clip, fadeTime, startTime));
+        }
+
+        public void StopMusic()
+        {
+            if (musicSourceA != null) musicSourceA.Stop();
+            if (musicSourceB != null) musicSourceB.Stop();
+        }
+
+        public bool IsMusicPlaying()
+        {
+            return (musicSourceA != null && musicSourceA.isPlaying)
+                || (musicSourceB != null && musicSourceB.isPlaying);
+        }
+
+        public float GetMusicTime()
+        {
+            AudioSource next = isPlayingMusicA ? musicSourceB : musicSourceA;
+            if (next != null && next.isPlaying && next.clip != null) return next.time;
+            AudioSource active = isPlayingMusicA ? musicSourceA : musicSourceB;
+            if (active != null && active.isPlaying && active.clip != null) return active.time;
+            return -1f;
+        }
+
+        private IEnumerator CrossfadeMusic(AudioClip newClip, float fadeTime, float startTime)
         {
             AudioSource active = isPlayingMusicA ? musicSourceA : musicSourceB;
             AudioSource next = isPlayingMusicA ? musicSourceB : musicSourceA;
@@ -306,6 +332,8 @@ namespace RKS.RhythmParkour.Core.Managers
             next.clip = newClip;
             next.volume = 0f;
             next.loop = true;
+            if (startTime > 0f && newClip != null && startTime < newClip.length)
+                next.time = startTime;
             next.Play();
 
             float t = 0f;

@@ -17,6 +17,7 @@ namespace RKS.RhythmParkour.Core.Storage
         bool Extract(string rkslPath, string extractDir, out RkslManifest manifest, out string audioPath, out string videoPath, out string coverPath);
         List<string> FindAllRkslFiles(IEnumerable<string> extraPaths = null);
         bool LoadManifestOnly(string rkslPath, out RkslManifest manifest);
+        bool TryReuseExtracted(string rkslPath, string extractDir, out string audioPath, out string videoPath, out string coverPath);
         RhythmLevelData ToRuntimeData(RkslManifest manifest, AudioClip audioClip, VideoClip videoClip, Sprite cover);
         RkslManifest FromRuntimeData(RhythmLevelData data);
     }

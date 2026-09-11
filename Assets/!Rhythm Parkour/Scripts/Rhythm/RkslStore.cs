@@ -25,6 +25,8 @@ namespace RKS.RhythmParkour.Rhythm
         public static IRkslStore Shared { get; } = new RkslStore(new RechCodec());
 
         private readonly IDataCodec _codec;
+        private readonly Dictionary<string, (DateTime stamp, RkslManifest manifest)> _manifestCache =
+            new Dictionary<string, (DateTime stamp, RkslManifest manifest)>(StringComparer.OrdinalIgnoreCase);
 
         [Inject]
         public RkslStore(IDataCodec codec)
@@ -157,14 +159,57 @@ namespace RKS.RhythmParkour.Rhythm
             manifest = null;
             try
             {
+                if (!File.Exists(rkslPath)) return false;
+                DateTime stamp = File.GetLastWriteTimeUtc(rkslPath);
+                if (_manifestCache.TryGetValue(rkslPath, out var cached) && cached.stamp == stamp)
+                {
+                    manifest = cached.manifest;
+                    return manifest != null;
+                }
                 using (var zip = ZipFile.OpenRead(rkslPath))
                 {
                     if (!TryReadManifest(zip, out string json)) return false;
                     manifest = JsonUtility.FromJson<RkslManifest>(json);
+                    if (_manifestCache.Count > 511) _manifestCache.Clear();
+                    _manifestCache[rkslPath] = (stamp, manifest);
                     return manifest != null;
                 }
             }
             catch (Exception e) { Debug.LogError($"[Rksl] LoadManifest {rkslPath}: {e}"); return false; }
+        }
+
+        public bool TryReuseExtracted(string rkslPath, string extractDir, out string audioPath, out string videoPath, out string coverPath)
+        {
+            audioPath = null; videoPath = null; coverPath = null;
+            try
+            {
+                if (string.IsNullOrEmpty(rkslPath) || !File.Exists(rkslPath)) return false;
+                if (string.IsNullOrEmpty(extractDir) || !Directory.Exists(extractDir)) return false;
+                if (!TryReadManifestFile(extractDir, out string json)) return false;
+                var manifest = JsonUtility.FromJson<RkslManifest>(json);
+                if (manifest == null) return false;
+                if (!string.IsNullOrEmpty(manifest.audioFile))
+                {
+                    string p = Path.Combine(extractDir, manifest.audioFile);
+                    if (!File.Exists(p)) return false;
+                    audioPath = p;
+                }
+                else return false;
+                if (!string.IsNullOrEmpty(manifest.videoFile))
+                {
+                    string p = Path.Combine(extractDir, manifest.videoFile);
+                    if (!File.Exists(p)) return false;
+                    videoPath = p;
+                }
+                if (!string.IsNullOrEmpty(manifest.coverFile))
+                {
+                    string p = Path.Combine(extractDir, manifest.coverFile);
+                    if (!File.Exists(p)) return false;
+                    coverPath = p;
+                }
+                return true;
+            }
+            catch (Exception e) { Debug.LogWarning($"[Rksl] Reuse check failed: {e.Message}"); return false; }
         }
 
         public List<string> FindAllRkslFiles(IEnumerable<string> extraPaths = null)

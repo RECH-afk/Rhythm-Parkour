@@ -4,7 +4,9 @@ using System.IO;
 using RKS.RhythmParkour.Core;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.Networking;
 using UnityEngine.UI;
+using UnityEngine.Video;
 using UnityEngine.SceneManagement;
 using TMPro;
 using DG.Tweening;
@@ -37,6 +39,9 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private GameObject _levelListMenuRoot;
         [SerializeField] private Transform _levelListContainer;
         [SerializeField] private GameObject _levelButtonPrefab;
+
+        [Header("Level Selection")]
+        [SerializeField] private Color _selectedButtonColor = new Color(0.45f, 0.85f, 1f, 1f);
 
         [Header("Level Details Panel")]
         [SerializeField] private GameObject _levelDetailsRoot;
@@ -76,8 +81,12 @@ namespace RKS.RhythmParkour.UI
         private bool _isTransitioning = false;
 
         private Sequence _transitionSequence;
+        private Tween _detailsRefreshTween;
 
         private readonly Dictionary<GameObject, Vector2> _originalPositions = new();
+        private readonly Dictionary<string, GameObject> _levelButtonGOs = new();
+        private readonly Dictionary<GameObject, Color> _buttonBaseColors = new();
+        private GameObject _selectedButtonGO;
 
         [HideInInspector]
         [InjectOptional] public LevelTransfer transfer;
@@ -85,6 +94,29 @@ namespace RKS.RhythmParkour.UI
         [InjectOptional] public IRkslStore rksl;
 
         private IRkslStore Store => rksl ?? RkslStore.Shared;
+
+        [Header("Level Preview")]
+        public VideoPlayer previewVideo;
+        public Image backgroundImage;
+        public float blendFadeDuration = 1.2f;
+        public float previewFadeTime = 1f;
+        public float resyncThreshold = 0.35f;
+
+        private Material _bgMat;
+        private Coroutine _previewRoutine;
+        private Coroutine _layoutRebuildRoutine;
+        private int _previewSeq;
+        private bool _previewVideoReady;
+        private double _lastVideoTime;
+        private float _lastResyncTime;
+        private int _detailsSeq;
+        private Sprite _coverSprite;
+        private AudioClip _previewClip;
+        private string _previewClipPath = "";
+        private string _lastPreviewRkslPath = "";
+        private string _lastPreviewAudioPath = "";
+        private string _lastPreviewVideoPath = "";
+        private string _lastPreviewCoverPath = "";
 
         #endregion
 
@@ -108,6 +140,28 @@ namespace RKS.RhythmParkour.UI
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
             UpdateDetailsButtonsState();
+
+            if (previewVideo == null)
+            {
+                previewVideo = GetComponent<VideoPlayer>();
+                if (previewVideo == null) previewVideo = FindAnyObjectByType<VideoPlayer>();
+                if (previewVideo == null)
+                    Debug.LogWarning("[MenuController] Preview VideoPlayer не найден — назначь поле previewVideo.", this);
+            }
+            if (backgroundImage == null)
+            {
+                var bgGO = GameObject.Find("Background");
+                if (bgGO != null) backgroundImage = bgGO.GetComponent<Image>();
+                if (backgroundImage == null)
+                    Debug.LogWarning("[MenuController] Фон не найден — назначь поле backgroundImage.", this);
+            }
+            if (previewVideo != null)
+            {
+                previewVideo.playOnAwake = false;
+                previewVideo.isLooping = true;
+                previewVideo.errorReceived -= OnPreviewVideoError;
+                previewVideo.errorReceived += OnPreviewVideoError;
+            }
 
             CacheOriginalPosition(_mainMenuRoot);
             CacheOriginalPosition(_levelListMenuRoot);
@@ -139,10 +193,45 @@ namespace RKS.RhythmParkour.UI
                     ShowQuitConfirmation();
                 }
             }
+            SyncPreviewVideo();
+        }
+
+        private void SyncPreviewVideo()
+        {
+            if (!_previewVideoReady || Audio == null || previewVideo == null) return;
+            if (!previewVideo.isPlaying || !previewVideo.isPrepared) return;
+            float musicTime = Audio.GetMusicTime();
+            if (musicTime < 0f) return;
+            double vt = previewVideo.time;
+            if (Mathf.Abs((float)(vt - _lastVideoTime)) < 0.0001f) return;
+            _lastVideoTime = vt;
+            if (Time.unscaledTime - _lastResyncTime < 1f) return;
+            if (Mathf.Abs((float)(vt - musicTime)) > resyncThreshold)
+            {
+                previewVideo.time = musicTime;
+                _lastVideoTime = musicTime;
+                _lastResyncTime = Time.unscaledTime;
+            }
         }
 
         protected override void OnDisposed()
         {
+            StopLevelPreview();
+            if (_previewClip != null)
+            {
+                Destroy(_previewClip);
+                _previewClip = null;
+            }
+            if (_coverSprite != null)
+            {
+                if (_coverSprite.texture != null) Destroy(_coverSprite.texture);
+                Destroy(_coverSprite);
+                _coverSprite = null;
+            }
+            if (_bgMat != null && _bgMat.HasProperty("_BaseStrength"))
+                _bgMat.SetFloat("_BaseStrength", 0f);
+            if (previewVideo != null) previewVideo.errorReceived -= OnPreviewVideoError;
+            if (_detailsRefreshTween != null && _detailsRefreshTween.IsActive()) _detailsRefreshTween.Kill();
             DOTween.Kill(this);
             _transitionSequence?.Kill(true);
         }
@@ -391,7 +480,9 @@ namespace RKS.RhythmParkour.UI
         private void ShowMainMenu()
         {
             if (_isTransitioning) return;
+            StopLevelPreview();
             _selectedLevelPath = null;
+            SetSelectedButton(null);
             UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             HideQuitConfirmationImmediate();
@@ -401,7 +492,9 @@ namespace RKS.RhythmParkour.UI
         public void ShowLevelList()
         {
             if (_isTransitioning) return;
+            StopLevelPreview();
             _selectedLevelPath = null;
+            SetSelectedButton(null);
             UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             HideQuitConfirmationImmediate();
@@ -419,10 +512,32 @@ namespace RKS.RhythmParkour.UI
         {
             if (_isTransitioning) return;
             if (_selectedLevelPath == path && _levelDetailsRoot != null && _levelDetailsRoot.activeSelf) return;
+            bool switchWhileOpen = _selectedLevelPath != path
+                && _levelDetailsRoot != null
+                && _levelDetailsRoot.activeSelf;
             _selectedLevelPath = path;
+            _detailsSeq++;
+            SetSelectedButton(path);
             UpdateDetailsButtonsState();
             PopulateDetails(path);
-            TransitionTo(_levelDetailsRoot);
+            StartCoroutine(DetailsMediaRoutine(path, _detailsSeq));
+            if (switchWhileOpen)
+                PlayDetailsRefreshAnimation();
+            else
+                TransitionTo(_levelDetailsRoot);
+        }
+
+        private void PlayDetailsRefreshAnimation()
+        {
+            if (_levelDetailsRoot == null) return;
+            var rt = _levelDetailsRoot.GetComponent<RectTransform>();
+            if (rt == null) return;
+            if (_detailsRefreshTween != null && _detailsRefreshTween.IsActive()) _detailsRefreshTween.Kill();
+            Vector2 origPos = _originalPositions.TryGetValue(_levelDetailsRoot, out var o) ? o : rt.anchoredPosition;
+            rt.anchoredPosition = origPos;
+            _detailsRefreshTween = DOTween.Sequence()
+                .Append(rt.DOAnchorPosY(origPos.y - 120f, 0.18f).SetEase(Ease.InQuad))
+                .Append(rt.DOAnchorPosY(origPos.y, 0.35f).SetEase(Ease.OutCubic));
         }
 
         private void HideLevelDetails()
@@ -432,7 +547,9 @@ namespace RKS.RhythmParkour.UI
 
             _isTransitioning = true;
             _selectedLevelPath = null;
+            SetSelectedButton(null);
             UpdateDetailsButtonsState();
+            StopLevelPreview();
 
             var rt = _levelDetailsRoot.GetComponent<RectTransform>();
             rt.DOKill(true);
@@ -465,6 +582,7 @@ namespace RKS.RhythmParkour.UI
 
         private void HideLevelDetailsImmediate()
         {
+            StopLevelPreview();
             if (_levelDetailsRoot != null && _levelDetailsRoot.activeSelf)
             {
                 _levelDetailsRoot.GetComponent<RectTransform>()?.DOKill(true);
@@ -535,6 +653,9 @@ namespace RKS.RhythmParkour.UI
         {
             if (_levelListContainer == null) return;
 
+            ClearSelectedButtonVisual();
+            _levelButtonGOs.Clear();
+            _buttonBaseColors.Clear();
             for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
             {
                 var child = _levelListContainer.GetChild(i).gameObject;
@@ -546,16 +667,28 @@ namespace RKS.RhythmParkour.UI
             _foundPaths.Clear();
             _foundPaths.AddRange(Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
 
-            if (_foundPaths.Count == 0) return;
-
             for (int i = 0; i < _foundPaths.Count; i++) CreateLevelListItem(_foundPaths[i], i);
 
+            RequestLayoutRefresh();
+        }
+
+        private void RequestLayoutRefresh()
+        {
             var containerRT = _levelListContainer as RectTransform;
-            if (containerRT != null)
-            {
-                Canvas.ForceUpdateCanvases();
-                LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
-            }
+            if (containerRT == null) return;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
+            if (_layoutRebuildRoutine != null) StopCoroutine(_layoutRebuildRoutine);
+            _layoutRebuildRoutine = StartCoroutine(RebuildLayoutNextFrame(containerRT));
+        }
+
+        private IEnumerator RebuildLayoutNextFrame(RectTransform containerRT)
+        {
+            yield return new WaitForEndOfFrame();
+            _layoutRebuildRoutine = null;
+            if (containerRT == null) yield break;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(containerRT);
         }
 
         private void CreateLevelListItem(string path, int order)
@@ -599,8 +732,33 @@ namespace RKS.RhythmParkour.UI
             }
             btn.interactable = true;
             btn.onClick.AddListener(() => HandleLevelClick(path));
+            _levelButtonGOs[path] = btnGO;
 
             AnimateLevelButtonIn(btnGO, order, man == null);
+        }
+
+        private void SetSelectedButton(string path)
+        {
+            ClearSelectedButtonVisual();
+            if (string.IsNullOrEmpty(path)) return;
+            if (!_levelButtonGOs.TryGetValue(path, out var btnGO) || btnGO == null) return;
+            var img = btnGO.GetComponent<Image>();
+            if (img == null) img = btnGO.GetComponentInChildren<Image>(true);
+            if (img == null) return;
+            _selectedButtonGO = btnGO;
+            _buttonBaseColors[btnGO] = img.color;
+            img.color = _selectedButtonColor;
+        }
+
+        private void ClearSelectedButtonVisual()
+        {
+            if (_selectedButtonGO == null) return;
+            var img = _selectedButtonGO.GetComponent<Image>();
+            if (img == null) img = _selectedButtonGO.GetComponentInChildren<Image>(true);
+            if (img != null && _buttonBaseColors.TryGetValue(_selectedButtonGO, out var baseColor))
+                img.color = baseColor;
+            _buttonBaseColors.Remove(_selectedButtonGO);
+            _selectedButtonGO = null;
         }
 
         private void AnimateLevelButtonIn(GameObject btnGO, int order, bool invalid)
@@ -667,44 +825,76 @@ namespace RKS.RhythmParkour.UI
             if (!Store.LoadManifestOnly(path, out man) || man == null)
                 Debug.LogWarning($"[MenuController] Не удалось прочитать манифест уровня: {path}", this);
 
-            if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0} BPM" : "N/A";
+            if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0}" : "N/A";
             if (_detailDurationText) _detailDurationText.text = man != null && man.duration > 0f ? FormatDuration(man.duration) : "N/A";
-            if (_detailNotesText) _detailNotesText.text = man != null ? $"{man.events.Count} нот" : "0 нот";
-            if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "Неизвестен";
-            if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "Неизвестен";
-            if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "Без названия";
-
-            LoadCoverImage(path);
+            if (_detailNotesText) _detailNotesText.text = man != null ? $"{man.events.Count}" : "N/A";
+            if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "N/A";
+            if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "N/A";
+            if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "N/A";
         }
 
-        private static string FormatDuration(float seconds)
+        private IEnumerator DetailsMediaRoutine(string rkslPath, int seq)
         {
-            int total = Mathf.RoundToInt(Mathf.Max(0f, seconds));
-            return $"{total / 60:0}:{total % 60:00}";
-        }
-
-        private void LoadCoverImage(string rkslPath)
-        {
-            if (_levelCoverImage == null) return;
-
-            _levelCoverImage.sprite = null;
+            yield return null;
+            if (seq != _detailsSeq) yield break;
 
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslCover_" + Path.GetFileNameWithoutExtension(rkslPath));
 
-            if (!Store.Extract(rkslPath, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
-                return;
+            string audioPath;
+            string videoPath;
+            string coverPath;
+            if (rkslPath == _lastPreviewRkslPath && PreviewCacheValid())
+            {
+                audioPath = _lastPreviewAudioPath;
+                videoPath = _lastPreviewVideoPath;
+                coverPath = _lastPreviewCoverPath;
+            }
+            else if (Store.TryReuseExtracted(rkslPath, extractDir, out audioPath, out videoPath, out coverPath))
+            {
+                _lastPreviewRkslPath = rkslPath;
+                _lastPreviewAudioPath = audioPath;
+                _lastPreviewVideoPath = videoPath;
+                _lastPreviewCoverPath = coverPath;
+            }
+            else if (!Store.Extract(rkslPath, extractDir, out RkslManifest man, out audioPath, out videoPath, out coverPath))
+            {
+                yield break;
+            }
+            else
+            {
+                _lastPreviewRkslPath = rkslPath;
+                _lastPreviewAudioPath = audioPath;
+                _lastPreviewVideoPath = videoPath;
+                _lastPreviewCoverPath = coverPath;
+            }
+            if (seq != _detailsSeq) yield break;
 
-            if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath))
-                return;
+            yield return null;
+            if (seq != _detailsSeq) yield break;
 
+            PlayLevelPreview(audioPath, videoPath);
+            SetCoverSprite(coverPath);
+        }
+
+        private void SetCoverSprite(string coverPath)
+        {
+            if (_levelCoverImage == null) return;
+            if (_coverSprite != null)
+            {
+                if (_coverSprite.texture != null) Destroy(_coverSprite.texture);
+                Destroy(_coverSprite);
+                _coverSprite = null;
+            }
+            _levelCoverImage.sprite = null;
+            if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath)) return;
             try
             {
                 byte[] bytes = File.ReadAllBytes(coverPath);
                 Texture2D tex = new Texture2D(2, 2);
                 if (tex.LoadImage(bytes))
                 {
-                    Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
-                    _levelCoverImage.sprite = sprite;
+                    _coverSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
+                    _levelCoverImage.sprite = _coverSprite;
                 }
                 else
                 {
@@ -717,9 +907,213 @@ namespace RKS.RhythmParkour.UI
             }
         }
 
+        private static string FormatDuration(float seconds)
+        {
+            int total = Mathf.RoundToInt(Mathf.Max(0f, seconds));
+            return $"{total / 60:0}:{total % 60:00}";
+        }
+
+        private bool PreviewCacheValid()
+        {
+            if (string.IsNullOrEmpty(_lastPreviewAudioPath) || !File.Exists(_lastPreviewAudioPath)) return false;
+            if (!string.IsNullOrEmpty(_lastPreviewVideoPath) && !File.Exists(_lastPreviewVideoPath)) return false;
+            return true;
+        }
+
+        #region Level Preview
+
+        public bool IsPreviewPlaying => (Audio != null && Audio.IsMusicPlaying())
+            || (previewVideo != null && previewVideo.isPlaying);
+
+        public void PlayLevelPreview(string audioPath, string videoPath)
+        {
+            if (previewVideo != null && !previewVideo.gameObject.activeSelf)
+                previewVideo.gameObject.SetActive(true);
+            bool wasShowingVideo = _previewVideoReady;
+            StopLevelPreviewInternal();
+            _previewSeq++;
+            if (wasShowingVideo) FadeBackgroundBlend(0f, 0.35f);
+            _previewRoutine = StartCoroutine(PreviewRoutine(audioPath, videoPath, _previewSeq));
+        }
+
+        public void StopLevelPreview()
+        {
+            StopLevelPreviewInternal();
+            _previewSeq++;
+            _detailsSeq++;
+            FadeBackgroundBlend(0f);
+        }
+
+        private void StopLevelPreviewInternal()
+        {
+            _previewVideoReady = false;
+            if (_previewRoutine != null)
+            {
+                StopCoroutine(_previewRoutine);
+                _previewRoutine = null;
+            }
+            if (Audio != null) Audio.StopMusic();
+            if (previewVideo != null) previewVideo.Stop();
+            if (_bgMat != null) _bgMat.DOKill();
+        }
+
+        private IEnumerator PreviewRoutine(string audioPath, string videoPath, int seq)
+        {
+            yield return null;
+
+            AudioClip clip = null;
+            if (!string.IsNullOrEmpty(audioPath) && File.Exists(audioPath))
+            {
+                if (_previewClip != null && _previewClipPath == audioPath)
+                {
+                    clip = _previewClip;
+                }
+                else
+                {
+                    if (_previewClip != null)
+                    {
+                        Destroy(_previewClip);
+                        _previewClip = null;
+                        _previewClipPath = "";
+                    }
+                    using (var uwr = UnityWebRequestMultimedia.GetAudioClip(RkslStore.GetFileUri(audioPath), RkslStore.GetAudioType(audioPath)))
+                    {
+                        yield return uwr.SendWebRequest();
+                        if (seq != _previewSeq) yield break;
+                        if (uwr.result == UnityWebRequest.Result.Success)
+                            clip = DownloadHandlerAudioClip.GetContent(uwr);
+                        else
+                            Debug.LogWarning($"[MenuController] Preview audio failed: {uwr.error}", this);
+                    }
+                    yield return null;
+                    if (seq != _previewSeq) yield break;
+                    _previewClip = clip;
+                    _previewClipPath = clip != null ? audioPath : "";
+                }
+            }
+            if (seq != _previewSeq) yield break;
+
+            bool wantVideo = !string.IsNullOrEmpty(videoPath) && File.Exists(videoPath) && previewVideo != null;
+            float start = clip != null && clip.length > 1f ? Random.Range(0f, clip.length - 0.5f) : 0f;
+
+            if (wantVideo)
+            {
+                ClearVideoTarget();
+                previewVideo.source = VideoSource.Url;
+                previewVideo.url = RkslStore.GetFileUri(videoPath);
+                previewVideo.isLooping = true;
+                bool prepared = false;
+                VideoPlayer.EventHandler onPrepared = vp => prepared = true;
+                previewVideo.prepareCompleted += onPrepared;
+                previewVideo.Prepare();
+                float wait = 0f;
+                while (!prepared && wait < 15f && seq == _previewSeq)
+                {
+                    wait += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+                previewVideo.prepareCompleted -= onPrepared;
+                if (seq != _previewSeq) yield break;
+                if (!prepared)
+                {
+                    Debug.LogWarning("[MenuController] Preview video prepare timed out, audio only.", this);
+                    FadeBackgroundBlend(0f);
+                    wantVideo = false;
+                }
+            }
+            else
+            {
+                if (previewVideo != null) previewVideo.Stop();
+                FadeBackgroundBlend(0f);
+            }
+
+            if (seq != _previewSeq) yield break;
+            if (clip != null && Audio != null)
+                Audio.PlayMusic(clip, previewFadeTime, start);
+            if (wantVideo)
+            {
+                previewVideo.Play();
+                float waitFrames = 0f;
+                while (previewVideo.frame <= 0 && waitFrames < 5f && seq == _previewSeq)
+                {
+                    waitFrames += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+                if (seq != _previewSeq) yield break;
+                if (previewVideo.frame > 0)
+                {
+                    float anchor = Audio != null ? Audio.GetMusicTime() : -1f;
+                    if (anchor < 0f) anchor = start;
+                    double vlen = previewVideo.length;
+                    if (vlen > 0.5) previewVideo.time = anchor % vlen;
+                    _lastVideoTime = previewVideo.time;
+                    _lastResyncTime = Time.unscaledTime;
+                    ApplyVideoTexture();
+                    FadeBackgroundBlend(1f);
+                    _previewVideoReady = clip != null;
+                }
+                else
+                {
+                    Debug.LogWarning("[MenuController] Preview video produced no frames.", this);
+                    previewVideo.Stop();
+                    FadeBackgroundBlend(0f);
+                    _previewVideoReady = false;
+                }
+            }
+            else
+            {
+                _previewVideoReady = false;
+            }
+            _previewRoutine = null;
+        }
+
+        private void ClearVideoTarget()
+        {
+            if (previewVideo == null) return;
+            RenderTexture rt = previewVideo.targetTexture;
+            if (rt == null || !rt.IsCreated()) return;
+            RenderTexture prev = RenderTexture.active;
+            RenderTexture.active = rt;
+            GL.Clear(true, true, Color.black);
+            RenderTexture.active = prev;
+        }
+
+        private void ApplyVideoTexture()
+        {
+            if (_bgMat == null)
+            {
+                if (backgroundImage == null) return;
+                _bgMat = backgroundImage.material;
+            }
+            if (previewVideo == null || !_bgMat.HasProperty("_BaseTex")) return;
+            Texture vt = previewVideo.targetTexture != null ? (Texture)previewVideo.targetTexture : previewVideo.texture;
+            if (vt != null) _bgMat.SetTexture("_BaseTex", vt);
+        }
+
+        private void FadeBackgroundBlend(float target, float? durationOverride = null)
+        {
+            if (_bgMat == null)
+            {
+                if (backgroundImage == null) return;
+                _bgMat = backgroundImage.material;
+            }
+            if (!_bgMat.HasProperty("_BaseStrength")) return;
+            _bgMat.DOKill();
+            _bgMat.DOFloat(target, "_BaseStrength", durationOverride ?? blendFadeDuration).SetEase(Ease.InOutSine);
+        }
+
+        private void OnPreviewVideoError(VideoPlayer source, string message)
+        {
+            Debug.LogWarning($"[MenuController] Preview video error: {message}", this);
+            FadeBackgroundBlend(0f);
+        }
+
+        #endregion
+
         public void DeleteSelectedLevel()
         {
             if (_isTransitioning || string.IsNullOrEmpty(_selectedLevelPath)) return;
+            _detailsSeq++;
             ShowDeleteConfirmation();
         }
 
@@ -777,6 +1171,7 @@ namespace RKS.RhythmParkour.UI
             }
 
             _selectedLevelPath = null;
+            SetSelectedButton(null);
             UpdateDetailsButtonsState();
 
             HideDeleteConfirmationImmediate();
@@ -827,6 +1222,7 @@ namespace RKS.RhythmParkour.UI
 
         private void LoadAndPlay(string path)
         {
+            StopLevelPreview();
             if (transfer != null) transfer.SetRkslPath(path, "Menu");
             else if (Save != null)
             {
@@ -848,6 +1244,7 @@ namespace RKS.RhythmParkour.UI
 
         public void OpenNewLevelInEditor()
         {
+            StopLevelPreview();
             if (transfer != null)
             {
                 transfer.SetLevel(new RhythmLevelData { fullTitle = "New Level", bpm = 128f }, "Menu");
@@ -860,6 +1257,7 @@ namespace RKS.RhythmParkour.UI
 
         private IEnumerator LoadAndEditRoutine(string path)
         {
+            StopLevelPreview();
             string extractDir = Path.Combine(Application.temporaryCachePath, "RkslExtract_" + Path.GetFileNameWithoutExtension(path));
 
             if (!Store.Extract(path, extractDir, out RkslManifest man, out string audioPath, out string videoPath, out string coverPath))
