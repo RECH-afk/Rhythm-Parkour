@@ -18,6 +18,7 @@ public sealed class EditorInstaller : MonoInstaller
         [SerializeField] private LevelEditorVisualSettings visualSettings;
         [SerializeField] private RhythmParkourManager parkourManager;
         [SerializeField] private Conductor conductor;
+        [SerializeField] private TabsUI tabsUI;
 
         public override void InstallBindings()
         {
@@ -27,6 +28,7 @@ public sealed class EditorInstaller : MonoInstaller
             BindFromHierarchyOrInstance(visualSettings);
             BindFromHierarchyOrInstance(parkourManager);
             BindFromHierarchyOrInstance(conductor);
+            BindFromHierarchyOrInstance(tabsUI);
         }
 
         void BindFromHierarchyOrInstance<T>(T instance) where T : Component
