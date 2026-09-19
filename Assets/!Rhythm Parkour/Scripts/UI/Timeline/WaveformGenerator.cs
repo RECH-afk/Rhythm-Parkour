@@ -58,7 +58,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             return data;
         }
 
-        public static Texture2D GenerateTexture(float[] data, int texWidth, int texHeight, Color waveColor, Color backgroundColor, bool mirror = true)
+        public static Texture2D GenerateTexture(float[] data, int texWidth, int texHeight, Color waveColor, Color backgroundColor, bool mirror = true, float roundRadiusPx = 3f)
         {
             texWidth = Mathf.Clamp(texWidth, 512, 16384);
             texHeight = Mathf.Clamp(texHeight, 32, 512);
@@ -90,9 +90,11 @@ namespace RKS.RhythmParkour.UI.Timeline
             float[] blurred = new float[texWidth];
             for (int x = 0; x < texWidth; x++)
             {
-                float v = smooth[x] * 0.6f;
-                if (x > 0) v += smooth[x - 1] * 0.2f;
-                if (x + 1 < texWidth) v += smooth[x + 1] * 0.2f;
+                float v = smooth[x] * 0.375f;
+                if (x > 0) v += smooth[x - 1] * 0.25f;
+                if (x + 1 < texWidth) v += smooth[x + 1] * 0.25f;
+                if (x > 1) v += smooth[x - 2] * 0.0625f;
+                if (x + 2 < texWidth) v += smooth[x + 2] * 0.0625f;
                 blurred[x] = Mathf.Clamp01(v);
             }
 
@@ -106,15 +108,23 @@ namespace RKS.RhythmParkour.UI.Timeline
                 float hFloat = amp * (texHeight * 0.86f);
                 if (hFloat < 1f && amp > 0.015f) hFloat = 1f;
                 float half = hFloat * 0.5f;
+                float r = Mathf.Min(Mathf.Max(roundRadiusPx, 0f), half);
+                float inner = half - r;
                 int yStart = Mathf.Clamp(Mathf.FloorToInt(center - half - 1f), 0, texHeight - 1);
                 int yEnd = Mathf.Clamp(Mathf.CeilToInt(center + half + 1f), 0, texHeight - 1);
                 for (int y = yStart; y <= yEnd; y++)
                 {
                     float dist = Mathf.Abs(y - center);
-                    float coverage;
-                    if (dist <= half - 0.5f) coverage = 1f;
-                    else if (dist <= half + 0.5f) { coverage = Mathf.Clamp01((half + 0.5f - dist)); coverage = coverage * coverage * (3f - 2f * coverage); }
-                    else continue;
+                    float cap;
+                    if (dist <= inner) cap = 1f;
+                    else
+                    {
+                        float t = Mathf.Clamp01((dist - inner) / Mathf.Max(r, 0.001f));
+                        cap = Mathf.Sqrt(Mathf.Max(0f, 1f - t * t));
+                    }
+                    float aaEdge = Mathf.Clamp01(half + 0.5f - dist);
+                    aaEdge = aaEdge * aaEdge * (3f - 2f * aaEdge);
+                    float coverage = cap * aaEdge;
                     if (coverage <= 0.001f) continue;
                     float vDist = half > 0.001f ? dist / half : 0f;
                     float grad = 1f - vDist * 0.18f;

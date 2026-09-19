@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using RKS.RhythmParkour.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -125,6 +126,8 @@ namespace RKS.RhythmParkour.UI.Timeline
         public TMP_InputField propPrefabIndexInput;
         public TMP_Dropdown propPrefabDropdown;
         public TextMeshProUGUI propTitleLabel;
+        public TMP_InputField propSpeedInput;
+        private TextMeshProUGUI propPrefabButtonLabel;
 
         [Header("Сетка миниатюр (выбор вида)")]
         public GameObject prefabGridPanel;
@@ -249,6 +252,8 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (manager != null) manager.levelData = levelData;
                 RefreshAll();
             }
+
+            if (GetComponent<TimingsPanel>() == null) gameObject.AddComponent<TimingsPanel>();
         }
 
         protected override void OnDisposed()
@@ -1607,6 +1612,134 @@ namespace RKS.RhythmParkour.UI.Timeline
         public void SelectNote(int idx) { selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; RefreshNotes(); if (idx >= 0 && idx < levelData.events.Count) { FlashStatus($"Выбрано #{idx}  {FormatTime(GetHitTime(levelData.events[idx]))} — Ctrl+клик множ."); ShowPropertiesPanel(idx); } else HidePropertiesPanel(); }
         public void ToggleSelectNote(int idx) { if (selectedIndices.Contains(idx)) { selectedIndices.Remove(idx); if (selectedIndex == idx) selectedIndex = selectedIndices.Count > 0 ? new List<int>(selectedIndices)[selectedIndices.Count - 1] : -1; } else { selectedIndices.Add(idx); selectedIndex = idx; } RefreshNotes(); if (selectedIndex >= 0) ShowPropertiesPanel(selectedIndex); else HidePropertiesPanel(); FlashStatus($"Выделено {selectedIndices.Count} нот"); }
         public void DeselectNote() { selectedIndex = -1; selectedIndices.Clear(); RefreshNotes(); HidePropertiesPanel(); }
+        public static bool TryParseFloat(string s, out float v)
+        {
+            v = 0f;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            return float.TryParse(s.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out v);
+        }
+
+        Button MakePropButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, Color bg)
+        {
+            var go = new GameObject("Btn", typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            go.GetComponent<Image>().color = bg;
+            var le = go.AddComponent<LayoutElement>(); le.minHeight = 30; le.flexibleWidth = 1f;
+            var txtGO = new GameObject("Text", typeof(RectTransform));
+            txtGO.transform.SetParent(go.transform, false);
+            var trt = txtGO.GetComponent<RectTransform>(); trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            var tmp = txtGO.AddComponent<TextMeshProUGUI>(); tmp.text = text; tmp.fontSize = 13; tmp.alignment = TextAlignmentOptions.Center; tmp.color = Color.white;
+            var btn = go.GetComponent<Button>();
+            btn.onClick.AddListener(onClick);
+            return btn;
+        }
+
+        void EnsurePropertiesUI()
+        {
+            if (notePropertiesPanel == null) return;
+            Transform parent = notePropertiesPanel.transform;
+            var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
+            if (scroll != null && scroll.content != null) parent = scroll.content;
+            if (parent.GetComponent<VerticalLayoutGroup>() == null)
+            {
+                var pvlg = parent.gameObject.AddComponent<VerticalLayoutGroup>();
+                pvlg.spacing = 6;
+                pvlg.padding = new RectOffset(8, 8, 8, 8);
+                pvlg.childAlignment = TextAnchor.UpperCenter;
+                pvlg.childControlWidth = true;
+                pvlg.childControlHeight = false;
+                pvlg.childForceExpandWidth = true;
+                pvlg.childForceExpandHeight = false;
+                var pcsf = parent.gameObject.AddComponent<ContentSizeFitter>();
+                pcsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            }
+
+            if (propTitleLabel == null)
+            {
+                var titleGO = new GameObject("Title", typeof(RectTransform));
+                titleGO.transform.SetParent(parent, false);
+                var ttmp = titleGO.AddComponent<TextMeshProUGUI>(); ttmp.fontSize = 14; ttmp.fontStyle = FontStyles.Bold; ttmp.alignment = TextAlignmentOptions.Center; ttmp.color = Color.white;
+                var tle = titleGO.AddComponent<LayoutElement>(); tle.minHeight = 24; tle.flexibleWidth = 1f;
+                propTitleLabel = ttmp;
+            }
+
+            if (propPrefabButtonLabel == null)
+            {
+                var btn = MakePropButton(parent, "Вид", () => ShowPrefabGrid(), new Color(0.16f, 0.22f, 0.32f, 1f));
+                btn.name = "PrefabButton";
+                propPrefabButtonLabel = btn.GetComponentInChildren<TextMeshProUGUI>();
+            }
+
+            EnsurePropSpeedRow();
+
+            if (parent.Find("DeleteCloseRow") == null)
+            {
+                var rowGO = new GameObject("DeleteCloseRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+                rowGO.transform.SetParent(parent, false);
+                var hlg = rowGO.GetComponent<HorizontalLayoutGroup>(); hlg.spacing = 8; hlg.childAlignment = TextAnchor.MiddleCenter; hlg.childControlWidth = true; hlg.childControlHeight = true; hlg.childForceExpandWidth = true; hlg.childForceExpandHeight = false;
+                var rle = rowGO.AddComponent<LayoutElement>(); rle.minHeight = 30;
+                var del = MakePropButton(rowGO.transform, "× Удалить", () => OnPropDelete(), new Color(0.5f, 0.2f, 0.2f, 1f));
+                del.name = "DeleteButton";
+                var close = MakePropButton(rowGO.transform, "Закрыть", () => DeselectNote(), new Color(0.25f, 0.25f, 0.28f, 1f));
+                close.name = "CloseButton";
+            }
+        }
+
+        void EnsurePropSpeedRow()
+        {
+            if (propSpeedInput != null || notePropertiesPanel == null) return;
+            Transform parent = notePropertiesPanel.transform;
+            var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
+            if (scroll != null && scroll.content != null) parent = scroll.content;
+            if (parent.GetComponent<VerticalLayoutGroup>() == null)
+            {
+                var pvlg = parent.gameObject.AddComponent<VerticalLayoutGroup>();
+                pvlg.spacing = 6;
+                pvlg.padding = new RectOffset(8, 8, 8, 8);
+                pvlg.childAlignment = TextAnchor.UpperCenter;
+                pvlg.childControlWidth = true;
+                pvlg.childControlHeight = false;
+                pvlg.childForceExpandWidth = true;
+                pvlg.childForceExpandHeight = false;
+                var pcsf = parent.gameObject.AddComponent<ContentSizeFitter>();
+                pcsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            }
+
+            var rowGO = new GameObject("SpeedRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            rowGO.transform.SetParent(parent, false);
+            var hlg = rowGO.GetComponent<HorizontalLayoutGroup>(); hlg.spacing = 8; hlg.childAlignment = TextAnchor.MiddleLeft; hlg.childControlWidth = true; hlg.childControlHeight = true; hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
+            var rle = rowGO.AddComponent<LayoutElement>(); rle.minHeight = 30;
+
+            var labGO = new GameObject("Label", typeof(RectTransform));
+            labGO.transform.SetParent(rowGO.transform, false);
+            var ltmp = labGO.AddComponent<TextMeshProUGUI>(); ltmp.text = "Скорость"; ltmp.fontSize = 13; ltmp.alignment = TextAlignmentOptions.MidlineLeft; ltmp.color = new Color(1, 1, 1, 0.85f);
+            var lle = labGO.AddComponent<LayoutElement>(); lle.minWidth = 90; lle.preferredWidth = 90;
+
+            var inGO = new GameObject("SpeedInput", typeof(RectTransform), typeof(Image), typeof(TMP_InputField));
+            inGO.transform.SetParent(rowGO.transform, false);
+            var iimg = inGO.GetComponent<Image>(); iimg.color = new Color(0, 0, 0, 0.35f);
+            var input = inGO.GetComponent<TMP_InputField>();
+            var areaGO = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D));
+            areaGO.transform.SetParent(inGO.transform, false);
+            var art = areaGO.GetComponent<RectTransform>(); art.anchorMin = Vector2.zero; art.anchorMax = Vector2.one; art.offsetMin = new Vector2(6, 2); art.offsetMax = new Vector2(-6, -2);
+            var txtGO = new GameObject("Text", typeof(RectTransform));
+            txtGO.transform.SetParent(areaGO.transform, false);
+            var trt = txtGO.GetComponent<RectTransform>(); trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            var ttmp = txtGO.AddComponent<TextMeshProUGUI>(); ttmp.fontSize = 13; ttmp.color = Color.white; ttmp.alignment = TextAlignmentOptions.MidlineLeft;
+            var phGO = new GameObject("Placeholder", typeof(RectTransform));
+            phGO.transform.SetParent(areaGO.transform, false);
+            var prt = phGO.GetComponent<RectTransform>(); prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one; prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
+            var ptmp = phGO.AddComponent<TextMeshProUGUI>(); ptmp.text = "авто"; ptmp.fontSize = 13; ptmp.color = new Color(1, 1, 1, 0.35f); ptmp.alignment = TextAlignmentOptions.MidlineLeft;
+            input.textViewport = art;
+            input.textComponent = ttmp;
+            input.placeholder = ptmp;
+            input.contentType = TMP_InputField.ContentType.DecimalNumber;
+            input.characterLimit = 7;
+            var ile = inGO.AddComponent<LayoutElement>(); ile.minHeight = 30; ile.flexibleWidth = 1f;
+            propSpeedInput = input;
+            propSpeedInput.onEndEdit.AddListener(_ => ApplyPropertiesFromPanel());
+        }
+
         void ShowPropertiesPanel(int idx)
         {
             if (notePropertiesPanel == null)
@@ -1619,10 +1752,14 @@ namespace RKS.RhythmParkour.UI.Timeline
             notePropertiesPanel.SetActive(true);
             var ev = levelData.events[idx];
             float hitTime = GetHitTime(ev);
+            string speedTxt = ev.speed > 0.01f ? $" • {ev.speed:0.#} м/с" : " • авто";
             if (selectedIndices.Count > 1 && propTitleLabel != null) propTitleLabel.text = $"Выделено {selectedIndices.Count} нот";
-            else if (propTitleLabel != null) propTitleLabel.text = $"Нота #{idx} — {FormatTime(hitTime)} • {GetPrefabName(ev.prefabIndex)}";
+            else if (propTitleLabel != null) propTitleLabel.text = $"Нота #{idx} — {FormatTime(hitTime)} • {GetPrefabName(ev.prefabIndex)}{speedTxt}";
 
             if (propPrefabIndexInput != null) { propPrefabIndexInput.gameObject.SetActive(true); propPrefabIndexInput.SetTextWithoutNotify(ev.prefabIndex.ToString()); }
+            EnsurePropertiesUI();
+            if (propPrefabButtonLabel != null) propPrefabButtonLabel.text = $"Вид: {GetPrefabName(ev.prefabIndex)}";
+            if (propSpeedInput != null) { propSpeedInput.gameObject.SetActive(true); propSpeedInput.SetTextWithoutNotify(ev.speed > 0.01f ? ev.speed.ToString("0.##", CultureInfo.InvariantCulture) : ""); }
             if (propPrefabDropdown != null)
             {
                 propPrefabDropdown.gameObject.SetActive(true);
@@ -1660,7 +1797,30 @@ namespace RKS.RhythmParkour.UI.Timeline
             else if (propPrefabIndexInput != null && int.TryParse(propPrefabIndexInput.text, out int pi)) { int total = (catalog != null ? catalog.Count : 0); if (total == 0) total = levelData.PrefabCount(catalog); newPrefab = Mathf.Clamp(pi, 0, Mathf.Max(0, total - 1)); }
 
             var tgt = selectedIndices.Count > 1 ? new System.Collections.Generic.List<int>(selectedIndices) : new System.Collections.Generic.List<int>{selectedIndex};
-            foreach (var ti in tgt) { if (ti<0||ti>=levelData.events.Count) continue; var ee = levelData.events[ti]; ee.prefabIndex = newPrefab; levelData.events[ti]=ee; }
+            float newSpeed = ev.speed;
+            bool hasSpeed = false;
+            if (propSpeedInput != null && propSpeedInput.gameObject.activeInHierarchy)
+            {
+                if (string.IsNullOrWhiteSpace(propSpeedInput.text)) { newSpeed = 0f; hasSpeed = true; }
+                else if (TryParseFloat(propSpeedInput.text, out float sv)) { newSpeed = Mathf.Clamp(sv, 0f, 60f); hasSpeed = true; }
+                else FlashStatus("Скорость: число м/с (пусто = авто)");
+            }
+            foreach (var ti in tgt)
+            {
+                if (ti < 0 || ti >= levelData.events.Count) continue;
+                var ee = levelData.events[ti];
+                ee.prefabIndex = newPrefab;
+                if (hasSpeed && Mathf.Abs(ee.speed - newSpeed) > 0.001f)
+                {
+                    float hb = GetHitBeat(ee);
+                    ee.speed = newSpeed;
+                    float travel = GetTravelForEvent(ee);
+                    float spawnT = levelData.BeatToTime(hb) - travel;
+                    ee.beat = levelData.TimeToBeat(spawnT);
+                    ee.time = spawnT;
+                }
+                levelData.events[ti] = ee;
+            }
             preview?.ForceRefresh();
             levelData.SortByTime();
 
@@ -1685,6 +1845,30 @@ namespace RKS.RhythmParkour.UI.Timeline
 
             for (int i = 0; i < levelData.events.Count; i++) if (Mathf.Abs(GetHitBeat(levelData.events[i]) - hb) < 0.01f) { selectedIndex = i; break; }
             RefreshNotes();
+        }
+        public int ResnapAllNotes()
+        {
+            if (levelData == null || levelData.events.Count == 0) return 0;
+            float q = Mathf.Max(0.05f, quantStep);
+            float maxBeat = levelData.music != null ? levelData.TimeToBeat(levelData.music.length) : float.MaxValue;
+            int n = 0;
+            for (int i = 0; i < levelData.events.Count; i++)
+            {
+                var ev = levelData.events[i];
+                float snapped = Mathf.Clamp(Mathf.Round(GetHitBeat(ev) / q) * q, 0f, maxBeat);
+                if (Mathf.Abs(snapped - GetHitBeat(ev)) < 1e-4f) continue;
+                float travel = GetTravelForEvent(ev);
+                float spawnT = levelData.BeatToTime(snapped) - travel;
+                ev.beat = levelData.TimeToBeat(spawnT);
+                ev.time = spawnT;
+                levelData.events[i] = ev;
+                n++;
+            }
+            levelData.SortByTime();
+            selectedIndex = -1; selectedIndices.Clear();
+            RefreshNotes(); HidePropertiesPanel();
+            preview?.ForceRefresh();
+            return n;
         }
         public void ClearAllNotes()
         {
@@ -1895,90 +2079,6 @@ namespace RKS.RhythmParkour.UI.Timeline
         }
         void FlashStatus(string msg) { if (statusLabel != null) statusLabel.text = msg; Debug.Log($"[Timeline] {msg}", this); CancelInvoke(nameof(ClearStatus)); Invoke(nameof(ClearStatus), 3f); }
         void ClearStatus() { if (statusLabel != null) statusLabel.text = ""; }
-
-
-        public bool useFallbackGUI = true;
-        string fbLane = "0", fbSpeed = "12", fbScale = "1", fbRot = "0", fbComment = "", fbBeat = "0";
-        int fbLastIdx = -1;
-        Vector2 fbScroll;
-        bool fbShowGrid = false;
-
-        void OnGUI()
-        {
-            if (!useFallbackGUI) return;
-
-            bool hasPanel = notePropertiesPanel != null && notePropertiesPanel.activeSelf;
-            if (hasPanel) return;
-            if (selectedIndex < 0 || levelData == null || selectedIndex >= levelData.events.Count) return;
-
-            var ev = levelData.events[selectedIndex];
-            if (fbLastIdx != selectedIndex)
-            {
-                fbLastIdx = selectedIndex;
-                fbBeat = GetHitBeat(ev).ToString("0.##");
-                fbSpeed = ev.speed.ToString("0.##");
-                fbScale = ev.scale == Vector3.one ? "1" : $"{ev.scale.x:0.##},{ev.scale.y:0.##},{ev.scale.z:0.##}";
-                if (ev.scale.x == ev.scale.y && ev.scale.y == ev.scale.z) fbScale = ev.scale.x.ToString("0.##");
-                fbRot = ev.rotation == Vector3.zero ? "0" : $"{ev.rotation.x:0.#},{ev.rotation.y:0.#},{ev.rotation.z:0.#}";
-                fbLane = ev.position.x.ToString("0.##");
-                fbComment = ev.comment ?? "";
-            }
-
-            int total = (catalog != null ? catalog.Count : 0); if (total==0) total = levelData.PrefabCount(catalog);
-            Rect r = new Rect(Screen.width - 392, 80, 380, 560);
-            GUILayout.BeginArea(r, GUI.skin.window);
-            GUILayout.Label($"Нота #{selectedIndex} — {FormatTime(GetHitTime(ev))} — {GetPrefabName(ev.prefabIndex)}", new GUIStyle(GUI.skin.label){fontStyle=FontStyle.Bold, alignment=TextAnchor.MiddleCenter});
-            GUILayout.Space(4);
-            if (GUILayout.Button(fbShowGrid ? "▲ Скрыть выбор вида" : "▼ Выбрать вид...  (миниатюры)", GUILayout.Height(28))) fbShowGrid = !fbShowGrid;
-            if (fbShowGrid)
-            {
-                GUILayout.Label("Тип препятствия — выбери миниатюру:");
-                GUILayout.BeginHorizontal();
-                for (int i=0;i< Mathf.Min(total,8); i++)
-                {
-                    Color prev = GUI.backgroundColor;
-                    GUI.backgroundColor = ev.prefabIndex==i ? Color.green : Color.white;
-                    if (GUILayout.Button($"{i}", GUILayout.Width(38), GUILayout.Height(38)))
-                    {
-                        ev.prefabIndex = i;
-                        var pf = catalog != null ? catalog.GetPrefab(i) : null;
-                        if (pf==null && levelData!=null) pf=levelData.GetPrefab(i, catalog);
-                        if (pf!=null) { var ob = pf.GetComponent<Obstacle>(); if (ob) ev.speed = ob.baseSpeed; fbSpeed = ev.speed.ToString("0.##"); }
-                        levelData.events[selectedIndex]=ev; RefreshNotes(); preview?.ForceRefresh(); fbShowGrid=false; fbLastIdx=-1;
-                    }
-                    GUI.backgroundColor = prev;
-                }
-                GUILayout.EndHorizontal();
-                if (total>8)
-                {
-                    GUILayout.BeginHorizontal();
-                    for (int i=8;i< Mathf.Min(total,16); i++)
-                    {
-                        Color prev = GUI.backgroundColor;
-                        GUI.backgroundColor = ev.prefabIndex==i ? Color.green : Color.white;
-                        if (GUILayout.Button($"{i}", GUILayout.Width(38), GUILayout.Height(38))) { ev.prefabIndex=i; levelData.events[selectedIndex]=ev; RefreshNotes(); preview?.ForceRefresh(); fbShowGrid=false; fbLastIdx=-1; }
-                        GUI.backgroundColor = prev;
-                    }
-                    GUILayout.EndHorizontal();
-                }
-                var curGo = catalog != null ? catalog.GetPrefab(ev.prefabIndex) : null;
-                if (curGo!=null) GUILayout.Label($"→ {ev.prefabIndex}: {curGo.name}", new GUIStyle(GUI.skin.label){fontSize=11, normal=new GUIStyleState{textColor=Color.cyan}});
-                GUILayout.Space(6);
-            }
-            else
-            {
-                var curGo2 = catalog != null ? catalog.GetPrefab(ev.prefabIndex) : null;
-                if (curGo2!=null) GUILayout.Label($"→ {ev.prefabIndex}: {curGo2.name}", new GUIStyle(GUI.skin.label){fontSize=11, normal=new GUIStyleState{textColor=Color.cyan}});
-                GUILayout.Space(6);
-            }
-            GUILayout.Space(8);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button("× Удалить", GUILayout.Height(28))) { RemoveNoteAt(selectedIndex); fbLastIdx=-1; }
-            GUILayout.EndHorizontal();
-            GUILayout.Space(4);
-            if (GUILayout.Button("Закрыть")) DeselectNote();
-            GUILayout.EndArea();
-        }
 
         [ContextMenu("Перестроить вейвформу")] void ContextRebuild() { lastClip = null; lastWaveformGenWidth = -1; RefreshAll(); }
         [ContextMenu("Добавить ноту")] void ContextAdd() => AddNoteAtCurrentPlayhead();
