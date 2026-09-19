@@ -7,6 +7,13 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
+    "com.codewriter.textmeshpro-spriteatlas-support": {
+      "version": "https://github.com/codewriter-packages/textmeshpro-spriteatlas-support.git",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "660e7a55406bec8e884bb7b6b6e8b31c9bdaa760"
+    },
     "com.unity.2d.common": {
       "version": "14.0.1",
       "depth": 1,

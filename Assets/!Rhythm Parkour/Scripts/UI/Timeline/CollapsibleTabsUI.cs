@@ -255,7 +255,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (panels == null || panels.Length == 0) return;
             int idx = Mathf.Clamp(CurrentIndex < 0 ? defaultIndex : CurrentIndex, 0, panels.Length - 1);
             string name = TabName(idx);
-            toggleLabel.text = collapsed ? "↑↑↑ " + name + " ↑↑↑" : "↓↓↓ " + name + " ↓↓↓";
+            toggleLabel.text = collapsed ? "<size=20><sprite name=\"ArrowUp\"></size>  " + name + "  <size=20><sprite name=\"ArrowUp\"></size>" : "<size=20><sprite name=\"ArrowDown\"></size>  " + name + "  <size=20><sprite name=\"ArrowDown\"></size>";
         }
 
         private void RefreshArrows()

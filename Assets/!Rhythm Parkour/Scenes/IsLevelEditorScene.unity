@@ -4423,7 +4423,6 @@ MonoBehaviour:
   gridSecColor: {r: 1, g: 1, b: 1, a: 0.22}
   gridSec5Color: {r: 1, g: 1, b: 1, a: 0.32}
   gridLabelFont: {fileID: 12800000, guid: ff8ff2b0e8957d84cad5e9c066c8cdf5, type: 3}
-  useFallbackGUI: 1
 --- !u!114 &295294848
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6050,7 +6049,8 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u2193\u2193\u2193 \u0422\u0410\u0419\u041C\u041B\u0410\u0419\u041D \u2193\u2193\u2193"
+  m_text: "<size=20><sprite name=\"ArrowDown\"></size>  \u0422\u0410\u0419\u041C\u041B\u0410\u0419\u041D 
+    <size=20><sprite name=\"ArrowDown\"></size> "
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c13cfca6da12dc44a86e690fa81e25d5, type: 2}
   m_sharedMaterial: {fileID: -6220101661779451932, guid: c13cfca6da12dc44a86e690fa81e25d5,
@@ -10893,7 +10893,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: <
+  m_text: <size=30><sprite name="ArrowLeft"></size>
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c13cfca6da12dc44a86e690fa81e25d5, type: 2}
   m_sharedMaterial: {fileID: -6220101661779451932, guid: c13cfca6da12dc44a86e690fa81e25d5,
@@ -17145,7 +17145,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: '>'
+  m_text: <size=30><sprite name="ArrowRight"></size>
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c13cfca6da12dc44a86e690fa81e25d5, type: 2}
   m_sharedMaterial: {fileID: -6220101661779451932, guid: c13cfca6da12dc44a86e690fa81e25d5,
