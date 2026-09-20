@@ -146,10 +146,10 @@ Material:
     - _PatternPulseAmp: 0
     - _PatternPulseSpeed: -14.08
     - _PatternRotateSpeed: 0
-    - _PatternSize: 0.5844875
+    - _PatternSize: 0.53887916
     - _PatternSoftness: 0.001
     - _PatternType: 4
-    - _Phase: 40.629776
+    - _Phase: 179.82117
     - _QueueOffset: 0
     - _ReceiveShadows: 1
     - _Smoothness: 0.5

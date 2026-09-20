@@ -43,6 +43,14 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private float _pulseMaxAlpha = 0.55f;
         [SerializeField] private float _pulseCooldown = 0.18f;
 
+        [Header("Logo Beat Excite")]
+        [SerializeField] private float excitePositionAmount = 7f;
+        [SerializeField] private float exciteRotationAmount = 2.5f;
+        [SerializeField] private float exciteDecay = 5f;
+        [SerializeField] private float clapVolume = 0.7f;
+        [SerializeField] private string clapSoundName = "clap";
+        [SerializeField] private float logoBeatScaleAmount = 0.06f;
+
         [Header("Background Beat")]
         [SerializeField] private float bgBasePhaseSpeed = 0.15f;
         [SerializeField] private float bgEnergySpeedBoost = 1.4f;
@@ -103,6 +111,12 @@ namespace RKS.RhythmParkour.UI
         private float _pulseCooldownT;
         private float _prevBassEnergy;
         private float _pulseSearchT;
+        private float _logoExcite;
+        private bool _exciteWasActive;
+        private Canvas _menuCanvas;
+        private float _logoBeatPulse;
+        private bool _logoBeatWasActive;
+        private Vector3 _logoBaseScale = Vector3.zero;
 
         private Sequence _transitionSequence;
         private Tween _detailsRefreshTween;
@@ -130,7 +144,7 @@ namespace RKS.RhythmParkour.UI
         private bool _bgHasPhase;
         private bool _bgHasPatternSize;
         private bool _bgPhaseChecked;
-        private float _bgPatternBase = 0.8f;
+        private const float BgPatternRestSize = 0.5f;
         private float _bgSizePunch;
         private float _bgPhase;
         private float _bgKick;
@@ -246,7 +260,6 @@ namespace RKS.RhythmParkour.UI
                 _bgPhaseChecked = true;
                 _bgHasPhase = _bgMat.HasProperty("_Phase");
                 _bgHasPatternSize = _bgMat.HasProperty("_PatternSize");
-                if (_bgHasPatternSize) _bgPatternBase = Mathf.Clamp(_bgMat.GetFloat("_PatternSize"), 0.05f, 1f);
             }
             float dt = Time.unscaledDeltaTime;
             bool playing = Audio != null && Audio.IsMusicPlaying();
@@ -266,7 +279,7 @@ namespace RKS.RhythmParkour.UI
             {
                 if (_bgSizePunch > 0f) _bgSizePunch = Mathf.Max(0f, _bgSizePunch - _bgSizePunch * Mathf.Max(0.1f, bgPatternBeatDecay) * dt);
                 float e = _bgSizePunch * _bgSizePunch;
-                _bgMat.SetFloat("_PatternSize", Mathf.Clamp(_bgPatternBase * (1f + Mathf.Max(0f, bgPatternBeatScale) * e), 0.05f, 1f));
+                _bgMat.SetFloat("_PatternSize", Mathf.Clamp(BgPatternRestSize * (1f + Mathf.Max(0f, bgPatternBeatScale) * e), 0.05f, 1f));
             }
         }
 
@@ -289,6 +302,10 @@ namespace RKS.RhythmParkour.UI
 
         private void TickLogoPulse()
         {
+            float dt = Time.unscaledDeltaTime;
+            bool music = Audio != null && Audio.IsMusicPlaying();
+            float energy = music ? Audio.GetMusicLevel() : 0f;
+            TickLogoBeatScale(dt);
             if (_logoPulse == null)
             {
                 _pulseSearchT -= Time.unscaledDeltaTime;
@@ -297,10 +314,6 @@ namespace RKS.RhythmParkour.UI
                 ResolveLogoPulse();
             }
             if (_logoPulse == null) return;
-            float energy = 0f;
-            bool music = Audio != null && Audio.IsMusicPlaying();
-            if (music) energy = Audio.GetMusicLevel();
-            float dt = Time.unscaledDeltaTime;
             _pulseCooldownT -= dt;
             if (music && _pulseCooldownT <= 0f && energy >= _pulseThreshold && _prevBassEnergy < _pulseThreshold)
             {
@@ -309,8 +322,19 @@ namespace RKS.RhythmParkour.UI
                 if (!_logoPulse.gameObject.activeSelf) _logoPulse.gameObject.SetActive(true);
                 _logoPulse.localScale = _pulseBaseScale * (1f + Mathf.Max(0f, _pulseScaleAmount));
                 SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)));
+                _logoBeatPulse = 1f;
+                if (IsLogoHovered())
+                {
+                    _logoExcite = 1f;
+                    if (Audio != null)
+                    {
+                        var clapSrc = Audio.Play(clapSoundName);
+                        if (clapSrc != null) clapSrc.volume = Mathf.Clamp01(clapVolume);
+                    }
+                }
             }
             _prevBassEnergy = energy;
+            TickLogoExcite(dt);
             if (!_logoPulse.gameObject.activeSelf) return;
             if (!music)
             {
@@ -325,6 +349,59 @@ namespace RKS.RhythmParkour.UI
             _logoPulse.localScale = _pulseBaseScale * (1f + Mathf.Max(0f, _pulseScaleAmount) * e);
             SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)) * e);
             if (k >= 1f) _logoPulse.gameObject.SetActive(false);
+        }
+
+        private bool IsLogoHovered()
+        {
+            if (_logoTransform == null) return false;
+            if (_menuCanvas == null)
+            {
+                _menuCanvas = GetComponentInParent<Canvas>();
+                if (_menuCanvas == null) _menuCanvas = FindFirstObjectByType<Canvas>();
+                if (_menuCanvas == null) return false;
+            }
+            Camera cam = _menuCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _menuCanvas.worldCamera;
+            return RectTransformUtility.RectangleContainsScreenPoint(_logoTransform, Input.mousePosition, cam);
+        }
+
+        private void TickLogoBeatScale(float dt)
+        {
+            _logoBeatPulse = Mathf.Max(0f, _logoBeatPulse - dt * Mathf.Max(0.1f, exciteDecay));
+            if (_logoTransform == null || DOTween.IsTweening(_logoTransform)) return;
+            if (_logoBaseScale == Vector3.zero) _logoBaseScale = _logoTransform.localScale;
+            if (_logoBeatPulse > 0.003f)
+            {
+                float e = _logoBeatPulse * _logoBeatPulse;
+                _logoTransform.localScale = _logoBaseScale * (1f + Mathf.Max(0f, logoBeatScaleAmount) * e);
+                _logoBeatWasActive = true;
+            }
+            else if (_logoBeatWasActive)
+            {
+                _logoBeatWasActive = false;
+                _logoTransform.localScale = _logoBaseScale;
+            }
+        }
+
+        private void TickLogoExcite(float dt)
+        {
+            _logoExcite = Mathf.Max(0f, _logoExcite - dt * Mathf.Max(0.1f, exciteDecay));
+            if (_logoTransform == null || DOTween.IsTweening(_logoTransform)) return;
+            if (_logoExcite > 0.003f)
+            {
+                Vector2 logoBase = _originalPositions.TryGetValue(_logoTransform.gameObject, out var lb) ? lb : _logoTransform.anchoredPosition;
+                _logoTransform.anchoredPosition = logoBase + new Vector2(Random.Range(-1f, 1f), Random.Range(-1f, 1f)) * Mathf.Max(0f, excitePositionAmount) * _logoExcite;
+                _logoTransform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(-1f, 1f) * exciteRotationAmount * _logoExcite);
+                _exciteWasActive = true;
+            }
+            else if (_exciteWasActive)
+            {
+                _exciteWasActive = false;
+                if (_originalPositions.TryGetValue(_logoTransform.gameObject, out var lb2))
+                {
+                    _logoTransform.anchoredPosition = lb2;
+                    _logoTransform.localRotation = Quaternion.identity;
+                }
+            }
         }
 
         private void SetPulseAlpha(float a)

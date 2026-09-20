@@ -6353,7 +6353,6 @@ GameObject:
   m_Component:
   - component: {fileID: 820601935}
   - component: {fileID: 820601936}
-  - component: {fileID: 820601937}
   m_Layer: 0
   m_Name: MenuManager
   m_TagString: Untagged
@@ -6392,11 +6391,25 @@ MonoBehaviour:
   _logoTransform: {fileID: 302931595}
   _mainMenuButtonsContainer: {fileID: 498915265}
   _logoPulse: {fileID: 546499621}
-  _pulseThreshold: 0.3
+  _pulseThreshold: 0.4
   _pulseScaleAmount: 0.2
   _pulseFadeDuration: 0.6
   _pulseMaxAlpha: 0.5
   _pulseCooldown: 0.1
+  excitePositionAmount: 7
+  exciteRotationAmount: 2.5
+  exciteDecay: 5
+  clapVolume: 1
+  clapSoundName: clap
+  logoBeatScaleAmount: 0.06
+  bgBasePhaseSpeed: 0.15
+  bgEnergySpeedBoost: 1.4
+  bgBeatThreshold: 0.35
+  bgBeatCooldown: 0.2
+  bgKickAmount: 1.6
+  bgKickDecay: 3
+  bgPatternBeatScale: 0.3
+  bgPatternBeatDecay: 4
   _levelListMenuRoot: {fileID: 1053851176}
   _levelListContainer: {fileID: 629720117}
   _levelButtonPrefab: {fileID: 7178840455604156779, guid: 8b6aef1b851c3f44c94d75253c6e2cde,
@@ -6418,14 +6431,6 @@ MonoBehaviour:
   _editorSceneName: IsLevelEditorScene
   _gameSceneName: IsGameScene
   _animDuration: 0.4
-  bgBasePhaseSpeed: 0.15
-  bgEnergySpeedBoost: 1.4
-  bgBeatThreshold: 0.35
-  bgBeatCooldown: 0.2
-  bgKickAmount: 1.6
-  bgKickDecay: 3
-  bgPatternBeatScale: 0.3
-  bgPatternBeatDecay: 4
   transfer:
     levelData:
       music: {fileID: 0}
@@ -6458,18 +6463,6 @@ MonoBehaviour:
   blendFadeDuration: 1.2
   previewFadeTime: 0.7
   resyncThreshold: 0.35
---- !u!114 &820601937
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 820601934}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 891d6e713fcfdfc4a95271fdee018e94, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.BackgroundBeatDriver
 --- !u!1 &838400845
 GameObject:
   m_ObjectHideFlags: 0
@@ -6505,7 +6498,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -207.17303, y: 0.0000059605}
+  m_AnchoredPosition: {x: -209, y: 0.0000059605}
   m_SizeDelta: {x: 55.82, y: 68.59}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &838400847
