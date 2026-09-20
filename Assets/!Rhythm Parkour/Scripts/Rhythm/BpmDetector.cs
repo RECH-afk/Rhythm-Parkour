@@ -159,14 +159,14 @@ float period = 60f / detectedBpm;
             return res;
         }
 
-public static void ApplyBpm(RhythmLevelData level, float newBpm, bool keepBeats = true)
+public static bool ApplyBpm(RhythmLevelData level, float newBpm, bool keepBeats = true)
         {
-            if (level == null) return;
-            newBpm = Mathf.Clamp(newBpm, 40f, 300f);
-            if (Mathf.Abs(level.bpm - newBpm) < 0.01f) return;
+            if (level == null) return false;
+            if (newBpm < 40f || newBpm > 300f) return false;
+            if (Mathf.Abs(level.bpm - newBpm) < 0.01f) return true;
             float oldBpm = level.bpm;
             level.bpm = newBpm;
-            if (!keepBeats) return;
+            if (!keepBeats) return true;
 
             for (int i = 0; i < level.events.Count; i++)
             {
@@ -176,13 +176,13 @@ public static void ApplyBpm(RhythmLevelData level, float newBpm, bool keepBeats 
                 level.events[i] = ev;
             }
             level.SortByTime();
-            Debug.Log($"[BPM] {oldBpm:0.##} -> {newBpm:0.##} (keepBeats={keepBeats}, {level.events.Count} нот пересчитано)");
+            return true;
         }
 
-public static void KeepTimes(RhythmLevelData level, float newBpm)
+public static bool KeepTimes(RhythmLevelData level, float newBpm)
         {
-            if (level == null) return;
-            newBpm = Mathf.Clamp(newBpm, 40f, 300f);
+            if (level == null) return false;
+            if (newBpm < 40f || newBpm > 300f) return false;
             level.bpm = newBpm;
             for (int i = 0; i < level.events.Count; i++)
             {
@@ -191,6 +191,7 @@ public static void KeepTimes(RhythmLevelData level, float newBpm)
                 level.events[i] = ev;
             }
             level.SortByTime();
+            return true;
         }
     }
 }

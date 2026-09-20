@@ -294,9 +294,12 @@ namespace RKS.RhythmParkour.Rhythm
             data.events = new List<ObstacleEvent>(m.events ?? new List<ObstacleEvent>());
             data.particlesEnabled = m.particlesEnabled;
             data.particleColor = m.particleColor;
+            data.particleSpriteName = m.particleSpriteName ?? "";
+            data.particleSprite = null;
             data.obstacleColor = m.obstacleColor;
             data.trackColor = m.trackColor;
             data.sphereRotates = m.sphereRotates;
+            data.sphereUseVideo = m.sphereUseVideo;
             data.defaultObstacleMaterialName = m.defaultObstacleMaterialName ?? "";
             data.music = audioClip;
             data.video = videoClip;
@@ -313,6 +316,8 @@ namespace RKS.RhythmParkour.Rhythm
             else if (data.defaultObstacleMaterial != null && data.defaultObstacleMaterial.name != data.defaultObstacleMaterialName)
                 data.defaultObstacleMaterialName = data.defaultObstacleMaterial.name;
 
+            if (data.particleSprite != null && string.IsNullOrEmpty(data.particleSpriteName))
+                data.particleSpriteName = data.particleSprite.name;
             return new RkslManifest
             {
                 version = ManifestVersion,
@@ -325,9 +330,11 @@ namespace RKS.RhythmParkour.Rhythm
                 events = new List<ObstacleEvent>(data.events),
                 particlesEnabled = data.particlesEnabled,
                 particleColor = data.particleColor,
+                particleSpriteName = data.particleSpriteName ?? "",
                 obstacleColor = data.obstacleColor,
                 trackColor = data.trackColor,
                 sphereRotates = data.sphereRotates,
+                sphereUseVideo = data.sphereUseVideo,
                 defaultObstacleMaterialName = data.defaultObstacleMaterialName ?? "",
                 audioFile = !string.IsNullOrEmpty(data.audioPath) ? Path.GetFileName(data.audioPath) : "",
                 videoFile = !string.IsNullOrEmpty(data.videoPath) ? Path.GetFileName(data.videoPath) : "",

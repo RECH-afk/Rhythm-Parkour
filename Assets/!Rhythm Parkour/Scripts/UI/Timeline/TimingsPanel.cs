@@ -18,6 +18,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         TMP_InputField bpmInput;
         TMP_InputField offsetInput;
         TMP_InputField speedInput;
+        TextMeshProUGUI speedHintLabel;
         TextMeshProUGUI statusLabel;
         TextMeshProUGUI quantLabel;
         TextMeshProUGUI snapLabel;
@@ -45,7 +46,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (root != null) return;
             if (timelineUI == null) timelineUI = GetComponent<TimelineUI>();
             if (timelineUI == null) return;
-            if (tabs == null) tabs = FindAnyObjectByType<CollapsibleTabsUI>();
+            if (tabs == null) tabs = FindFirstObjectByType<CollapsibleTabsUI>();
 
             GameObject refWin = null;
             if (tabs != null && tabs.panels != null && tabs.panels.Length > 0 && tabs.panels[0] != null)
@@ -119,6 +120,12 @@ namespace RKS.RhythmParkour.UI.Timeline
             MakeLabel(spdRow, "Скорость новых", 13, TextAlignmentOptions.MidlineLeft, 120f);
             speedInput = MakeInput(spdRow);
             speedInput.onEndEdit.AddListener(OnSpeedSubmit);
+
+            speedHintLabel = MakeLabel(root.transform, "", 11, TextAlignmentOptions.TopLeft, 0f);
+            speedHintLabel.color = new Color(1, 1, 1, 0.55f);
+            var speedHintLE = speedHintLabel.gameObject.AddComponent<LayoutElement>();
+            speedHintLE.minHeight = 18f;
+            speedHintLE.flexibleWidth = 1f;
 
             statusLabel = MakeLabel(root.transform, "", 12, TextAlignmentOptions.TopLeft, 0f);
             statusLabel.color = new Color(1, 1, 1, 0.6f);
@@ -268,6 +275,14 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (offsetInput != null) offsetInput.SetTextWithoutNotify(d != null ? d.offset.ToString("0.##", CultureInfo.InvariantCulture) : "");
             if (speedInput != null && timelineUI != null) speedInput.SetTextWithoutNotify(timelineUI.defaultNoteSpeed.ToString("0.##", CultureInfo.InvariantCulture));
             SyncLabels();
+            SyncSpeedHint();
+        }
+
+        void SyncSpeedHint()
+        {
+            if (speedHintLabel == null || timelineUI == null) return;
+
+            speedHintLabel.text = timelineUI.SpeedHint(timelineUI.defaultNoteSpeed);
         }
 
         void SyncLabels()
@@ -276,6 +291,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (quantLabel != null) quantLabel.text = "Квант: " + QuantName(timelineUI.quantStep);
             if (snapLabel != null) snapLabel.text = "Привязка: " + (timelineUI.snapToGrid ? "ВКЛ" : "ВЫКЛ");
             if (autoQuantLabel != null) autoQuantLabel.text = "Авто-квант: " + (timelineUI.autoQuantize ? "ВКЛ" : "ВЫКЛ");
+            SyncSpeedHint();
         }
 
         static string QuantName(float q)
@@ -296,7 +312,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             if (timelineUI == null || timelineUI.levelData == null) return;
             if (!TryParseFloat(s, out float v)) { Status("BPM: введите число 40–300"); RefreshAll(); return; }
-            BpmDetector.ApplyBpm(timelineUI.levelData, v, true);
+            if (!BpmDetector.ApplyBpm(timelineUI.levelData, v, true)) { Status("BPM: только 40–300, без округления"); RefreshAll(); return; }
             timelineUI.RefreshAll();
             RefreshAll();
             Status($"BPM → {timelineUI.levelData.bpm:0.##}, биты нот сохранены");
@@ -312,7 +328,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             try
             {
                 var det = BpmDetector.Detect(timelineUI.levelData.music);
-                BpmDetector.ApplyBpm(timelineUI.levelData, det.bpm, true);
+                if (!BpmDetector.ApplyBpm(timelineUI.levelData, det.bpm, true)) { Status($"Детект дал {det.bpm:0.##} — вне 40–300, не применён"); return; }
                 if (timelineUI.bpmOutputText != null) timelineUI.bpmOutputText.text = $"BPM: {timelineUI.levelData.bpm:0}";
                 timelineUI.RefreshAll();
                 RefreshAll();
@@ -375,10 +391,13 @@ namespace RKS.RhythmParkour.UI.Timeline
         void OnSpeedSubmit(string s)
         {
             if (timelineUI == null) return;
-            if (!TryParseFloat(s, out float v)) { Status("Скорость: число 1–60"); RefreshAll(); return; }
-            timelineUI.defaultNoteSpeed = Mathf.Clamp(v, 1f, 60f);
+
+            if (string.IsNullOrWhiteSpace(s)) { Status("Скорость: введите число 1–60 м/с"); RefreshAll(); return; }
+            if (!TryParseFloat(s, out float v)) { Status("Скорость: введите число 1–60 м/с"); RefreshAll(); return; }
+            if (v < 1f || v > 60f) { Status("Скорость: только 1–60 м/с, без округления"); RefreshAll(); return; }
+            timelineUI.defaultNoteSpeed = v;
             RefreshAll();
-            Status($"Скорость новых нот → {timelineUI.defaultNoteSpeed:0.#}");
+            Status($"Скорость новых нот → {timelineUI.SpeedHint(timelineUI.defaultNoteSpeed)}");
         }
     }
 }

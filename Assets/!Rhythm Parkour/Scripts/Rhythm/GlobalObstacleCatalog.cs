@@ -99,8 +99,9 @@ public int Count => prefabs != null ? prefabs.Count : 0;
 
         public GameObject GetPrefab(int index)
         {
+
             if (prefabs == null || prefabs.Count == 0) return null;
-            if (index < 0 || index >= prefabs.Count) return prefabs[0];
+            if (index < 0 || index >= prefabs.Count) return null;
             return prefabs[index];
         }
 

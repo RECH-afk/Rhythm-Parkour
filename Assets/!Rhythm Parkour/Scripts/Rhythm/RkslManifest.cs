@@ -27,9 +27,11 @@ namespace RKS.RhythmParkour.Rhythm
 
         public bool particlesEnabled = true;
         public Color particleColor = new Color(0.2f, 0.7f, 1f, 1f);
+        public string particleSpriteName = "";
         public Color obstacleColor = Color.white;
         public Color trackColor = new Color(0.2f, 0.6f, 1f, 1f);
         public bool sphereRotates = true;
+        public bool sphereUseVideo = true;
         public string defaultObstacleMaterialName = "";
 
         public float BeatToTime(float beat) => offset + beat * 60f / Mathf.Max(1f, bpm);

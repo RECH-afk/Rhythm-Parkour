@@ -16,13 +16,9 @@ namespace RKS.RhythmParkour.UI.Timeline
 {
     public interface ITimelineNoteView { void Setup(int index, ObstacleEvent ev, float hitBeat, bool selected); }
 
-
-
-
-
     public class TimelineUI : RKSBehaviour
     {
-        public RhythmLevelData levelData;
+        [HideInInspector] public RhythmLevelData levelData;
         public AudioSource audioSource;
         [HideInInspector]
         [InjectOptional] public RhythmParkourManager manager;
@@ -123,11 +119,11 @@ namespace RKS.RhythmParkour.UI.Timeline
         Coroutine followSmoothCoroutine;
 
         public GameObject notePropertiesPanel;
-        public TMP_InputField propPrefabIndexInput;
         public TMP_Dropdown propPrefabDropdown;
         public TextMeshProUGUI propTitleLabel;
         public TMP_InputField propSpeedInput;
         private TextMeshProUGUI propPrefabButtonLabel;
+        private TextMeshProUGUI propSpeedHintLabel;
 
         [Header("Сетка миниатюр (выбор вида)")]
         public GameObject prefabGridPanel;
@@ -230,7 +226,6 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (waveformRect == null && waveformImage != null) waveformRect = waveformImage.rectTransform;
             if (timelineScrollbar == null && timelineScrollRect != null) timelineScrollbar = timelineScrollRect.horizontalScrollbar;
             OptimizeTimelineLayout();
-
 
             BindEvents();
             if (fileLoader != null) fileLoader.onFileLoaded.AddListener(OnFileLoaded);
@@ -337,11 +332,8 @@ namespace RKS.RhythmParkour.UI.Timeline
             }
         }
 
-
-
         void BindPropertiesPanel()
         {
-            if (propPrefabIndexInput != null) propPrefabIndexInput.onSubmit.AddListener(_ => ApplyPropertiesFromPanel());
             if (propPrefabDropdown != null)
             {
                 propPrefabDropdown.onValueChanged.RemoveListener(OnPrefabDropdownChanged);
@@ -353,7 +345,6 @@ namespace RKS.RhythmParkour.UI.Timeline
 
         void OnPrefabDropdownChanged(int idx)
         {
-            if (propPrefabIndexInput != null) propPrefabIndexInput.SetTextWithoutNotify(idx.ToString());
             ApplyPropertiesFromPanel();
         }
 
@@ -446,12 +437,19 @@ namespace RKS.RhythmParkour.UI.Timeline
             for (int i=prefabGridContainer.childCount-1;i>=0;i--) Destroy(prefabGridContainer.GetChild(i).gameObject);
             int total = (catalog != null ? catalog.Count : 0);
             if (total==0 && levelData!=null) total = levelData.PrefabCount(catalog);
-            if (total==0) total=1;
+
+            if (total==0)
+            {
+                FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/");
+                return;
+            }
             for (int i=0;i<total;i++)
             {
                 var pf = catalog != null ? catalog.GetPrefab(i) : null;
                 if (pf==null && levelData!=null) pf = levelData.GetPrefab(i, catalog);
-                string name = pf!=null? pf.name : $"#{i}";
+
+                if (pf == null) continue;
+                string name = pf.name;
                 GameObject btnGO;
                 if (prefabThumbPrefab != null) btnGO = Instantiate(prefabThumbPrefab, prefabGridContainer);
                 else
@@ -504,8 +502,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (levelData==null || selectedIndex<0 || selectedIndex>=levelData.events.Count) return;
             var tgt = selectedIndices.Count>1 ? new System.Collections.Generic.List<int>(selectedIndices) : new System.Collections.Generic.List<int>{selectedIndex};
             foreach (var ti in tgt) { if (ti<0||ti>=levelData.events.Count) continue; var e=levelData.events[ti]; e.prefabIndex=idx; levelData.events[ti]=e; }
-            if (propPrefabDropdown!=null) propPrefabDropdown.SetValueWithoutNotify(Mathf.Clamp(idx,0,propPrefabDropdown.options.Count-1));
-            if (propPrefabIndexInput!=null) propPrefabIndexInput.SetTextWithoutNotify(idx.ToString());
+            if (propPrefabDropdown!=null && propPrefabDropdown.options.Count > idx) propPrefabDropdown.SetValueWithoutNotify(idx);
             RefreshNotes();
             ShowPropertiesPanel(selectedIndex);
             if (closeGridOnSelect) HidePrefabGrid();
@@ -537,13 +534,15 @@ namespace RKS.RhythmParkour.UI.Timeline
             propPrefabDropdown.ClearOptions();
             int total = (catalog != null ? catalog.Count : 0);
             if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
-            if (total == 0) total = 1;
+
+            if (total == 0) return;
             var opts = new System.Collections.Generic.List<string>();
             for (int i=0;i<total;i++)
             {
                 var pf = catalog != null ? catalog.GetPrefab(i) : null;
                 if (pf == null && levelData != null) pf = levelData.GetPrefab(i, catalog);
-                string name = pf != null ? $"{i}: {pf.name}" : $"{i}";
+                if (pf == null) continue;
+                string name = $"{i}: {pf.name}";
                 opts.Add(name);
             }
             propPrefabDropdown.AddOptions(opts);
@@ -588,7 +587,6 @@ namespace RKS.RhythmParkour.UI.Timeline
                 else { autoscrollLockedRatio = 0.35f; autoscrollHasLockedRatio = false; }
 
                 if (followSmoothCoroutine != null) StopCoroutine(followSmoothCoroutine);
-
 
                 RectTransform vp2 = timelineViewport != null ? timelineViewport : timelineScrollRect.viewport;
                 if (vp2 == null) vp2 = timelineScrollRect.GetComponent<RectTransform>();
@@ -695,7 +693,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             followSmoothCoroutine = null;
         }
 
-        public void RefreshAll() { RefreshWaveform(); RefreshScrollContent(); RefreshNotes(); RefreshGrid(true); UpdatePlayhead(); UpdateScrollToPlayhead(true); UpdateLabels(); UpdatePlayPauseLabel(); UpdateWarningState(); }
+        public void RefreshAll() { EnsureExplicitSpeeds(); RefreshWaveform(); RefreshScrollContent(); RefreshNotes(); RefreshGrid(true); UpdatePlayhead(); UpdateScrollToPlayhead(true); UpdateLabels(); UpdatePlayPauseLabel(); UpdateWarningState(); }
         bool HasTrack() => (levelData != null && levelData.music != null) || (audioSource != null && audioSource.clip != null);
         void UpdateWarningState() { bool has = HasTrack(); if (warningObject != null) warningObject.SetActive(!has); if (timelineObject != null) timelineObject.SetActive(has); }
 
@@ -790,7 +788,6 @@ namespace RKS.RhythmParkour.UI.Timeline
             lastGridLabelEvery = labelEvery;
             lastGridRefreshTime = Time.unscaledTime;
 
-
             if (gridLinePool.Count == 0 && gridContainer.childCount > 0)
             {
                 for (int i = gridContainer.childCount - 1; i >= 0; i--)
@@ -835,7 +832,6 @@ namespace RKS.RhythmParkour.UI.Timeline
                 else img.color = gridSecColor * 0.65f;
             }
             for (int i = neededLines; i < gridLinePool.Count; i++) if (gridLinePool[i]) gridLinePool[i].SetActive(false);
-
 
             int neededLabels = 0;
             for (int sec = 0; sec <= totalSecs; sec++)
@@ -899,7 +895,6 @@ namespace RKS.RhythmParkour.UI.Timeline
                     clipLen = Mathf.Max(30f, maxT + 5f);
                 }
             }
-
 
             for (int i = levelData.events.Count; i < noteGos.Count; i++)
             {
@@ -1359,7 +1354,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                 else if (selectedIndices.Count == 1) { int idx = new List<int>(selectedIndices)[0]; RemoveNoteAt(idx); }
                 else RemoveNearestNote();
             }
-            for (int k = 1; k <= 12; k++) { if (Input.GetKeyDown(KeyCode.Alpha0 + k) || Input.GetKeyDown(KeyCode.Keypad0 + k)) { brushIndex = k - 1; int c = (catalog != null ? catalog.Count : 0); if (c == 0 && levelData != null) c = levelData.PrefabCount(catalog); if (c > 0) brushIndex = Mathf.Clamp(brushIndex, 0, c - 1); FlashStatus($"Кисть → {brushIndex} {(levelData != null && levelData.GetPrefab(brushIndex) ? levelData.GetPrefab(brushIndex).name : (catalog.GetPrefab(brushIndex) ? catalog.GetPrefab(brushIndex).name : ""))}"); } }
+            for (int k = 1; k <= 12; k++) { if (Input.GetKeyDown(KeyCode.Alpha0 + k) || Input.GetKeyDown(KeyCode.Keypad0 + k)) { SetBrush(k - 1); } }
             if ((selectedIndex >= 0 || selectedIndices.Count > 0) && levelData != null && (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow)))
             {
                 float dir = Input.GetKeyDown(KeyCode.RightArrow) ? 1f : -1f;
@@ -1558,7 +1553,6 @@ namespace RKS.RhythmParkour.UI.Timeline
         public void AddNoteAtTime(float hitTime)
         {
             if (levelData == null) { FlashStatus("Нет LevelData!"); return; }
-            if (levelData.music == null && audioSource != null && audioSource.clip != null) levelData.music = audioSource.clip;
             if (levelData.music == null) { FlashStatus("Нет музыки — загрузите аудио!"); return; }
             int gCountAdd = (catalog != null ? catalog.Count : 0); if (gCountAdd == 0) gCountAdd = levelData.PrefabCount(catalog);
             if (gCountAdd == 0) { FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; }
@@ -1572,9 +1566,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             float spawnTime = hitTimeQ - travel;
             float spawnBeat = levelData.TimeToBeat(spawnTime);
 
-
-            int maxIdx = (catalog != null ? catalog.Count : 0) > 0 ? (catalog != null ? catalog.Count : 0) - 1 : Mathf.Max(0, levelData.PrefabCount(catalog) - 1);
-            brushIndex = Mathf.Clamp(brushIndex, 0, maxIdx);
+            if (brushIndex < 0 || brushIndex >= gCountAdd) { FlashStatus($"Кисть {brushIndex} вне каталога (0–{gCountAdd - 1})"); return; }
             var ev = ObstacleEvent.Create(spawnBeat, brushIndex, Vector3.zero, speed);
             ev.time = spawnTime;
             levelData.events.Add(ev);
@@ -1687,7 +1679,12 @@ namespace RKS.RhythmParkour.UI.Timeline
 
         void EnsurePropSpeedRow()
         {
-            if (propSpeedInput != null || notePropertiesPanel == null) return;
+            if (notePropertiesPanel == null) return;
+            if (propSpeedInput != null)
+            {
+                EnsurePropSpeedHint();
+                return;
+            }
             Transform parent = notePropertiesPanel.transform;
             var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
             if (scroll != null && scroll.content != null) parent = scroll.content;
@@ -1729,7 +1726,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             var phGO = new GameObject("Placeholder", typeof(RectTransform));
             phGO.transform.SetParent(areaGO.transform, false);
             var prt = phGO.GetComponent<RectTransform>(); prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one; prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
-            var ptmp = phGO.AddComponent<TextMeshProUGUI>(); ptmp.text = "авто"; ptmp.fontSize = 13; ptmp.color = new Color(1, 1, 1, 0.35f); ptmp.alignment = TextAlignmentOptions.MidlineLeft;
+            var ptmp = phGO.AddComponent<TextMeshProUGUI>(); ptmp.text = "м/с"; ptmp.fontSize = 13; ptmp.color = new Color(1, 1, 1, 0.35f); ptmp.alignment = TextAlignmentOptions.MidlineLeft;
             input.textViewport = art;
             input.textComponent = ttmp;
             input.placeholder = ptmp;
@@ -1738,6 +1735,27 @@ namespace RKS.RhythmParkour.UI.Timeline
             var ile = inGO.AddComponent<LayoutElement>(); ile.minHeight = 30; ile.flexibleWidth = 1f;
             propSpeedInput = input;
             propSpeedInput.onEndEdit.AddListener(_ => ApplyPropertiesFromPanel());
+
+            EnsurePropSpeedHint();
+        }
+
+        void EnsurePropSpeedHint()
+        {
+            if (propSpeedHintLabel != null) return;
+            if (notePropertiesPanel == null) return;
+            Transform parent = notePropertiesPanel.transform;
+            var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
+            if (scroll != null && scroll.content != null) parent = scroll.content;
+
+            var hintGO = new GameObject("SpeedHint", typeof(RectTransform));
+            hintGO.transform.SetParent(parent, false);
+            var htmp = hintGO.AddComponent<TextMeshProUGUI>();
+            htmp.name = "SpeedHintLabel";
+            htmp.fontSize = 11;
+            htmp.alignment = TextAlignmentOptions.TopLeft;
+            htmp.color = new Color(1, 1, 1, 0.55f);
+            var hle = hintGO.AddComponent<LayoutElement>(); hle.minHeight = 16; hle.flexibleWidth = 1f;
+            propSpeedHintLabel = htmp;
         }
 
         void ShowPropertiesPanel(int idx)
@@ -1752,19 +1770,30 @@ namespace RKS.RhythmParkour.UI.Timeline
             notePropertiesPanel.SetActive(true);
             var ev = levelData.events[idx];
             float hitTime = GetHitTime(ev);
-            string speedTxt = ev.speed > 0.01f ? $" • {ev.speed:0.#} м/с" : " • авто";
+
+            string speedTxt = $" • {SpeedHint(ev.speed)}";
             if (selectedIndices.Count > 1 && propTitleLabel != null) propTitleLabel.text = $"Выделено {selectedIndices.Count} нот";
             else if (propTitleLabel != null) propTitleLabel.text = $"Нота #{idx} — {FormatTime(hitTime)} • {GetPrefabName(ev.prefabIndex)}{speedTxt}";
 
-            if (propPrefabIndexInput != null) { propPrefabIndexInput.gameObject.SetActive(true); propPrefabIndexInput.SetTextWithoutNotify(ev.prefabIndex.ToString()); }
             EnsurePropertiesUI();
             if (propPrefabButtonLabel != null) propPrefabButtonLabel.text = $"Вид: {GetPrefabName(ev.prefabIndex)}";
-            if (propSpeedInput != null) { propSpeedInput.gameObject.SetActive(true); propSpeedInput.SetTextWithoutNotify(ev.speed > 0.01f ? ev.speed.ToString("0.##", CultureInfo.InvariantCulture) : ""); }
+            if (propSpeedInput != null) { propSpeedInput.gameObject.SetActive(true); propSpeedInput.SetTextWithoutNotify(ev.speed.ToString("0.##", CultureInfo.InvariantCulture)); }
+            if (propSpeedHintLabel != null) propSpeedHintLabel.text = SpeedHint(ev.speed);
             if (propPrefabDropdown != null)
             {
                 propPrefabDropdown.gameObject.SetActive(true);
                 RefreshPrefabDropdown();
-                propPrefabDropdown.SetValueWithoutNotify(Mathf.Clamp(ev.prefabIndex, 0, propPrefabDropdown.options.Count-1));
+                if (ev.prefabIndex < 0 || ev.prefabIndex >= propPrefabDropdown.options.Count)
+                {
+                    var repaired = levelData.events[idx];
+                    repaired.prefabIndex = 0;
+                    levelData.events[idx] = repaired;
+                    ev = repaired;
+                    RefreshNotes();
+                    FlashStatus("Вид ноты был вне каталога — явно сброшен в 0");
+                }
+                if (propPrefabDropdown.options.Count > 0)
+                    propPrefabDropdown.SetValueWithoutNotify(ev.prefabIndex);
                 var thumb = propPrefabDropdown.transform.Find("Thumb");
                 if (thumb == null && propPrefabDropdown.template != null) thumb = propPrefabDropdown.template.Find("Thumb");
             }
@@ -1783,7 +1812,8 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             var pf = catalog != null ? catalog.GetPrefab(idx) : null;
             if (pf == null && levelData != null) pf = levelData.GetPrefab(idx, catalog);
-            return pf != null ? pf.name : $"#{idx}";
+
+            return pf != null ? pf.name : "—";
         }
         public void HidePropertiesPanel() { if (notePropertiesPanel != null) notePropertiesPanel.SetActive(false); if (prefabGridPanel != null) prefabGridPanel.SetActive(false); }
         void RefreshPropertiesPanel() { if (selectedIndex >= 0 && notePropertiesPanel != null && notePropertiesPanel.activeSelf) ShowPropertiesPanel(selectedIndex); }
@@ -1792,18 +1822,29 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (levelData == null || selectedIndex < 0 || selectedIndex >= levelData.events.Count) return;
             var ev = levelData.events[selectedIndex];
 
+            int total = (catalog != null ? catalog.Count : 0);
+            if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
+            if (total == 0) { FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; }
             int newPrefab = ev.prefabIndex;
-            if (propPrefabDropdown != null && propPrefabDropdown.options.Count > 0) newPrefab = Mathf.Clamp(propPrefabDropdown.value, 0, Mathf.Max(0, ((catalog != null ? catalog.Count : 0)>0?(catalog != null ? catalog.Count : 0):levelData.PrefabCount(catalog))-1));
-            else if (propPrefabIndexInput != null && int.TryParse(propPrefabIndexInput.text, out int pi)) { int total = (catalog != null ? catalog.Count : 0); if (total == 0) total = levelData.PrefabCount(catalog); newPrefab = Mathf.Clamp(pi, 0, Mathf.Max(0, total - 1)); }
+            if (propPrefabDropdown != null && propPrefabDropdown.options.Count > 0)
+            {
+                if (propPrefabDropdown.value < 0 || propPrefabDropdown.value >= total) { FlashStatus("Вид вне каталога"); return; }
+                newPrefab = propPrefabDropdown.value;
+            }
 
             var tgt = selectedIndices.Count > 1 ? new System.Collections.Generic.List<int>(selectedIndices) : new System.Collections.Generic.List<int>{selectedIndex};
             float newSpeed = ev.speed;
             bool hasSpeed = false;
             if (propSpeedInput != null && propSpeedInput.gameObject.activeInHierarchy)
             {
-                if (string.IsNullOrWhiteSpace(propSpeedInput.text)) { newSpeed = 0f; hasSpeed = true; }
-                else if (TryParseFloat(propSpeedInput.text, out float sv)) { newSpeed = Mathf.Clamp(sv, 0f, 60f); hasSpeed = true; }
-                else FlashStatus("Скорость: число м/с (пусто = авто)");
+
+                if (string.IsNullOrWhiteSpace(propSpeedInput.text)) { FlashStatus("Скорость: введите число 1–60 м/с"); return; }
+                else if (TryParseFloat(propSpeedInput.text, out float sv))
+                {
+                    if (sv < 1f || sv > 60f) { FlashStatus("Скорость: только 1–60 м/с, без округления"); return; }
+                    newSpeed = sv; hasSpeed = true;
+                }
+                else { FlashStatus("Скорость: число м/с 1–60"); return; }
             }
             foreach (var ti in tgt)
             {
@@ -1929,28 +1970,66 @@ namespace RKS.RhythmParkour.UI.Timeline
         }
         float GetTravelForSpeed(float speed)
         {
-            if (speed < 0.1f) speed = defaultNoteSpeed;
+
+            speed = Mathf.Max(1f, speed);
             if (manager != null) return manager.GetTravelTime(speed);
-            return 52f / Mathf.Max(1f, speed);
+            return 52f / speed;
         }
         float GetTravelForEvent(ObstacleEvent ev)
         {
-            float s = ev.speed;
-            if (s < 0.1f && levelData != null) { var pf = levelData.GetPrefab(ev.prefabIndex, catalog); if (pf) { var ob = pf.GetComponent<Obstacle>(); if (ob) s = ob.baseSpeed; } }
-            if (s < 0.1f) s = defaultNoteSpeed;
-            return GetTravelForSpeed(s);
+
+            return GetTravelForSpeed(ev.speed);
         }
         float GetHitTime(ObstacleEvent ev) => ev.time + GetTravelForEvent(ev);
         float GetHitBeat(ObstacleEvent ev) => levelData != null ? levelData.TimeToBeat(GetHitTime(ev)) : ev.beat;
         float GetSpeedForBrush()
         {
-            float s = defaultNoteSpeed;
 
-            var pf = catalog != null ? catalog.GetPrefab(brushIndex) : null;
-            if (!pf && levelData != null) pf = levelData.GetPrefab(brushIndex, catalog);
-            if (pf) { var ob = pf.GetComponent<Obstacle>(); if (ob && ob.baseSpeed > 0.1f) s = ob.baseSpeed; }
-            if (s < 0.1f) s = defaultNoteSpeed;
-            return s;
+            return Mathf.Clamp(defaultNoteSpeed, 1f, 60f);
+        }
+
+        public string SpeedHint(float speed)
+        {
+            float s = Mathf.Max(1f, speed);
+            float dist = manager != null ? manager.GetSpawnToHitDistance() : 52f;
+            if (dist < 1f) dist = 52f;
+            float travel = dist / s;
+            return $"{s:0.#} м/с • {travel:0.0}с полёта ({dist:0.0}м)";
+        }
+
+        public int EnsureExplicitSpeeds()
+        {
+            if (levelData == null) return 0;
+            float def = Mathf.Clamp(defaultNoteSpeed, 1f, 60f);
+            float dist = manager != null ? manager.GetSpawnToHitDistance() : 52f;
+            if (dist < 1f) dist = 52f;
+            int n = 0;
+            for (int i = 0; i < levelData.events.Count; i++)
+            {
+                var ev = levelData.events[i];
+                if (ev.speed < 0.1f)
+                {
+
+                    float oldS = def;
+                    var pf = levelData.GetPrefab(ev.prefabIndex, catalog);
+                    if (pf != null)
+                    {
+                        var ob = pf.GetComponent<Obstacle>();
+                        if (ob != null && ob.baseSpeed > 0.1f) oldS = ob.baseSpeed;
+                    }
+                    float oldTravel = dist / Mathf.Max(1f, oldS);
+                    float hitT = ev.time + oldTravel;
+                    float newTravel = dist / def;
+                    float spawnT = hitT - newTravel;
+                    ev.speed = def;
+                    ev.time = spawnT;
+                    ev.beat = levelData.TimeToBeat(spawnT);
+                    levelData.events[i] = ev;
+                    n++;
+                }
+            }
+            if (n > 0) { levelData.SortByTime(); RefreshNotes(); }
+            return n;
         }
         float GetTimeFromMouse(Vector2 screenPos)
         {
@@ -2026,7 +2105,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         }
         public void TogglePlayPause() { if (audioSource != null && audioSource.isPlaying) Pause(); else Play(); }
         public void SetQuant(float q) { quantStep = q; RefreshGrid(true); }
-        public void SetBrush(int idx) { int c = (catalog != null ? catalog.Count : 0); if (c == 0 && levelData != null) c = levelData.PrefabCount(catalog); if (c == 0) c = 7; brushIndex = Mathf.Clamp(idx, 0, c - 1); FlashStatus($"Кисть {brushIndex}"); }
+        public void SetBrush(int idx) { int c = (catalog != null ? catalog.Count : 0); if (c == 0 && levelData != null) c = levelData.PrefabCount(catalog); if (c == 0) { FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; } if (idx < 0 || idx >= c) { FlashStatus($"Кисть: только 0–{c - 1}"); return; } brushIndex = idx; FlashStatus($"Кисть {brushIndex}"); }
         void OnFileLoaded(string path, AudioClip clip)
         {
             if (clip == null) return;
@@ -2053,15 +2132,16 @@ namespace RKS.RhythmParkour.UI.Timeline
             }
             if (audioSource != null) { audioSource.clip = clip; audioSource.Stop(); currentTime = 0f; }
 
-
             if (showBpmAfterLoad && clip != null)
             {
                 try
                 {
                     var det = BpmDetector.Detect(clip);
 
-                    levelData.bpm = Mathf.Clamp(det.bpm, 40f, 300f);
-                    string bpmTxt = $"BPM: {levelData.bpm:0}";
+                    bool detValid = det.bpm >= 40f && det.bpm <= 300f;
+                    if (detValid) levelData.bpm = det.bpm;
+                    else levelData.bpm = 128f;
+                    string bpmTxt = detValid ? $"BPM: {levelData.bpm:0}" : $"BPM: 128 (детект {det.bpm:0} вне 40–300)";
 
                     if (bpmOutputText != null) bpmOutputText.text = bpmTxt;
                     Debug.Log($"[BPM] {clip.name} -> {det.bpm:0.##} conf {det.confidence:0.##} (сохранен {levelData.bpm:0})", this);

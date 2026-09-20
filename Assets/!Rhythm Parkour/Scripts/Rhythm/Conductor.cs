@@ -16,7 +16,7 @@ namespace RKS.RhythmParkour.Rhythm
     public class Conductor : RKSBehaviour
     {
         public AudioSource musicSource;
-        public RhythmLevelData levelData;
+        [HideInInspector] public RhythmLevelData levelData;
         public double dspSongStartTime;
         public float songPosition;
         public float songPositionBeats;

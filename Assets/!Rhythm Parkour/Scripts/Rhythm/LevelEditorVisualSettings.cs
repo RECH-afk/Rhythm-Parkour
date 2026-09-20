@@ -33,19 +33,33 @@ namespace RKS.RhythmParkour.Rhythm
 
         [Header("Particles")]
         [SerializeField] private Toggle _particlesToggle;
+        [SerializeField] private Button _particlesColorButton;
+        [SerializeField] private Button _particlesSpriteButton;
+        [SerializeField] private TextMeshProUGUI _particleSpriteLabel;
         [SerializeField] private Image _particleColorPreview;
 
         [Header("Colors")]
+        [SerializeField] private Button _obstacleColorButton;
         [SerializeField] private Image _obstacleColorPreview;
+        [SerializeField] private Button _trackColorButton;
         [SerializeField] private Image _trackColorPreview;
 
         [Header("Sphere")]
         [SerializeField] private Toggle _sphereToggle;
+        [SerializeField] private Toggle _sphereUseVideoToggle;
+
+        [Header("Color Picker")]
+        [Tooltip("Общий FlexibleColorPicker из сцены (неактивный). Если пусто — найдётся автоматически")]
+        [SerializeField] private FlexibleColorPicker _colorPicker;
 
         [Header("Materials")]
         [SerializeField] private TextMeshProUGUI _defaultMaterialLabel;
         [SerializeField] private GameObject _materialGridPanel;
         [SerializeField] private Transform _materialGridContainer;
+
+        [Header("Particle Sprites")]
+        [SerializeField] private GameObject _spriteGridPanel;
+        [SerializeField] private Transform _spriteGridContainer;
 
         [Header("Settings")]
         [SerializeField]
@@ -67,6 +81,8 @@ namespace RKS.RhythmParkour.Rhythm
 
         private RhythmLevelData _levelData;
         private bool _isRefreshing;
+        private enum PickerTarget { None, Particle, Obstacle, Track }
+        private PickerTarget _pickerTarget = PickerTarget.None;
 
     #endregion
 
@@ -75,11 +91,15 @@ namespace RKS.RhythmParkour.Rhythm
         protected override void OnInjected()
         {
             ResolveDependencies();
+            AutoFindUI();
             ValidateReferences();
         }
 
         protected override void OnReady()
         {
+
+            ResolveDependencies();
+            AutoFindUI();
             Subscribe();
             RefreshFromData();
             ApplyVisual();
@@ -96,39 +116,110 @@ namespace RKS.RhythmParkour.Rhythm
 
         private void ResolveDependencies()
         {
+            if (timelineUI == null) timelineUI = FindFirstObjectByType<TimelineUI>();
+            if (editorController == null) editorController = FindFirstObjectByType<RkslEditorController>();
+            if (previewManager == null) previewManager = FindFirstObjectByType<RhythmParkourManager>();
+            if (preview == null) preview = FindFirstObjectByType<TimelinePreview>();
+
             _levelData = timelineUI?.levelData
                          ?? editorController?.levelData
                          ?? previewManager?.levelData;
         }
 
+        private static T FindByName<T>(string objectName) where T : Component
+        {
+            var go = GameObject.Find(objectName);
+            if (go == null) return null;
+            return go.GetComponent<T>();
+        }
+
+        private void AutoFindUI()
+        {
+
+            if (_particlesToggle == null)
+            {
+                _particlesToggle = FindByName<Toggle>("ToggleParticlesEnabled");
+                if (_particlesToggle == null)
+                {
+                    var all = FindObjectsByType<Toggle>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    foreach (var t in all)
+                        if (t.name.IndexOf("Particle", StringComparison.OrdinalIgnoreCase) >= 0) { _particlesToggle = t; break; }
+                }
+            }
+            if (_sphereToggle == null)
+            {
+                _sphereToggle = FindByName<Toggle>("ToggleSphereRotating");
+                if (_sphereToggle == null)
+                {
+                    var all = FindObjectsByType<Toggle>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                    foreach (var t in all)
+                        if (t.name.IndexOf("SphereRotat", StringComparison.OrdinalIgnoreCase) >= 0) { _sphereToggle = t; break; }
+                }
+            }
+            if (_sphereUseVideoToggle == null)
+                _sphereUseVideoToggle = FindByName<Toggle>("ToggleSphereUseVideo");
+            if (_particlesColorButton == null)
+                _particlesColorButton = FindByName<Button>("ButtonParticlesColor");
+            if (_particlesSpriteButton == null)
+                _particlesSpriteButton = FindByName<Button>("ButtonParticlesSprite");
+            if (_trackColorButton == null)
+                _trackColorButton = FindByName<Button>("ButtonTrackColor");
+            if (_obstacleColorButton == null)
+                _obstacleColorButton = FindByName<Button>("ButtonObstaclesColor");
+            if (_colorPicker == null)
+            {
+                var pickers = FindObjectsByType<FlexibleColorPicker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                if (pickers != null && pickers.Length > 0) _colorPicker = pickers[0];
+            }
+            if (_particleColorPreview == null)
+            {
+                var go = GameObject.Find("ParticleColorPreview");
+                if (go != null) _particleColorPreview = go.GetComponent<Image>();
+            }
+            if (_trackColorPreview == null)
+            {
+                var go = GameObject.Find("TrackColorPreview");
+                if (go != null) _trackColorPreview = go.GetComponent<Image>();
+            }
+            if (_obstacleColorPreview == null)
+            {
+                var go = GameObject.Find("ObstacleColorPreview");
+                if (go != null) _obstacleColorPreview = go.GetComponent<Image>();
+            }
+        }
+
         private void ValidateReferences()
         {
-            if (_levelData == null)
-            {
-                Debug.LogError("[VisualSettings] RhythmLevelData не найден. " +
-                               "Убедитесь, что в сцене есть RkslEditorController или TimelineUI.", this);
-                enabled = false;
-                return;
-            }
 
-            if (_particlesToggle == null || _sphereToggle == null)
-            {
-                Debug.LogError("[VisualSettings] Обязательные UI-ссылки не назначены в Inspector. " +
-                               "Настройте VisualSettings вручную в сцене.", this);
-                enabled = false;
-            }
+            if (_levelData == null)
+                Debug.LogWarning("[VisualSettings] RhythmLevelData пока нет — подхватим позже из TimelineUI/Transfer.", this);
+            if (_particlesToggle == null)
+                Debug.LogWarning("[VisualSettings] ToggleParticlesEnabled не найден — тоггл частиц недоступен.", this);
+            if (_sphereToggle == null)
+                Debug.LogWarning("[VisualSettings] ToggleSphereRotating не найден — тоггл сферы недоступен.", this);
         }
 
         private void Subscribe()
         {
-            if (_particlesToggle != null) _particlesToggle.onValueChanged.AddListener(OnParticlesChanged);
-            if (_sphereToggle != null) _sphereToggle.onValueChanged.AddListener(OnSphereChanged);
+            if (_particlesToggle != null) { _particlesToggle.onValueChanged.RemoveListener(OnParticlesChanged); _particlesToggle.onValueChanged.AddListener(OnParticlesChanged); }
+            if (_sphereToggle != null) { _sphereToggle.onValueChanged.RemoveListener(OnSphereChanged); _sphereToggle.onValueChanged.AddListener(OnSphereChanged); }
+            if (_sphereUseVideoToggle != null) { _sphereUseVideoToggle.onValueChanged.RemoveListener(OnSphereVideoChanged); _sphereUseVideoToggle.onValueChanged.AddListener(OnSphereVideoChanged); }
+            if (_particlesColorButton != null) { _particlesColorButton.onClick.RemoveListener(OpenParticleColorPicker); _particlesColorButton.onClick.AddListener(OpenParticleColorPicker); }
+            if (_trackColorButton != null) { _trackColorButton.onClick.RemoveListener(OpenTrackColorPicker); _trackColorButton.onClick.AddListener(OpenTrackColorPicker); }
+            if (_obstacleColorButton != null) { _obstacleColorButton.onClick.RemoveListener(OpenObstacleColorPicker); _obstacleColorButton.onClick.AddListener(OpenObstacleColorPicker); }
+            if (_particlesSpriteButton != null) { _particlesSpriteButton.onClick.RemoveListener(ToggleSpriteGrid); _particlesSpriteButton.onClick.AddListener(ToggleSpriteGrid); }
         }
 
         private void Unsubscribe()
         {
             if (_particlesToggle != null) _particlesToggle.onValueChanged.RemoveListener(OnParticlesChanged);
             if (_sphereToggle != null) _sphereToggle.onValueChanged.RemoveListener(OnSphereChanged);
+            if (_sphereUseVideoToggle != null) _sphereUseVideoToggle.onValueChanged.RemoveListener(OnSphereVideoChanged);
+            if (_particlesColorButton != null) _particlesColorButton.onClick.RemoveListener(OpenParticleColorPicker);
+            if (_trackColorButton != null) _trackColorButton.onClick.RemoveListener(OpenTrackColorPicker);
+            if (_obstacleColorButton != null) _obstacleColorButton.onClick.RemoveListener(OpenObstacleColorPicker);
+            if (_particlesSpriteButton != null) _particlesSpriteButton.onClick.RemoveListener(ToggleSpriteGrid);
+            if (_colorPicker != null) _colorPicker.onColorChange.RemoveListener(OnPickerColorChanged);
         }
 
     #endregion
@@ -144,17 +235,23 @@ public void SetLevelData(RhythmLevelData data)
 
 public void RefreshFromData()
         {
-            if (_levelData == null) return;
+            if (_levelData == null)
+            {
+                ResolveDependencies();
+                if (_levelData == null) return;
+            }
 
             _isRefreshing = true;
             try
             {
-                if (_particlesToggle != null) _particlesToggle.isOn = _levelData.particlesEnabled;
-                if (_sphereToggle != null) _sphereToggle.isOn = _levelData.sphereRotates;
+                if (_particlesToggle != null) _particlesToggle.SetIsOnWithoutNotify(_levelData.particlesEnabled);
+                if (_sphereToggle != null) _sphereToggle.SetIsOnWithoutNotify(_levelData.sphereRotates);
+                if (_sphereUseVideoToggle != null) _sphereUseVideoToggle.SetIsOnWithoutNotify(_levelData.sphereUseVideo);
 
                 if (_particleColorPreview != null) _particleColorPreview.color = _levelData.particleColor;
                 if (_obstacleColorPreview != null) _obstacleColorPreview.color = _levelData.obstacleColor;
                 if (_trackColorPreview != null) _trackColorPreview.color = _levelData.trackColor;
+                UpdateSpriteLabel();
 
                 UpdateMaterialLabel();
             }
@@ -170,39 +267,276 @@ public void RefreshFromData()
 
         private void OnParticlesChanged(bool value)
         {
-            if (_isRefreshing || _levelData == null) return;
+            if (_isRefreshing) return;
+            if (_levelData == null) ResolveDependencies();
+            if (_levelData == null) return;
             _levelData.particlesEnabled = value;
             ApplyVisual();
         }
 
         private void OnSphereChanged(bool value)
         {
-            if (_isRefreshing || _levelData == null) return;
+            if (_isRefreshing) return;
+            if (_levelData == null) ResolveDependencies();
+            if (_levelData == null) return;
             _levelData.sphereRotates = value;
+            ApplyVisual();
+        }
+
+        private void OnSphereVideoChanged(bool value)
+        {
+            if (_isRefreshing) return;
+            if (_levelData == null) ResolveDependencies();
+            if (_levelData == null) return;
+            _levelData.sphereUseVideo = value;
+            ApplyVisual();
+        }
+
+        public void OpenParticleColorPicker() => OpenPicker(PickerTarget.Particle);
+
+        public void OpenParticleSettings() => OpenPicker(PickerTarget.Particle);
+        public void OpenTrackColorPicker() => OpenPicker(PickerTarget.Track);
+        public void OpenObstacleColorPicker() => OpenPicker(PickerTarget.Obstacle);
+
+        private void OpenPicker(PickerTarget target)
+        {
+            if (_levelData == null) ResolveDependencies();
+            if (_levelData == null) { Debug.LogWarning("[VisualSettings] Нет LevelData для пикера.", this); return; }
+            if (_colorPicker == null)
+            {
+                var pickers = FindObjectsByType<FlexibleColorPicker>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+                if (pickers != null && pickers.Length > 0) _colorPicker = pickers[0];
+            }
+            if (_colorPicker == null) { Debug.LogWarning("[VisualSettings] FlexibleColorPicker не найден в сцене.", this); return; }
+
+            if (_pickerTarget == target && _colorPicker.gameObject.activeSelf)
+            {
+                _colorPicker.gameObject.SetActive(false);
+                _pickerTarget = PickerTarget.None;
+                return;
+            }
+            _pickerTarget = target;
+            Color current = target switch
+            {
+                PickerTarget.Particle => _levelData.particleColor,
+                PickerTarget.Obstacle => _levelData.obstacleColor,
+                PickerTarget.Track => _levelData.trackColor,
+                _ => Color.white
+            };
+            _colorPicker.gameObject.SetActive(true);
+            _colorPicker.SetColor(current);
+            _colorPicker.onColorChange.RemoveListener(OnPickerColorChanged);
+            _colorPicker.onColorChange.AddListener(OnPickerColorChanged);
+
+            OnPickerColorChanged(current);
+        }
+
+        private void OnPickerColorChanged(Color c)
+        {
+            if (_levelData == null) return;
+            c.a = 1f;
+            switch (_pickerTarget)
+            {
+                case PickerTarget.Particle:
+                    _levelData.particleColor = c;
+                    if (_particleColorPreview != null) _particleColorPreview.color = c;
+                    break;
+                case PickerTarget.Obstacle:
+                    _levelData.obstacleColor = c;
+                    if (_obstacleColorPreview != null) _obstacleColorPreview.color = c;
+                    break;
+                case PickerTarget.Track:
+                    _levelData.trackColor = c;
+                    if (_trackColorPreview != null) _trackColorPreview.color = c;
+                    break;
+                default: return;
+            }
+            ApplyVisual();
+        }
+
+        public void CloseColorPicker()
+        {
+            if (_colorPicker != null) _colorPicker.gameObject.SetActive(false);
+            _pickerTarget = PickerTarget.None;
+        }
+
+        public void ToggleSpriteGrid()
+        {
+            if (_levelData == null) ResolveDependencies();
+            if (_levelData == null) return;
+            EnsureSpriteGrid();
+            if (_spriteGridPanel == null) return;
+            bool show = !_spriteGridPanel.activeSelf;
+            _spriteGridPanel.SetActive(show);
+            if (show) BuildSpriteOptions();
+        }
+
+        public void HideSpriteGrid()
+        {
+            if (_spriteGridPanel != null) _spriteGridPanel.SetActive(false);
+        }
+
+        private void EnsureSpriteGrid()
+        {
+            if (_spriteGridPanel != null && _spriteGridContainer != null) return;
+            if (_spriteGridPanel != null && _spriteGridContainer == null)
+            {
+                var t = _spriteGridPanel.transform.Find("Grid");
+                if (t != null) _spriteGridContainer = t;
+                else _spriteGridContainer = _spriteGridPanel.transform;
+            }
+            if (_spriteGridPanel != null) return;
+            Canvas canvas = GetComponentInParent<Canvas>();
+            if (canvas == null) canvas = FindFirstObjectByType<Canvas>();
+            if (canvas == null) return;
+            var panelGO = new GameObject("SpriteGridPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+            panelGO.transform.SetParent(canvas.transform, false);
+            var rt = panelGO.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero; rt.sizeDelta = new Vector2(560, 420);
+            panelGO.GetComponent<Image>().color = new Color(0.12f, 0.12f, 0.14f, 0.96f);
+            var vlg = panelGO.GetComponent<VerticalLayoutGroup>();
+            vlg.padding = new RectOffset(12, 12, 12, 12); vlg.spacing = 8;
+            vlg.childAlignment = TextAnchor.UpperCenter; vlg.childControlWidth = true; vlg.childControlHeight = false;
+            var titleGO = new GameObject("Title", typeof(RectTransform));
+            titleGO.transform.SetParent(panelGO.transform, false);
+            var ttmp = titleGO.AddComponent<TextMeshProUGUI>();
+            ttmp.text = "Спрайт частиц"; ttmp.fontSize = 16;
+            ttmp.alignment = TextAlignmentOptions.Center; ttmp.color = Color.white;
+            var tle = titleGO.AddComponent<LayoutElement>(); tle.minHeight = 24;
+            var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(Image), typeof(Mask));
+            scrollGO.transform.SetParent(panelGO.transform, false);
+            var sle = scrollGO.AddComponent<LayoutElement>(); sle.flexibleHeight = 1; sle.minHeight = 200;
+            scrollGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.15f);
+            scrollGO.GetComponent<Mask>().showMaskGraphic = false;
+            var scroll = scrollGO.GetComponent<ScrollRect>();
+            scroll.horizontal = false; scroll.vertical = true;
+            var gridGO = new GameObject("Grid", typeof(RectTransform), typeof(GridLayoutGroup));
+            gridGO.transform.SetParent(scrollGO.transform, false);
+            var grt = gridGO.GetComponent<RectTransform>();
+            grt.anchorMin = new Vector2(0, 1); grt.anchorMax = new Vector2(1, 1);
+            grt.pivot = new Vector2(0.5f, 1); grt.anchoredPosition = Vector2.zero;
+            var glg = gridGO.GetComponent<GridLayoutGroup>();
+            glg.cellSize = new Vector2(80, 80); glg.spacing = new Vector2(8, 8);
+            glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount; glg.constraintCount = 6;
+            glg.childAlignment = TextAnchor.UpperCenter;
+            var csf = gridGO.AddComponent<ContentSizeFitter>();
+            csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            scroll.content = grt;
+            scroll.viewport = scrollGO.GetComponent<RectTransform>();
+            var closeGO = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button));
+            closeGO.transform.SetParent(panelGO.transform, false);
+            closeGO.GetComponent<RectTransform>().sizeDelta = new Vector2(120, 32);
+            closeGO.GetComponent<Image>().color = new Color(0.5f, 0.2f, 0.2f, 1);
+            closeGO.GetComponent<Button>().onClick.AddListener(HideSpriteGrid);
+            var ctxt = new GameObject("Text", typeof(RectTransform));
+            ctxt.transform.SetParent(closeGO.transform, false);
+            var ctrt = ctxt.GetComponent<RectTransform>();
+            ctrt.anchorMin = Vector2.zero; ctrt.anchorMax = Vector2.one;
+            ctrt.offsetMin = Vector2.zero; ctrt.offsetMax = Vector2.zero;
+            var ctmp = ctxt.AddComponent<TextMeshProUGUI>();
+            ctmp.text = "Закрыть"; ctmp.fontSize = 14;
+            ctmp.alignment = TextAlignmentOptions.Center; ctmp.color = Color.white;
+            _spriteGridPanel = panelGO;
+            _spriteGridContainer = grt.transform;
+            _spriteGridPanel.SetActive(false);
+        }
+
+        private void BuildSpriteOptions()
+        {
+            if (_spriteGridContainer == null) return;
+            for (int i = _spriteGridContainer.childCount - 1; i >= 0; i--)
+                Destroy(_spriteGridContainer.GetChild(i).gameObject);
+            AddSpriteOption("Дефолт", "", null, true);
+            foreach (var preset in ParticleSpriteLibrary.PresetNames)
+                AddSpriteOption(preset, ParticleSpriteLibrary.PresetPrefix + preset, ParticleSpriteLibrary.Get(ParticleSpriteLibrary.PresetPrefix + preset), false);
+            var resourcesSprites = Resources.LoadAll<Sprite>("");
+            foreach (var spr in resourcesSprites)
+            {
+                if (spr == null) continue;
+                AddSpriteOption(spr.name, spr.name, spr, false);
+            }
+        }
+
+        private void AddSpriteOption(string name, string storedName, Sprite spr, bool isDefault)
+        {
+            var btnGO = new GameObject("SprBtn_" + name, typeof(RectTransform), typeof(Image), typeof(Button));
+            btnGO.transform.SetParent(_spriteGridContainer, false);
+            btnGO.GetComponent<RectTransform>().sizeDelta = new Vector2(80, 80);
+            btnGO.GetComponent<Image>().color = new Color(0.22f, 0.22f, 0.24f, 1f);
+            if (spr != null)
+            {
+                var iconGO = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+                iconGO.transform.SetParent(btnGO.transform, false);
+                var irt = iconGO.GetComponent<RectTransform>();
+                irt.anchorMin = new Vector2(0.1f, 0.22f); irt.anchorMax = new Vector2(0.9f, 0.9f);
+                irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+                var iimg = iconGO.GetComponent<Image>();
+                iimg.sprite = spr; iimg.color = Color.white; iimg.preserveAspect = true;
+            }
+            var lblGO = new GameObject("Label", typeof(RectTransform));
+            lblGO.transform.SetParent(btnGO.transform, false);
+            var lrt = lblGO.GetComponent<RectTransform>();
+            lrt.anchorMin = new Vector2(0, 0); lrt.anchorMax = new Vector2(1, 0.22f);
+            lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+            var ltmp = lblGO.AddComponent<TextMeshProUGUI>();
+            ltmp.text = name; ltmp.fontSize = 8;
+            ltmp.alignment = TextAlignmentOptions.Center; ltmp.color = new Color(1, 1, 1, 0.9f);
+            ltmp.enableWordWrapping = false; ltmp.overflowMode = TextOverflowModes.Ellipsis;
+            string capturedName = storedName;
+            Sprite capturedSpr = spr;
+            bool capturedDefault = isDefault;
+            btnGO.GetComponent<Button>().onClick.AddListener(() => OnSpritePicked(capturedName, capturedSpr, capturedDefault));
+            if (!isDefault && _levelData != null && _levelData.particleSpriteName == capturedName)
+            {
+                var ol = btnGO.AddComponent<Outline>();
+                ol.effectColor = Color.green; ol.effectDistance = new Vector2(3, 3);
+            }
+        }
+
+        private void OnSpritePicked(string storedName, Sprite spr, bool isDefault)
+        {
+            if (_levelData == null) return;
+            if (isDefault)
+            {
+                _levelData.particleSpriteName = "";
+                _levelData.particleSprite = null;
+            }
+            else
+            {
+                _levelData.particleSpriteName = storedName;
+                _levelData.particleSprite = spr;
+            }
+            UpdateSpriteLabel();
+            HideSpriteGrid();
+            ApplyVisual();
+        }
+
+        private void UpdateSpriteLabel()
+        {
+            if (_particleSpriteLabel == null || _levelData == null) return;
+            string n = _levelData.particleSpriteName;
+            if (string.IsNullOrEmpty(n)) _particleSpriteLabel.text = "Спрайт: дефолт";
+            else if (n.StartsWith(ParticleSpriteLibrary.PresetPrefix)) _particleSpriteLabel.text = "Спрайт: " + n.Substring(ParticleSpriteLibrary.PresetPrefix.Length);
+            else _particleSpriteLabel.text = "Спрайт: " + n;
+        }
+
+        public void ClearParticleSprite()
+        {
+            if (_levelData == null) return;
+            _levelData.particleSprite = null;
+            _levelData.particleSpriteName = "";
+            UpdateSpriteLabel();
             ApplyVisual();
         }
 
     #endregion
 
-    #region Color Cycling
+    #region Color Cycling (legacy, оставлено для совместимости)
 
-        public void CycleParticleColor() => CycleColor(c => _levelData.particleColor = c, () => _levelData.particleColor, _particleColorPreview);
-        public void CycleObstacleColor() => CycleColor(c => _levelData.obstacleColor = c, () => _levelData.obstacleColor, _obstacleColorPreview);
-        public void CycleTrackColor() => CycleColor(c => _levelData.trackColor = c, () => _levelData.trackColor, _trackColorPreview);
-
-        private void CycleColor(Action<Color> setter, Func<Color> getter, Image preview)
-        {
-            if (_levelData == null || _presetColors.Length == 0) return;
-
-            Color current = getter();
-            int idx = FindNearestColorIndex(current);
-            int next = (idx + 1) % _presetColors.Length;
-            Color newColor = _presetColors[next];
-
-            setter(newColor);
-            if (preview != null) preview.color = newColor;
-            ApplyVisual();
-        }
+        public void CycleParticleColor() => OpenParticleColorPicker();
+        public void CycleObstacleColor() => OpenObstacleColorPicker();
+        public void CycleTrackColor() => OpenTrackColorPicker();
 
         private int FindNearestColorIndex(Color target)
         {
@@ -229,7 +563,7 @@ public void RefreshFromData()
 
     #endregion
 
-    #region Material Selection
+    #region Material Selection (без fallback)
 
         public void ToggleMaterialGrid()
         {
@@ -250,34 +584,15 @@ public void RefreshFromData()
             AddMaterialOption("Дефолт (префаб)", null, isDefault: true);
 
             var catalogMaterials = catalog != null ? catalog.GetAllMaterials() : new List<Material>();
-            if (catalogMaterials.Count > 0)
+
+            if (catalogMaterials.Count == 0)
             {
-                foreach (var mat in catalogMaterials)
-                {
-                    if (mat != null) AddMaterialOption(mat.name, mat, isDefault: false);
-                }
+                Debug.LogWarning("[VisualSettings] Каталог материалов пуст — доступен только дефолт. Заполни GlobalObstacleCatalog.", this);
+                return;
             }
-            else
+            foreach (var mat in catalogMaterials)
             {
-                AddDiscoveredMaterialsFallback();
-            }
-        }
-
-        private void AddDiscoveredMaterialsFallback()
-        {
-            var discovered = Resources.FindObjectsOfTypeAll<Material>();
-            var seen = new HashSet<string>();
-
-            foreach (var mat in discovered)
-            {
-                if (mat == null) continue;
-                if (seen.Contains(mat.name)) continue;
-
-                string lower = mat.name.ToLowerInvariant();
-                if (!lower.Contains("obstacle") && !lower.Contains("level")) continue;
-
-                seen.Add(mat.name);
-                AddMaterialOption(mat.name, mat, isDefault: false);
+                if (mat != null) AddMaterialOption(mat.name, mat, isDefault: false);
             }
         }
 
@@ -354,7 +669,7 @@ public void RefreshFromData()
 
         private void UpdateMaterialLabel()
         {
-            if (_defaultMaterialLabel == null) return;
+            if (_defaultMaterialLabel == null || _levelData == null) return;
 
             string name = string.IsNullOrEmpty(_levelData.defaultObstacleMaterialName)
                 ? "Дефолт (префаб)"
@@ -377,8 +692,12 @@ public void RefreshFromData()
                 if (mat != null) _levelData.defaultObstacleMaterial = mat;
             }
 
+            if (_levelData.particleSprite == null && !string.IsNullOrEmpty(_levelData.particleSpriteName))
+                _levelData.particleSprite = ParticleSpriteLibrary.Get(_levelData.particleSpriteName);
+
             if (visual != null) visual.Apply(_levelData, null, true);
 
+            if (preview != null && !preview.previewEnabled) preview.SetPreviewEnabled(true);
             preview?.ForceRefresh();
         }
 

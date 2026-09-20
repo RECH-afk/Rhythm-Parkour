@@ -226,6 +226,9 @@ if (hideWhenPlaying && manager != null && manager.isPlaying)
             ClearGhosts();
             if (level == null || level.events.Count==0) return;
             EnsureRoot();
+            Material defMat = null;
+            if (!string.IsNullOrEmpty(level.defaultObstacleMaterialName) && catalog != null)
+                defMat = catalog.GetMaterial(level.defaultObstacleMaterialName);
             for (int i=0;i<level.events.Count;i++)
             {
                 var ev = level.events[i];
@@ -253,6 +256,10 @@ if (useGhostMaterial)
                     foreach (var r in rends)
                     {
                         var newMats = r.materials;
+                        if (defMat != null)
+                        {
+                            for (int m=0;m<newMats.Length;m++) newMats[m] = new Material(defMat);
+                        }
                         for (int m=0;m<newMats.Length;m++)
                         {
                             if (newMats[m].HasProperty("_Color"))
@@ -315,14 +322,7 @@ if (useGhostMaterial)
                 var go = ghosts[i];
                 if (go == null) continue;
                 var ev = level.events[i];
-                float speed = ev.speed;
-                if (speed < 0.1f)
-                {
-                    var pf = level.GetPrefab(ev.prefabIndex, catalog);
-                    if (pf == null) pf = catalog.GetPrefab(ev.prefabIndex);
-                    if (pf != null) { var ob = pf.GetComponent<Obstacle>(); if (ob) speed = ob.baseSpeed; }
-                    if (speed < 0.1f) speed = manager != null ? manager.defaultObstacleSpeed : 12f;
-                }
+                float speed = Mathf.Max(1f, ev.speed);
 
                 float spawnT = ev.time;
 

@@ -56,6 +56,10 @@ namespace RKS.RhythmParkour.Rhythm
         public Image coverPreviewImage;
         public TextMeshProUGUI statusText;
 
+        [Header("Test Play")]
+        public Button testPlayButton;
+        public string gameSceneName = "IsGameScene";
+
         string currentAudioPath;
         string currentVideoPath;
         string currentCoverPath;
@@ -98,6 +102,8 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             if (coverLoader != null) coverLoader.onFileLoaded.AddListener((p, c) => { currentCoverPath = p; UpdateStatus($"Обложка: {Path.GetFileName(p)}"); LoadCoverPreview(p); });
 
             EnsureVisualSettings();
+            WireTestButton();
+            RestorePathsFromData();
 
             if (levelData != null) PopulateUIFromData();
             else if (timelineUI != null && timelineUI.levelData != null) { levelData = timelineUI.levelData; PopulateUIFromData(); }
@@ -121,6 +127,59 @@ if (titleInput == null || artistInput == null || creatorInput == null)
 
             if (visualSettings == null) Debug.LogWarning("[RkslEditor] LevelEditorVisualSettings не забинден — добавь в EditorInstaller.", this);
         }
+
+        void WireTestButton()
+        {
+            if (testPlayButton == null)
+            {
+                var go = GameObject.Find("ButtonTest");
+                if (go != null) testPlayButton = go.GetComponent<Button>();
+            }
+            if (testPlayButton == null) return;
+            testPlayButton.interactable = true;
+            testPlayButton.onClick.RemoveListener(TestPlayLevel);
+            testPlayButton.onClick.AddListener(TestPlayLevel);
+        }
+
+        void RestorePathsFromData()
+        {
+            if (levelData == null) return;
+            if (!string.IsNullOrEmpty(levelData.audioPath) && File.Exists(levelData.audioPath))
+            {
+                currentAudioPath = levelData.audioPath;
+                if (levelData.music != null) currentAudioClip = levelData.music;
+            }
+            if (!string.IsNullOrEmpty(levelData.videoPath) && File.Exists(levelData.videoPath))
+                currentVideoPath = levelData.videoPath;
+            if (levelData.cover != null)
+            {
+                currentCoverSprite = levelData.cover;
+                if (coverPreviewImage != null) coverPreviewImage.sprite = levelData.cover;
+            }
+        }
+
+        public void TestPlayLevel()
+        {
+            if (timelineUI != null && timelineUI.levelData != null) levelData = timelineUI.levelData;
+            if (levelData == null) { UpdateStatus("Нет данных уровня для теста"); return; }
+            if (levelData.music == null)
+            {
+                if (currentAudioClip != null) levelData.music = currentAudioClip;
+                else { UpdateStatus("Загрузите аудио перед тестом"); return; }
+            }
+            if (titleInput != null) levelData.fullTitle = titleInput.text;
+            if (artistInput != null) levelData.songAuthor = artistInput.text;
+            if (creatorInput != null) levelData.mapAuthor = creatorInput.text;
+            if (string.IsNullOrEmpty(levelData.audioPath)) levelData.audioPath = currentAudioPath;
+            if (string.IsNullOrEmpty(levelData.videoPath)) levelData.videoPath = currentVideoPath;
+            if (timelineUI != null) timelineUI.levelData = levelData;
+            if (previewManager != null) previewManager.levelData = levelData;
+            if (transfer != null)
+                transfer.SetLevel(levelData, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            UpdateStatus("Тест уровня — возврат в редактор: Esc");
+            if (Transition != null) Transition.LoadScene(gameSceneName);
+            else UnityEngine.SceneManagement.SceneManager.LoadScene(gameSceneName);
+        }
         void PreviewVideo(string path)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
@@ -135,6 +194,7 @@ if (titleInput == null || artistInput == null || creatorInput == null)
         protected override void OnDestroy()
         {
             if (audioLoader != null) audioLoader.onFileLoaded.RemoveListener(OnAudioLoaded);
+            if (testPlayButton != null) testPlayButton.onClick.RemoveListener(TestPlayLevel);
             base.OnDestroy();
         }
 
@@ -205,6 +265,11 @@ if (timelineUI.levelData.events.Count > 0 && string.IsNullOrEmpty(timelineUI.lev
             levelData.videoPath = "";
             levelData.bpm = 128f;
             levelData.offset = 0f;
+            levelData.particlesEnabled = true;
+            levelData.particleSprite = null;
+            levelData.particleSpriteName = "";
+            levelData.sphereRotates = true;
+            levelData.sphereUseVideo = true;
             currentAudioPath = null; currentVideoPath = null; currentCoverPath = null; currentAudioClip = null; currentCoverSprite = null;
             if (titleInput != null) titleInput.text = "";
             if (artistInput != null) artistInput.text = "";

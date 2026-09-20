@@ -22,7 +22,7 @@ namespace RKS.RhythmParkour.UI
     public class MusicInfoUI : RKSBehaviour
     {
         [Header("References")]
-        public RhythmLevelData levelData;
+        [HideInInspector] public RhythmLevelData levelData;
         [HideInInspector]
         [InjectOptional] public RhythmParkourManager manager;
         [HideInInspector]

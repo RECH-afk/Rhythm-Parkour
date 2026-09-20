@@ -301,7 +301,6 @@ namespace RKS.RhythmParkour.Rhythm
             int prefabCount = catalog != null ? catalog.Count : 0;
             List<GameObject> sourcePrefabs = null;
             if (prefabCount > 0) sourcePrefabs = catalog.GetAll();
-            else if (data.obstaclePrefabs != null && data.obstaclePrefabs.Count > 0) { sourcePrefabs = data.obstaclePrefabs; prefabCount = sourcePrefabs.Count; }
 
             if (sourcePrefabs != null)
             {
@@ -390,9 +389,9 @@ namespace RKS.RhythmParkour.Rhythm
                 sm.BeginLevel(levelData != null ? levelData.fullTitle : "", total);
             }
 
-            if (playerController != null) playerController.SetControl(true);
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+       //     if (playerController != null) playerController.SetControl(true);
+       //    Cursor.lockState = CursorLockMode.Locked;
+       //    Cursor.visible = false;
         }
 
 
@@ -456,8 +455,8 @@ namespace RKS.RhythmParkour.Rhythm
                 if (cur == "IsGameScene")
                 {
                     Time.timeScale = 1f;
-                    Cursor.lockState = CursorLockMode.None;
-                    Cursor.visible = true;
+                   // Cursor.lockState = CursorLockMode.None;
+                   // Cursor.visible = true;
                     string target = transfer.sourceScene;
                     if (string.IsNullOrEmpty(target)) target = "IsLevelEditorScene";
 
@@ -653,11 +652,6 @@ namespace RKS.RhythmParkour.Rhythm
                 var all = catalog.GetAll();
                 for (int i = 0; i < all.Count; i++)
                     if (all[i] != null && ob.name.Contains(all[i].name)) { idx = i; break; }
-            }
-            else if (levelData != null && levelData.obstaclePrefabs != null)
-            {
-                for (int i = 0; i < levelData.obstaclePrefabs.Count; i++)
-                    if (levelData.obstaclePrefabs[i] != null && ob.name.Contains(levelData.obstaclePrefabs[i].name)) { idx = i; break; }
             }
             if (!pools.ContainsKey(idx)) pools[idx] = new Queue<Obstacle>();
             pools[idx].Enqueue(ob);

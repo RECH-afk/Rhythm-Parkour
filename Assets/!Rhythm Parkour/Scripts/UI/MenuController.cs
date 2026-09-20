@@ -144,7 +144,7 @@ namespace RKS.RhythmParkour.UI
             if (previewVideo == null)
             {
                 previewVideo = GetComponent<VideoPlayer>();
-                if (previewVideo == null) previewVideo = FindAnyObjectByType<VideoPlayer>();
+                if (previewVideo == null) previewVideo = FindFirstObjectByType<VideoPlayer>();
                 if (previewVideo == null)
                     Debug.LogWarning("[MenuController] Preview VideoPlayer не найден — назначь поле previewVideo.", this);
             }

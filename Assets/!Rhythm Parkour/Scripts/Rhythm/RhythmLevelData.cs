@@ -56,17 +56,19 @@ namespace RKS.RhythmParkour.Rhythm
         [Header("Level Visual")]
         public bool particlesEnabled = true;
         public Color particleColor = new Color(0.2f, 0.7f, 1f, 1f);
+        [Tooltip("Имя спрайта частиц (сохраняется в .rksl). Пусто = спрайт по умолчанию из сцены")]
+        public string particleSpriteName = "";
+        [Tooltip("Рантайм-спрайт частиц (не сериализуется в .rksl, резолвится по имени или из файла)")]
+        public Sprite particleSprite;
         public Color obstacleColor = Color.white;
         public Color trackColor = new Color(0.2f, 0.6f, 1f, 1f);
         public bool sphereRotates = true;
+        [Tooltip("Использует ли сфера видео-текстуру (VideoReactive). Выкл = обычный материал сферы")]
+        public bool sphereUseVideo = true;
         [Tooltip("Имя материала для препятствий по умолчанию (пусто = материал префаба). Сохраняется в .rksl")]
         public string defaultObstacleMaterialName = "";
         [Tooltip("Опционально прямой референс для редактора (не сериализуется в .rksl, синхронизируется по имени)")]
         public Material defaultObstacleMaterial;
-
-        [Header("Prefabs (DEPRECATED)")]
-        [Tooltip("Устарело: теперь префабы берутся из GlobalObstacleCatalog (Resources/GlobalObstacleCatalog). Оставлено для совместимости старых уровней.")]
-        public List<GameObject> obstaclePrefabs = new List<GameObject>();
 
         [Header("Notes")]
         public List<ObstacleEvent> events = new List<ObstacleEvent>();
@@ -77,50 +79,18 @@ namespace RKS.RhythmParkour.Rhythm
         public float TotalBeats => music ? TimeToBeat(music.length) : 0f;
         public void SortByTime() => events.Sort((a, b) => a.time.CompareTo(b.time));
 
-
-
-
         public GameObject GetPrefab(int index, GlobalObstacleCatalog catalog = null)
         {
-
-            if (catalog != null)
-            {
-                var global = catalog.GetPrefab(index);
-                if (global != null) return global;
-            }
-
-            if (obstaclePrefabs != null && obstaclePrefabs.Count > 0)
-            {
-                if (index < 0 || index >= obstaclePrefabs.Count) return obstaclePrefabs[0];
-                return obstaclePrefabs[index];
-            }
-            return null;
+            if (catalog == null) return null;
+            return catalog.GetPrefab(index);
         }
-
 
         public int PrefabCount(GlobalObstacleCatalog catalog = null)
         {
-            if (catalog != null)
-            {
-                int g = catalog.Count;
-                if (g > 0) return g;
-            }
-            return obstaclePrefabs != null ? obstaclePrefabs.Count : 0;
+            if (catalog == null) return 0;
+            return catalog.Count;
         }
 
-
-        public void MigratePrefabsToGlobal(GlobalObstacleCatalog catalog)
-        {
-#if UNITY_EDITOR
-            if (obstaclePrefabs == null || obstaclePrefabs.Count == 0) return;
-            if (catalog == null) return;
-            if (catalog.prefabs != null && catalog.prefabs.Count > 0) return;
-            catalog.prefabs = new List<GameObject>(obstaclePrefabs);
-            UnityEditor.EditorUtility.SetDirty(catalog);
-            UnityEditor.AssetDatabase.SaveAssets();
-            Debug.Log($"[RhythmLevelData] Мигрировано {obstaclePrefabs.Count} префабов в GlobalObstacleCatalog из уровня '{fullTitle}'");
-#endif
-        }
         public void OnValidate() => bpm = Mathf.Max(1f, bpm);
         public RhythmLevelData Clone()
         {
@@ -129,7 +99,6 @@ namespace RKS.RhythmParkour.Rhythm
         public RhythmLevelData CloneDeep()
         {
             var c = (RhythmLevelData)MemberwiseClone();
-            c.obstaclePrefabs = new System.Collections.Generic.List<GameObject>(obstaclePrefabs ?? new System.Collections.Generic.List<GameObject>());
             c.events = new System.Collections.Generic.List<ObstacleEvent>(events ?? new System.Collections.Generic.List<ObstacleEvent>());
             return c;
         }

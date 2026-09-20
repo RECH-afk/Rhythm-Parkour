@@ -1720,7 +1720,6 @@ MonoBehaviour:
     sphereRotates: 1
     defaultObstacleMaterialName: 
     defaultObstacleMaterial: {fileID: 0}
-    obstaclePrefabs: []
     events: []
   dspSongStartTime: 0
   songPosition: 0
@@ -1757,7 +1756,6 @@ MonoBehaviour:
     sphereRotates: 1
     defaultObstacleMaterialName: 
     defaultObstacleMaterial: {fileID: 0}
-    obstaclePrefabs: []
     events: []
   conductor: {fileID: 820601936}
   musicSource: {fileID: 966405}
@@ -1784,7 +1782,6 @@ MonoBehaviour:
       sphereRotates: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
-      obstaclePrefabs: []
       events: []
     rkslPath: 
     levelName: 
@@ -3040,7 +3037,6 @@ MonoBehaviour:
       sphereRotates: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
-      obstaclePrefabs: []
       events: []
     rkslPath: 
     levelName: 
@@ -3683,7 +3679,6 @@ MonoBehaviour:
     sphereRotates: 1
     defaultObstacleMaterialName: 
     defaultObstacleMaterial: {fileID: 0}
-    obstaclePrefabs: []
     events: []
   manager: {fileID: 0}
   transfer:
@@ -3706,7 +3701,6 @@ MonoBehaviour:
       sphereRotates: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
-      obstaclePrefabs: []
       events: []
     rkslPath: 
     levelName: 
@@ -9387,7 +9381,6 @@ MonoBehaviour:
       sphereRotates: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
-      obstaclePrefabs: []
       events: []
     rkslPath: 
     levelName: 
