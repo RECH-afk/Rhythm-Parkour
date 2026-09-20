@@ -171,6 +171,7 @@ namespace RKS.RhythmParkour.UI
             CacheOriginalPosition(_quitConfirmationWindow);
             if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
             if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
+            if (GetComponent<TopPanelController>() == null) gameObject.AddComponent<TopPanelController>();
         }
 
         protected override void OnReady()
@@ -480,7 +481,6 @@ namespace RKS.RhythmParkour.UI
         private void ShowMainMenu()
         {
             if (_isTransitioning) return;
-            StopLevelPreview();
             _selectedLevelPath = null;
             SetSelectedButton(null);
             UpdateDetailsButtonsState();
@@ -492,7 +492,6 @@ namespace RKS.RhythmParkour.UI
         public void ShowLevelList()
         {
             if (_isTransitioning) return;
-            StopLevelPreview();
             _selectedLevelPath = null;
             SetSelectedButton(null);
             UpdateDetailsButtonsState();
@@ -549,7 +548,6 @@ namespace RKS.RhythmParkour.UI
             _selectedLevelPath = null;
             SetSelectedButton(null);
             UpdateDetailsButtonsState();
-            StopLevelPreview();
 
             var rt = _levelDetailsRoot.GetComponent<RectTransform>();
             rt.DOKill(true);
@@ -831,6 +829,10 @@ namespace RKS.RhythmParkour.UI
             if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "N/A";
             if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "N/A";
             if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "N/A";
+            string topTitle = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
+            if (string.IsNullOrEmpty(topTitle)) topTitle = "Без названия";
+            CurrentPreviewTitle = topTitle;
+            CurrentPreviewArtist = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "Unknown";
         }
 
         private IEnumerator DetailsMediaRoutine(string rkslPath, int seq)
@@ -925,8 +927,46 @@ namespace RKS.RhythmParkour.UI
         public bool IsPreviewPlaying => (Audio != null && Audio.IsMusicPlaying())
             || (previewVideo != null && previewVideo.isPlaying);
 
+        public string CurrentPreviewTitle { get; private set; } = "";
+        public string CurrentPreviewArtist { get; private set; } = "";
+        public bool PreviewPaused { get; private set; }
+        public bool HasPreview => !string.IsNullOrEmpty(_lastPreviewAudioPath);
+        public bool IsDetailsVisible => _levelDetailsRoot != null && _levelDetailsRoot.activeSelf;
+        public bool IsMainMenuVisible => _mainMenuRoot != null && _mainMenuRoot.activeSelf;
+
+        public void TogglePreviewPlayback()
+        {
+            if (!HasPreview) return;
+            if (PreviewPaused)
+            {
+                PreviewPaused = false;
+                if (Audio != null) Audio.ResumeAll();
+                if (previewVideo != null) previewVideo.Play();
+            }
+            else if (IsPreviewPlaying)
+            {
+                PreviewPaused = true;
+                if (Audio != null) Audio.PauseAll();
+                if (previewVideo != null) previewVideo.Pause();
+            }
+        }
+
+        public bool RepeatEnabled { get; private set; } = true;
+
+        public void ToggleRepeat()
+        {
+            if (!HasPreview) return;
+            RepeatEnabled = !RepeatEnabled;
+            if (Audio != null) Audio.SetMusicLoop(RepeatEnabled);
+            if (previewVideo != null) previewVideo.isLooping = RepeatEnabled;
+        }
+
+        public float PreviewTime => Audio != null ? Audio.GetMusicTime() : -1f;
+        public float PreviewTrackLength => _previewClip != null ? _previewClip.length : -1f;
+
         public void PlayLevelPreview(string audioPath, string videoPath)
         {
+            PreviewPaused = false;
             if (previewVideo != null && !previewVideo.gameObject.activeSelf)
                 previewVideo.gameObject.SetActive(true);
             bool wasShowingVideo = _previewVideoReady;
@@ -942,6 +982,9 @@ namespace RKS.RhythmParkour.UI
             _previewSeq++;
             _detailsSeq++;
             FadeBackgroundBlend(0f);
+            PreviewPaused = false;
+            CurrentPreviewTitle = "";
+            CurrentPreviewArtist = "";
         }
 
         private void StopLevelPreviewInternal()
@@ -1001,7 +1044,7 @@ namespace RKS.RhythmParkour.UI
                 ClearVideoTarget();
                 previewVideo.source = VideoSource.Url;
                 previewVideo.url = RkslStore.GetFileUri(videoPath);
-                previewVideo.isLooping = true;
+                previewVideo.isLooping = RepeatEnabled;
                 bool prepared = false;
                 VideoPlayer.EventHandler onPrepared = vp => prepared = true;
                 previewVideo.prepareCompleted += onPrepared;
@@ -1029,7 +1072,10 @@ namespace RKS.RhythmParkour.UI
 
             if (seq != _previewSeq) yield break;
             if (clip != null && Audio != null)
+            {
                 Audio.PlayMusic(clip, previewFadeTime, start);
+                Audio.SetMusicLoop(RepeatEnabled);
+            }
             if (wantVideo)
             {
                 previewVideo.Play();

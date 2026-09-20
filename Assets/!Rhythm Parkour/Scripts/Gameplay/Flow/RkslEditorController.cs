@@ -77,7 +77,7 @@ namespace RKS.RhythmParkour.Rhythm
             }
             if (levelData == null && timelineUI != null) levelData = timelineUI.levelData;
             if (levelData == null && previewManager != null) levelData = previewManager.levelData;
-            if (levelData == null && transfer != null && transfer.hasLevel) levelData = transfer.levelData;
+            if (levelData == null && transfer != null && transfer.hasLevel && transfer.levelData != null) levelData = transfer.levelData;
 
 if (titleInput == null || artistInput == null || creatorInput == null)
                 Debug.LogWarning("[RkslEditor] InputFields не назначены — задай в инспекторе.", this);
@@ -107,11 +107,11 @@ if (titleInput == null || artistInput == null || creatorInput == null)
 
             if (levelData != null) PopulateUIFromData();
             else if (timelineUI != null && timelineUI.levelData != null) { levelData = timelineUI.levelData; PopulateUIFromData(); }
-            else if (transfer != null && transfer.hasLevel) { levelData = transfer.levelData; PopulateUIFromData(); }
+            else if (transfer != null && transfer.hasLevel && transfer.levelData != null) { levelData = transfer.levelData; PopulateUIFromData(); }
             else if (levelData == null) { levelData = new RhythmLevelData(); if (timelineUI != null) timelineUI.levelData = levelData; }
             UpdateStatus("Готов — загрузите аудио и создавайте уровень (SAVE .RKSL)");
 
-            if (transfer != null && transfer.hasLevel && timelineUI != null) { timelineUI.levelData = transfer.levelData; timelineUI.RefreshAll(); }
+            if (transfer != null && transfer.hasLevel && transfer.levelData != null && timelineUI != null) { timelineUI.levelData = transfer.levelData; timelineUI.RefreshAll(); }
 
             if (levelData != null && visual != null) visual.Apply(levelData, previewVideo, true);
         }

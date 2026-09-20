@@ -1715,9 +1715,12 @@ MonoBehaviour:
     videoPath: 
     particlesEnabled: 1
     particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    particleSpriteName: 
+    particleSprite: {fileID: 0}
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    sphereUseVideo: 1
     defaultObstacleMaterialName: 
     defaultObstacleMaterial: {fileID: 0}
     events: []
@@ -1751,9 +1754,12 @@ MonoBehaviour:
     videoPath: 
     particlesEnabled: 1
     particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    particleSpriteName: 
+    particleSprite: {fileID: 0}
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    sphereUseVideo: 1
     defaultObstacleMaterialName: 
     defaultObstacleMaterial: {fileID: 0}
     events: []
@@ -1763,7 +1769,6 @@ MonoBehaviour:
   score: {fileID: 0}
   catalog: {fileID: 0}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -1777,9 +1782,12 @@ MonoBehaviour:
       videoPath: 
       particlesEnabled: 1
       particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+      particleSpriteName: 
+      particleSprite: {fileID: 0}
       obstacleColor: {r: 1, g: 1, b: 1, a: 1}
       trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
       sphereRotates: 1
+      sphereUseVideo: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
       events: []
@@ -3018,7 +3026,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::IsGameSceneLoader
   manager: {fileID: 820601937}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -3032,9 +3039,12 @@ MonoBehaviour:
       videoPath: 
       particlesEnabled: 1
       particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+      particleSpriteName: 
+      particleSprite: {fileID: 0}
       obstacleColor: {r: 1, g: 1, b: 1, a: 1}
       trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
       sphereRotates: 1
+      sphereUseVideo: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
       events: []
@@ -3674,15 +3684,17 @@ MonoBehaviour:
     videoPath: 
     particlesEnabled: 1
     particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+    particleSpriteName: 
+    particleSprite: {fileID: 0}
     obstacleColor: {r: 1, g: 1, b: 1, a: 1}
     trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
     sphereRotates: 1
+    sphereUseVideo: 1
     defaultObstacleMaterialName: 
     defaultObstacleMaterial: {fileID: 0}
     events: []
   manager: {fileID: 0}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -3696,9 +3708,12 @@ MonoBehaviour:
       videoPath: 
       particlesEnabled: 1
       particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+      particleSpriteName: 
+      particleSprite: {fileID: 0}
       obstacleColor: {r: 1, g: 1, b: 1, a: 1}
       trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
       sphereRotates: 1
+      sphereUseVideo: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
       events: []
@@ -9343,26 +9358,22 @@ MonoBehaviour:
   _gameSceneName: IsGameScene
   _minComboToShow: 2
   _scoreText: {fileID: 0}
-  _accText: {fileID: 0}
-  _comboText: {fileID: 0}
-  _judgeText: {fileID: 0}
-  _resultsRoot: {fileID: 0}
-  _resTitle: {fileID: 0}
-  _resRank: {fileID: 0}
-  _resAcc: {fileID: 0}
+  _accText: {fileID: 1683893399}
+  _comboText: {fileID: 1139418236}
+  _judgeText: {fileID: 366554346}
+  _resultsRoot: {fileID: 548687239}
+  _resTitle: {fileID: 850252727}
+  _resRank: {fileID: 850252727}
+  _resAcc: {fileID: 586585822}
   _resScore: {fileID: 0}
   _resCounts: {fileID: 0}
   _resCombo: {fileID: 0}
   _resGroove: {fileID: 0}
-  _resFailed: {fileID: 0}
-  _retryButton: {fileID: 0}
-  _menuButton: {fileID: 0}
-  _editorButton: {fileID: 0}
+  _resFailed: {fileID: 1730678282}
   score: {fileID: 0}
   parkour: {fileID: 0}
   playerHealth: {fileID: 0}
   transfer:
-    save: {fileID: 0}
     levelData:
       music: {fileID: 0}
       video: {fileID: 0}
@@ -9376,9 +9387,12 @@ MonoBehaviour:
       videoPath: 
       particlesEnabled: 1
       particleColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+      particleSpriteName: 
+      particleSprite: {fileID: 0}
       obstacleColor: {r: 1, g: 1, b: 1, a: 1}
       trackColor: {r: 0.2, g: 0.6, b: 1, a: 1}
       sphereRotates: 1
+      sphereUseVideo: 1
       defaultObstacleMaterialName: 
       defaultObstacleMaterial: {fileID: 0}
       events: []

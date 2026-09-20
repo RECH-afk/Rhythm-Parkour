@@ -27,6 +27,20 @@ public sealed class EditorInstaller : MonoInstaller
             BindFromHierarchyOrInstance(visualSettings);
             BindFromHierarchyOrInstance(parkourManager);
             BindFromHierarchyOrInstance(conductor);
+            Container.Bind<TimelineNotesController>().FromMethod(EnsureTimelineComponent<TimelineNotesController>).AsSingle();
+            Container.Bind<TimelineWaveformView>().FromMethod(EnsureTimelineComponent<TimelineWaveformView>).AsSingle();
+            Container.Bind<TimelineGridView>().FromMethod(EnsureTimelineComponent<TimelineGridView>).AsSingle();
+            Container.Bind<TimelineTransport>().FromMethod(EnsureTimelineComponent<TimelineTransport>).AsSingle();
+            Container.Bind<TimelinePropertiesController>().FromMethod(EnsureTimelineComponent<TimelinePropertiesController>).AsSingle();
+        }
+
+        static T EnsureTimelineComponent<T>(InjectContext ctx) where T : Component
+        {
+            var ui = Object.FindFirstObjectByType<TimelineUI>();
+            if (ui == null) return null;
+            var c = ui.GetComponent<T>();
+            if (c == null) c = ui.gameObject.AddComponent<T>();
+            return c;
         }
 
         void BindFromHierarchyOrInstance<T>(T instance) where T : Component

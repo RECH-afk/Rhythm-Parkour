@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -35,7 +34,6 @@ namespace RKS.RhythmParkour.UI.Timeline
         float toggleHiddenY;
         Vector2 prevHome;
         Vector2 nextHome;
-        private readonly Dictionary<GameObject, Vector2> tabHomePositions = new Dictionary<GameObject, Vector2>();
         Tween slideTween;
         Tween tabTween;
 
@@ -62,21 +60,36 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (panels == null || panels.Length == 0) return;
             if (index < 0 || index >= panels.Length) return;
             int prev = CurrentIndex;
-            base.Show(index);
+            SetCurrent(index);
+            for (int i = 0; i < panels.Length; i++)
+                if (panels[i] != null && !panels[i].activeSelf) panels[i].SetActive(true);
+            GameObject newPanel = panels[index];
             if (collapsed)
             {
-                if (panels[index] != null)
+                for (int i = 0; i < panels.Length; i++)
                 {
-                    RectTransform rt = panels[index].GetComponent<RectTransform>();
-                    if (rt != null) rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, hiddenY);
+                    if (panels[i] == null) continue;
+                    if (i == index)
+                    {
+                        Vector2 home = HomeOf(panels[i]);
+                        RectTransform rt = panels[i].GetComponent<RectTransform>();
+                        if (rt != null) rt.anchoredPosition = new Vector2(home.x, hiddenY);
+                        SetIgnoreLayout(panels[i], false);
+                    }
+                    else ParkPanel(panels[i]);
                 }
                 RefreshLabel();
                 return;
             }
             GameObject oldPanel = (prev >= 0 && prev < panels.Length && prev != index) ? panels[prev] : null;
-            GameObject newPanel = panels[index];
-            if (oldPanel == null || newPanel == null)
+            if (oldPanel == null || newPanel == null || oldPanel == newPanel)
             {
+                for (int i = 0; i < panels.Length; i++)
+                {
+                    if (panels[i] == null) continue;
+                    if (i == index) RestorePanel(panels[i]);
+                    else ParkPanel(panels[i]);
+                }
                 RefreshLabel();
                 return;
             }
@@ -89,33 +102,22 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (tabTween != null && tabTween.IsActive()) tabTween.Kill();
             RectTransform oldRt = oldPanel.GetComponent<RectTransform>();
             RectTransform newRt = newPanel.GetComponent<RectTransform>();
-            Vector2 oldHome = TabHome(oldPanel);
-            Vector2 newHome = TabHome(newPanel);
+            Vector2 oldHome = HomeOf(oldPanel);
+            Vector2 newHome = HomeOf(newPanel);
             float dist = (newRt != null && newRt.rect.width > 1f) ? newRt.rect.width : 800f;
-            oldPanel.SetActive(true);
             if (oldRt != null) oldRt.anchoredPosition = oldHome;
             if (newRt != null) newRt.anchoredPosition = new Vector2(newHome.x - dist * dir, newHome.y);
+            SetIgnoreLayout(oldPanel, false);
+            SetIgnoreLayout(newPanel, false);
             Sequence seq = DOTween.Sequence();
             if (oldRt != null) seq.Join(oldRt.DOAnchorPosX(oldHome.x + dist * dir, tabSwitchDuration).SetEase(Ease.InCubic));
             if (newRt != null) seq.Join(newRt.DOAnchorPosX(newHome.x, tabSwitchDuration).SetEase(Ease.OutCubic));
             seq.OnComplete(() =>
             {
-                oldPanel.SetActive(false);
-                if (oldRt != null) oldRt.anchoredPosition = oldHome;
+                ParkPanel(oldPanel);
+                RestorePanel(newPanel);
             });
             tabTween = seq;
-        }
-
-        private Vector2 TabHome(GameObject panel)
-        {
-            if (panel == null) return Vector2.zero;
-            if (!tabHomePositions.TryGetValue(panel, out var home))
-            {
-                RectTransform rt = panel.GetComponent<RectTransform>();
-                home = rt != null ? rt.anchoredPosition : Vector2.zero;
-                tabHomePositions[panel] = home;
-            }
-            return home;
         }
 
         public override void Next()

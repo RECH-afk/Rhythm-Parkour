@@ -309,6 +309,12 @@ namespace RKS.RhythmParkour.Core.Managers
             if (musicSourceB != null) musicSourceB.Stop();
         }
 
+        public void SetMusicLoop(bool loop)
+        {
+            if (musicSourceA != null) musicSourceA.loop = loop;
+            if (musicSourceB != null) musicSourceB.loop = loop;
+        }
+
         public bool IsMusicPlaying()
         {
             return (musicSourceA != null && musicSourceA.isPlaying)

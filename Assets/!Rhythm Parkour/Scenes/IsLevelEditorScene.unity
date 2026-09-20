@@ -3761,6 +3761,10 @@ GameObject:
   - component: {fileID: 295294845}
   - component: {fileID: 295294847}
   - component: {fileID: 295294848}
+  - component: {fileID: 295294850}
+  - component: {fileID: 295294849}
+  - component: {fileID: 295294852}
+  - component: {fileID: 295294851}
   m_Layer: 5
   m_Name: TimelineWindow
   m_TagString: Untagged
@@ -3960,7 +3964,6 @@ MonoBehaviour:
   zoomToCursor: 1
   followSmoothDuration: 0.45
   notePropertiesPanel: {fileID: 426744812}
-  propPrefabIndexInput: {fileID: 0}
   propPrefabDropdown: {fileID: 0}
   propTitleLabel: {fileID: 0}
   propSpeedInput: {fileID: 0}
@@ -3999,6 +4002,54 @@ MonoBehaviour:
   useGhostMaterial: 1
   ghostAlpha: 0.55
   updateEveryFrame: 1
+--- !u!114 &295294849
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 295294842}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2575654f584220b4db9062ddd8923b5c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.Timeline.TimelineWaveformView
+--- !u!114 &295294850
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 295294842}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bddd769c5abd79646ad8f1400512ca00, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.Timeline.TimelineGridView
+--- !u!114 &295294851
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 295294842}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 64de9d90051e40a4b8c9b28250934ba1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.Timeline.TimelineTransport
+--- !u!114 &295294852
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 295294842}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6e083947e232cc14096a01b2c6ff6464, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.Timeline.TimelineNotesController
 --- !u!1001 &295458938
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -5722,6 +5773,8 @@ MonoBehaviour:
   visualSettings: {fileID: 1442854770}
   coverPreviewImage: {fileID: 766676911}
   statusText: {fileID: 0}
+  testPlayButton: {fileID: 0}
+  gameSceneName: IsGameScene
 --- !u!1 &485273176
 GameObject:
   m_ObjectHideFlags: 0

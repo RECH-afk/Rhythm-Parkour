@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Globalization;
 using RKS.RhythmParkour.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -111,19 +110,12 @@ namespace RKS.RhythmParkour.UI.Timeline
         bool isZoomAnimating;
         float _pendingZoomCursorTime = -1f;
         Vector2 _pendingZoomCursorScreenPos;
-        Vector2 lastScrubScreenPos;
-        float lastScrubMoveTime;
-        bool scrubPausedDueToStill;
-        const float scrubStillThresholdPxSq = 4f;
-        const float scrubStationaryPauseDelay = 0.18f;
         Coroutine followSmoothCoroutine;
 
         public GameObject notePropertiesPanel;
         public TMP_Dropdown propPrefabDropdown;
         public TextMeshProUGUI propTitleLabel;
         public TMP_InputField propSpeedInput;
-        private TextMeshProUGUI propPrefabButtonLabel;
-        private TextMeshProUGUI propSpeedHintLabel;
 
         [Header("Сетка миниатюр (выбор вида)")]
         public GameObject prefabGridPanel;
@@ -135,36 +127,11 @@ namespace RKS.RhythmParkour.UI.Timeline
         public TextMeshProUGUI bpmOutputText;
         public bool showBpmAfterLoad = true;
 
-        Texture2D waveformTex;
-        float[] waveformData;
-        AudioClip lastClip;
-        int lastWaveformGenWidth = -1;
-        float lastWaveformGenPPS = -1f;
-        float lastWaveformGenZoom = -1f;
-        float lastGridZoom = -999f;
-        float lastGridStepSec = -1f;
-        float lastGridClipLen = -1f;
-        float currentTime;
-
-        List<GameObject> gridLinePool = new List<GameObject>();
-        List<GameObject> gridLabelPool = new List<GameObject>();
-        float lastGridRefreshTime;
-        int lastGridLabelEvery = -1;
-        List<GameObject> notePool = new List<GameObject>();
-        bool isScrubbingWaveform;
-        bool wasPlayingBeforeScrub;
-        float scrubSavedVolume = 1f;
-        bool scrubWasPlaying;
-        int selectedIndex = -1;
-        HashSet<int> selectedIndices = new HashSet<int>();
-        List<GameObject> noteGos = new List<GameObject>();
-        Canvas injectedCanvas;
-        bool isDraggingNote;
-        int dragNoteIdx = -1;
-        RectTransform dragNoteRect;
-        Dictionary<int, float> dragOrigHitBeats = new Dictionary<int, float>();
-        float dragStartHitBeat;
-        float dragDeltaBeat;
+        private TimelineNotesController notesController;
+        private TimelineWaveformView waveformView;
+        private TimelineGridView gridView;
+        private TimelineTransport transport;
+        private TimelinePropertiesController propsController;
 
         protected override void OnInjected()
         {
@@ -189,6 +156,36 @@ namespace RKS.RhythmParkour.UI.Timeline
             }
             if (levelData == null && manager != null) levelData = manager.levelData;
             if (rootCanvas == null) rootCanvas = GetComponentInParent<Canvas>();
+            EnsureComponents();
+        }
+
+        void EnsureComponents()
+        {
+            if (notesController == null) notesController = GetComponent<TimelineNotesController>();
+            if (notesController == null) notesController = gameObject.AddComponent<TimelineNotesController>();
+            if (waveformView == null) waveformView = GetComponent<TimelineWaveformView>();
+            if (waveformView == null) waveformView = gameObject.AddComponent<TimelineWaveformView>();
+            if (gridView == null) gridView = GetComponent<TimelineGridView>();
+            if (gridView == null) gridView = gameObject.AddComponent<TimelineGridView>();
+            if (transport == null) transport = GetComponent<TimelineTransport>();
+            if (transport == null) transport = gameObject.AddComponent<TimelineTransport>();
+            if (propsController == null) propsController = GetComponent<TimelinePropertiesController>();
+            if (propsController == null) propsController = gameObject.AddComponent<TimelinePropertiesController>();
+        }
+
+        [Inject]
+        public void ConstructTimeline(
+            TimelineNotesController notes,
+            TimelineWaveformView wave,
+            TimelineGridView grid,
+            TimelineTransport transportComponent,
+            TimelinePropertiesController props)
+        {
+            if (notes != null) notesController = notes;
+            if (wave != null) waveformView = wave;
+            if (grid != null) gridView = grid;
+            if (transportComponent != null) transport = transportComponent;
+            if (props != null) propsController = props;
         }
 
         void OptimizeTimelineLayout()
@@ -226,6 +223,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (waveformRect == null && waveformImage != null) waveformRect = waveformImage.rectTransform;
             if (timelineScrollbar == null && timelineScrollRect != null) timelineScrollbar = timelineScrollRect.horizontalScrollbar;
             OptimizeTimelineLayout();
+            EnsureComponents();
 
             BindEvents();
             if (fileLoader != null) fileLoader.onFileLoaded.AddListener(OnFileLoaded);
@@ -234,8 +232,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (followSlider && !autoScrollWithPlayhead) followSlider = false; else followSlider = autoScrollWithPlayhead;
 
             RefreshAll();
-            currentTime = 0f;
-            UpdatePlayhead();
+            transport.SetTime(0f);
             UpdateScrollToPlayhead(true);
             UpdateAutoscrollToggleVisual();
             UpdatePreviewToggleVisual();
@@ -255,7 +252,6 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             if (fileLoader != null) fileLoader.onFileLoaded.RemoveListener(OnFileLoaded);
             if (followSmoothCoroutine != null) StopCoroutine(followSmoothCoroutine);
-            if (waveformTex != null) Destroy(waveformTex);
         }
 
         void OnValidate()
@@ -286,8 +282,8 @@ namespace RKS.RhythmParkour.UI.Timeline
             isZoomAnimating = false;
             RefreshScrollContent();
 
-            if (Time.unscaledTime - lastGridRefreshTime > 0.08f) RefreshGrid(false);
-            ApplyNoteZoomScale();
+            gridView.RefreshGrid(false);
+            notesController.ApplyNoteZoomScale();
             UpdateScrollToPlayhead(true);
             if (waveformRect != null) waveformRect.localScale = Vector3.one;
         }
@@ -314,239 +310,22 @@ namespace RKS.RhythmParkour.UI.Timeline
             return false;
         }
 
-        public void SetPixelsPerSecond(float pps) { float np = Mathf.Clamp(pps, 10f, 1000f); if (Mathf.Abs(np - pixelsPerSecond) < 0.1f) return; pixelsPerSecond = np; RefreshScrollContent(); if (Mathf.Abs(pps - lastWaveformGenPPS) > 5f) RefreshWaveform(true); }
+        public void SetPixelsPerSecond(float pps) { float np = Mathf.Clamp(pps, 10f, 1000f); if (Mathf.Abs(np - pixelsPerSecond) < 0.1f) return; pixelsPerSecond = np; RefreshScrollContent(); if (Mathf.Abs(pps - waveformView.LastPps) > 5f) waveformView.RefreshWaveform(true); }
 
         void BindEvents()
         {
-            BindPropertiesPanel();
+            propsController.BindPropertiesPanel();
             if (playheadHeader != null)
             {
                 var et = playheadHeader.gameObject.GetComponent<EventTrigger>();
                 if (et == null) et = playheadHeader.gameObject.AddComponent<EventTrigger>();
                 et.triggers.Clear();
-                EnsureEvent(et, EventTriggerType.PointerDown, OnHeaderPointerDown);
-                EnsureEvent(et, EventTriggerType.Drag, OnHeaderDrag);
-                EnsureEvent(et, EventTriggerType.PointerUp, data => EndScrub());
-                EnsureEvent(et, EventTriggerType.BeginDrag, OnHeaderPointerDown);
-                EnsureEvent(et, EventTriggerType.EndDrag, data => EndScrub());
+                EnsureEvent(et, EventTriggerType.PointerDown, transport.OnHeaderPointerDown);
+                EnsureEvent(et, EventTriggerType.Drag, transport.OnHeaderDrag);
+                EnsureEvent(et, EventTriggerType.PointerUp, data => transport.EndScrub());
+                EnsureEvent(et, EventTriggerType.BeginDrag, transport.OnHeaderPointerDown);
+                EnsureEvent(et, EventTriggerType.EndDrag, data => transport.EndScrub());
             }
-        }
-
-        void BindPropertiesPanel()
-        {
-            if (propPrefabDropdown != null)
-            {
-                propPrefabDropdown.onValueChanged.RemoveListener(OnPrefabDropdownChanged);
-                propPrefabDropdown.onValueChanged.AddListener(OnPrefabDropdownChanged);
-            }
-
-            if (prefabGridPanel != null) prefabGridPanel.SetActive(false);
-        }
-
-        void OnPrefabDropdownChanged(int idx)
-        {
-            ApplyPropertiesFromPanel();
-        }
-
-        void EnsurePrefabGrid()
-        {
-            if (prefabGridPanel != null && prefabGridContainer != null) return;
-
-            if (prefabGridPanel != null && prefabGridContainer == null)
-            {
-                var t = prefabGridPanel.transform.Find("Grid");
-                if (t != null) prefabGridContainer = t;
-                else prefabGridContainer = prefabGridPanel.transform;
-            }
-
-            if (prefabGridPanel == null)
-            {
-                if (rootCanvas == null) rootCanvas = GetComponentInParent<Canvas>();
-                if (rootCanvas == null) return;
-                var panelGO = new GameObject("PrefabGridPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
-                panelGO.transform.SetParent(rootCanvas.transform, false);
-                var rt = panelGO.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.5f, 0.5f); rt.anchorMax = new Vector2(0.5f, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.anchoredPosition = Vector2.zero; rt.sizeDelta = new Vector2(560, 420);
-                var img = panelGO.GetComponent<Image>(); img.color = new Color(0.12f, 0.12f, 0.14f, 0.96f); img.raycastTarget = true;
-                var vlg = panelGO.GetComponent<VerticalLayoutGroup>(); vlg.padding = new RectOffset(12,12,12,12); vlg.spacing = 8; vlg.childAlignment = TextAnchor.UpperCenter; vlg.childControlWidth = true; vlg.childControlHeight = false;
-
-                var titleGO = new GameObject("Title", typeof(RectTransform));
-                titleGO.transform.SetParent(panelGO.transform, false);
-                var ttmp = titleGO.AddComponent<TextMeshProUGUI>(); ttmp.text = "Выбор вида препятствия"; ttmp.fontSize = 16; ttmp.alignment = TextAlignmentOptions.Center; ttmp.color = Color.white;
-                var le = titleGO.AddComponent<LayoutElement>(); le.minHeight = 24;
-
-                var scrollGO = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect), typeof(Image), typeof(Mask));
-                scrollGO.transform.SetParent(panelGO.transform, false);
-                var srt = scrollGO.GetComponent<RectTransform>(); srt.sizeDelta = new Vector2(0, 320);
-                var sle = scrollGO.AddComponent<LayoutElement>(); sle.flexibleHeight = 1; sle.minHeight = 200;
-                var sImg = scrollGO.GetComponent<Image>(); sImg.color = new Color(0,0,0,0.15f);
-                scrollGO.GetComponent<Mask>().showMaskGraphic = false;
-                var scroll = scrollGO.GetComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.movementType = ScrollRect.MovementType.Clamped;
-                var gridGO = new GameObject("Grid", typeof(RectTransform), typeof(GridLayoutGroup));
-                gridGO.transform.SetParent(scrollGO.transform, false);
-                var grt = gridGO.GetComponent<RectTransform>(); grt.anchorMin = new Vector2(0,1); grt.anchorMax = new Vector2(1,1); grt.pivot = new Vector2(0.5f,1); grt.anchoredPosition = Vector2.zero; grt.sizeDelta = new Vector2(0,0);
-                var glg = gridGO.GetComponent<GridLayoutGroup>(); glg.cellSize = new Vector2(80, 80); glg.spacing = new Vector2(8,8); glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount; glg.constraintCount = 6; glg.childAlignment = TextAnchor.UpperCenter;
-                var csf = gridGO.AddComponent<ContentSizeFitter>(); csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-                scroll.content = grt;
-                scroll.viewport = srt;
-
-                var btnRow = new GameObject("Buttons", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-                btnRow.transform.SetParent(panelGO.transform, false);
-                var brow = btnRow.GetComponent<HorizontalLayoutGroup>(); brow.spacing = 8; brow.childAlignment = TextAnchor.MiddleCenter; brow.childControlWidth = false;
-                var ble = btnRow.AddComponent<LayoutElement>(); ble.minHeight = 32;
-                var closeGO = new GameObject("Close", typeof(RectTransform), typeof(Image), typeof(Button));
-                closeGO.transform.SetParent(btnRow.transform, false);
-                var crt = closeGO.GetComponent<RectTransform>(); crt.sizeDelta = new Vector2(120, 32);
-                var cimg = closeGO.GetComponent<Image>(); cimg.color = new Color(0.5f,0.2f,0.2f,1);
-                var cbtn = closeGO.GetComponent<Button>();
-                var ctxt = new GameObject("Text", typeof(RectTransform)); ctxt.transform.SetParent(closeGO.transform,false);
-                var ctrt = ctxt.GetComponent<RectTransform>(); ctrt.anchorMin=Vector2.zero; ctrt.anchorMax=Vector2.one; ctrt.offsetMin=Vector2.zero; ctrt.offsetMax=Vector2.zero;
-                var ctmp = ctxt.AddComponent<TextMeshProUGUI>(); ctmp.text="Закрыть"; ctmp.fontSize=14; ctmp.alignment=TextAlignmentOptions.Center; ctmp.color=Color.white;
-                cbtn.onClick.AddListener(HidePrefabGrid);
-                prefabGridPanel = panelGO;
-                prefabGridContainer = grt.transform;
-                prefabGridPanel.SetActive(false);
-            }
-        }
-
-        public void TogglePrefabGrid()
-        {
-            EnsurePrefabGrid();
-            if (prefabGridPanel == null) return;
-            if (prefabGridPanel.activeSelf) HidePrefabGrid();
-            else ShowPrefabGrid();
-        }
-        public void ShowPrefabGrid()
-        {
-            EnsurePrefabGrid();
-            if (prefabGridPanel == null) return;
-            RefreshPrefabGridThumbs();
-            prefabGridPanel.SetActive(true);
-
-            if (rootCanvas != null) prefabGridPanel.transform.SetAsLastSibling();
-        }
-        public void HidePrefabGrid()
-        {
-            if (prefabGridPanel != null) prefabGridPanel.SetActive(false);
-        }
-        void RefreshPrefabGridThumbs()
-        {
-            if (prefabGridContainer == null) return;
-
-            for (int i=prefabGridContainer.childCount-1;i>=0;i--) Destroy(prefabGridContainer.GetChild(i).gameObject);
-            int total = (catalog != null ? catalog.Count : 0);
-            if (total==0 && levelData!=null) total = levelData.PrefabCount(catalog);
-
-            if (total==0)
-            {
-                FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/");
-                return;
-            }
-            for (int i=0;i<total;i++)
-            {
-                var pf = catalog != null ? catalog.GetPrefab(i) : null;
-                if (pf==null && levelData!=null) pf = levelData.GetPrefab(i, catalog);
-
-                if (pf == null) continue;
-                string name = pf.name;
-                GameObject btnGO;
-                if (prefabThumbPrefab != null) btnGO = Instantiate(prefabThumbPrefab, prefabGridContainer);
-                else
-                {
-                    btnGO = new GameObject($"Thumb_{i}", typeof(RectTransform), typeof(Image), typeof(Button));
-                    btnGO.transform.SetParent(prefabGridContainer, false);
-                    var rt = btnGO.GetComponent<RectTransform>(); rt.sizeDelta = new Vector2(80,80);
-                    var img = btnGO.GetComponent<Image>(); img.color = new Color(0.22f,0.22f,0.24f,1f);
-
-                    var iconGO = new GameObject("Icon", typeof(RectTransform), typeof(Image));
-                    iconGO.transform.SetParent(btnGO.transform, false);
-                    var irt = iconGO.GetComponent<RectTransform>(); irt.anchorMin = new Vector2(0.1f,0.2f); irt.anchorMax = new Vector2(0.9f,0.85f); irt.offsetMin=irt.offsetMax=Vector2.zero;
-                    var iimg = iconGO.GetComponent<Image>(); iimg.color = Color.white; iimg.preserveAspect = true;
-
-#if UNITY_EDITOR
-                    try{
-                        var tex = UnityEditor.AssetPreview.GetAssetPreview(pf);
-                        if (tex != null) iimg.sprite = Sprite.Create(tex, new Rect(0,0,tex.width,tex.height), new Vector2(0.5f,0.5f));
-                        else {
-                            var mini = UnityEditor.AssetPreview.GetMiniThumbnail(pf);
-                            if (mini != null) iimg.sprite = Sprite.Create(mini, new Rect(0,0,mini.width,mini.height), new Vector2(0.5f,0.5f));
-                        }
-                    } catch {}
-#endif
-                    if (iimg.sprite == null)
-                    {
-
-                        iimg.color = GetColorForPrefab(i);
-                    }
-
-                    var lblGO = new GameObject("Label", typeof(RectTransform));
-                    lblGO.transform.SetParent(btnGO.transform, false);
-                    var lrt = lblGO.GetComponent<RectTransform>(); lrt.anchorMin=new Vector2(0,0); lrt.anchorMax=new Vector2(1,0.22f); lrt.offsetMin=lrt.offsetMax=Vector2.zero;
-                    var ltmp = lblGO.AddComponent<TextMeshProUGUI>(); ltmp.text = $"{i}: {name}"; ltmp.fontSize=8; ltmp.alignment=TextAlignmentOptions.Center; ltmp.color=new Color(1,1,1,0.9f); ltmp.enableWordWrapping=false; ltmp.overflowMode=TextOverflowModes.Ellipsis;
-                }
-                var btn = btnGO.GetComponent<Button>();
-                int idx=i;
-                btn.onClick.RemoveAllListeners();
-                btn.onClick.AddListener(()=>{ OnThumbClicked(idx); });
-
-                if (selectedIndex>=0 && selectedIndex < levelData.events.Count && levelData.events[selectedIndex].prefabIndex==i)
-                {
-                    var ol = btnGO.GetComponent<Outline>(); if (ol==null) ol=btnGO.AddComponent<Outline>();
-                    ol.effectColor = Color.green; ol.effectDistance = new Vector2(3,3);
-                }
-            }
-        }
-        void OnThumbClicked(int idx)
-        {
-            if (levelData==null || selectedIndex<0 || selectedIndex>=levelData.events.Count) return;
-            var tgt = selectedIndices.Count>1 ? new System.Collections.Generic.List<int>(selectedIndices) : new System.Collections.Generic.List<int>{selectedIndex};
-            foreach (var ti in tgt) { if (ti<0||ti>=levelData.events.Count) continue; var e=levelData.events[ti]; e.prefabIndex=idx; levelData.events[ti]=e; }
-            if (propPrefabDropdown!=null && propPrefabDropdown.options.Count > idx) propPrefabDropdown.SetValueWithoutNotify(idx);
-            RefreshNotes();
-            ShowPropertiesPanel(selectedIndex);
-            if (closeGridOnSelect) HidePrefabGrid();
-            preview?.ForceRefresh();
-            FlashStatus($"Вид → {GetPrefabName(idx)}");
-        }
-
-        void OnColorButtonClicked()
-        {
-            if (levelData == null || selectedIndex < 0) return;
-            var ev = levelData.events[selectedIndex];
-            Color newCol = ev.HasCustomColor ? ev.color : Color.white;
-            float h = Random.value;
-            newCol = Color.HSVToRGB(h, 0.85f, 1f);
-            newCol.a = 1f;
-
-            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
-                newCol = new Color(0,0,0,0);
-            ev.color = newCol;
-            levelData.events[selectedIndex] = ev;
-            RefreshNotes();
-            ShowPropertiesPanel(selectedIndex);
-            FlashStatus(newCol.a < 0.1f ? "Цвет сброшен к глобальному" : $"Цвет → {ColorUtility.ToHtmlStringRGB(newCol)}");
-        }
-
-        void RefreshPrefabDropdown()
-        {
-            if (propPrefabDropdown == null) return;
-            propPrefabDropdown.ClearOptions();
-            int total = (catalog != null ? catalog.Count : 0);
-            if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
-
-            if (total == 0) return;
-            var opts = new System.Collections.Generic.List<string>();
-            for (int i=0;i<total;i++)
-            {
-                var pf = catalog != null ? catalog.GetPrefab(i) : null;
-                if (pf == null && levelData != null) pf = levelData.GetPrefab(i, catalog);
-                if (pf == null) continue;
-                string name = $"{i}: {pf.name}";
-                opts.Add(name);
-            }
-            propPrefabDropdown.AddOptions(opts);
-
         }
 
         void EnsureEvent(EventTrigger trigger, EventTriggerType type, System.Action<BaseEventData> cb)
@@ -571,7 +350,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                     float viewportW = viewport.rect.width;
                     float contentW = timelineContent.rect.width;
                     if (contentW < 1f) contentW = timelineContent.sizeDelta.x;
-                    float norm = Mathf.Clamp01(currentTime / GetClipLength());
+                    float norm = Mathf.Clamp01(transport.GetCurrentTime() / GetClipLength());
                     float playheadX = norm * contentW;
                     float offset = -timelineContent.anchoredPosition.x;
                     float inView = playheadX - offset;
@@ -594,7 +373,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                 float cW2 = timelineContent.rect.width; if (cW2 < 1f) cW2 = timelineContent.sizeDelta.x;
                 if (cW2 > vpW2 + 1f)
                 {
-                    float n2 = Mathf.Clamp01(currentTime / GetClipLength());
+                    float n2 = Mathf.Clamp01(transport.GetCurrentTime() / GetClipLength());
                     float px2 = n2 * cW2;
                     float off2 = -timelineContent.anchoredPosition.x;
                     float inv2 = px2 - off2;
@@ -628,7 +407,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             bool on = preview != null && preview.previewEnabled;
             if (previewToggleLabel != null) previewToggleLabel.text = on ? "Preview ON" : "Preview OFF";
         }
-        void UpdateAutoscrollLockFromScreenPos(Vector2 screenPos)
+        public void UpdateAutoscrollLockFromScreenPos(Vector2 screenPos)
         {
             if (!autoScrollWithPlayhead || !autoscrollKeepCurrentPosition) return;
             RectTransform viewport = timelineViewport != null ? timelineViewport : timelineScrollRect?.viewport;
@@ -653,7 +432,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             float contentW = timelineContent.rect.width;
             if (contentW < 1f) contentW = timelineContent.sizeDelta.x;
             if (contentW <= viewportW + 1f) yield break;
-            float norm = Mathf.Clamp01(currentTime / GetClipLength());
+            float norm = Mathf.Clamp01(transport.GetCurrentTime() / GetClipLength());
             float playheadX = norm * contentW;
             float offset = -timelineContent.anchoredPosition.x;
             float anchorRatio = (autoscrollKeepCurrentPosition && autoscrollHasLockedRatio) ? autoscrollLockedRatio : 0.35f;
@@ -693,7 +472,19 @@ namespace RKS.RhythmParkour.UI.Timeline
             followSmoothCoroutine = null;
         }
 
-        public void RefreshAll() { EnsureExplicitSpeeds(); RefreshWaveform(); RefreshScrollContent(); RefreshNotes(); RefreshGrid(true); UpdatePlayhead(); UpdateScrollToPlayhead(true); UpdateLabels(); UpdatePlayPauseLabel(); UpdateWarningState(); }
+        public void RefreshAll() { notesController.EnsureExplicitSpeeds(); waveformView.RefreshWaveform(); RefreshScrollContent(); notesController.RefreshNotes(); gridView.RefreshGrid(true); transport.UpdatePlayhead(); UpdateScrollToPlayhead(true); transport.UpdateLabels(); transport.UpdatePlayPauseLabel(); UpdateWarningState(); }
+
+        public void RefreshNotes() => notesController.RefreshNotes();
+        public int ResnapAllNotes() => notesController.ResnapAllNotes();
+        public string SpeedHint(float speed) => notesController.SpeedHint(speed);
+        public int EnsureExplicitSpeeds() => notesController.EnsureExplicitSpeeds();
+        public int GetSelectedIndex() => notesController != null ? notesController.GetSelectedIndex() : -1;
+        public Texture2D GetWaveformTexture() => waveformView != null ? waveformView.GetWaveformTexture() : null;
+        public float[] GetWaveformData() => waveformView != null ? waveformView.GetWaveformData() : null;
+        public void Seek(float time) => transport.Seek(time);
+        public void Seek(float time, bool isScrubMove) => transport.Seek(time, isScrubMove);
+        public float GetCurrentTime() => transport != null ? transport.GetCurrentTime() : 0f;
+        public void TogglePlayPause() => transport.TogglePlayPause();
         bool HasTrack() => (levelData != null && levelData.music != null) || (audioSource != null && audioSource.clip != null);
         void UpdateWarningState() { bool has = HasTrack(); if (warningObject != null) warningObject.SetActive(!has); if (timelineObject != null) timelineObject.SetActive(has); }
 
@@ -711,514 +502,27 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (timelineViewport == null && timelineScrollRect != null) timelineViewport = timelineScrollRect.viewport;
         }
 
-        void RefreshWaveform(bool force = false)
-        {
-            if (waveformImage == null) return;
-            if (!showWaveform)
-            {
-                waveformImage.enabled = false;
-                if (waveformImage.texture != null) waveformImage.texture = null;
-                return;
-            }
-            waveformImage.enabled = true;
-            AudioClip clip = levelData != null ? levelData.music : null;
-            if (clip == null && audioSource != null) clip = audioSource.clip;
-            if (clip == null) { waveformImage.texture = null; waveformImage.color = new Color(1, 1, 1, 0.08f); return; }
 
-            int desiredWidth = Mathf.Clamp(Mathf.RoundToInt(GetClipLength() * pixelsPerSecond * Mathf.Clamp(zoom, 0.8f, 2.2f)), 4096, 16384);
-            desiredWidth = Mathf.Clamp(Mathf.Max(desiredWidth, waveformTexWidth), 4096, 16384);
-            bool needRegen = force || clip != lastClip || waveformTex == null || desiredWidth != lastWaveformGenWidth || Mathf.Abs(pixelsPerSecond - lastWaveformGenPPS) > 1f || Mathf.Abs(zoom - lastWaveformGenZoom) > 0.22f;
-            if (!needRegen) return;
-            lastClip = clip;
-            lastWaveformGenWidth = desiredWidth;
-            lastWaveformGenPPS = pixelsPerSecond;
-            lastWaveformGenZoom = zoom;
-            if (waveformTex != null) Destroy(waveformTex);
-            waveformData = WaveformGenerator.GenerateData(clip, desiredWidth);
-            int h = Mathf.Clamp(waveformTexHeight, 32, 360);
-            waveformTex = WaveformGenerator.GenerateTexture(waveformData, desiredWidth, h, waveformWaveColor, waveformBgColor);
-            waveformImage.texture = waveformTex;
-            waveformImage.color = Color.white;
-
-            if (waveformTex != null) waveformTex.filterMode = FilterMode.Bilinear;
-            if (waveformRect != null) waveformRect.localScale = Vector3.one;
-        }
-
-        bool IsFreeMoveHeld() => Input.GetKey(freeMoveKey) || Input.GetKey(freeMoveKeyAlt) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.LeftShift);
-        bool ShouldSnap() => autoQuantize && snapToGrid && !IsFreeMoveHeld();
+        public bool IsFreeMoveHeld() => Input.GetKey(freeMoveKey) || Input.GetKey(freeMoveKeyAlt) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.LeftShift);
+        public bool ShouldSnap() => autoQuantize && snapToGrid && !IsFreeMoveHeld();
 
         [Header("Сетка (секунды)")]
         public Color gridSecColor = new Color(1f, 1f, 1f, 0.22f);
         public Color gridSec5Color = new Color(1f, 1f, 1f, 0.32f);
         public Font gridLabelFont;
 
-        void RefreshGrid(bool force = false)
-        {
-            if (gridContainer == null) return;
-            float clipLen = GetClipLength();
-            if (clipLen < 0.01f)
-            {
-                foreach (var go in gridLinePool) if (go) go.SetActive(false);
-                foreach (var go in gridLabelPool) if (go) go.SetActive(false);
-                gridContainer.gameObject.SetActive(false);
-                return;
-            }
-            float pps = pixelsPerSecond * Mathf.Max(0.1f, zoom);
-            int labelEvery = 1;
-            if (pps < 25f) labelEvery = 10;
-            else if (pps < 50f) labelEvery = 5;
-            else if (pps < 90f) labelEvery = 2;
-            else labelEvery = 1;
 
-            bool need = force
-                || Mathf.Abs(clipLen - lastGridClipLen) > 0.1f
-                || Mathf.Abs(pixelsPerSecond - lastGridStepSec) > 1f
-                || labelEvery != lastGridLabelEvery
-                || gridLinePool.Count == 0;
-            if (!need)
-            {
 
-                if (Mathf.Abs(zoom - lastGridZoom) < 0.05f) return;
-            }
 
-            if (!force && Time.unscaledTime - lastGridRefreshTime < 0.08f) return;
-            lastGridZoom = zoom;
-            lastGridClipLen = clipLen;
-            lastGridStepSec = pixelsPerSecond;
-            lastGridLabelEvery = labelEvery;
-            lastGridRefreshTime = Time.unscaledTime;
 
-            if (gridLinePool.Count == 0 && gridContainer.childCount > 0)
-            {
-                for (int i = gridContainer.childCount - 1; i >= 0; i--)
-                {
-#if UNITY_EDITOR
-                    if (!Application.isPlaying) DestroyImmediate(gridContainer.GetChild(i).gameObject);
-                    else Destroy(gridContainer.GetChild(i).gameObject);
-#else
-                    Destroy(gridContainer.GetChild(i).gameObject);
-#endif
-                }
-            }
 
-            gridContainer.gameObject.SetActive(true);
-            int totalSecs = Mathf.CeilToInt(clipLen);
-            int neededLines = totalSecs + 1;
 
-            while (gridLinePool.Count < neededLines)
-            {
-                var lineGO = new GameObject($"Grid_Pooled_{gridLinePool.Count}s", typeof(RectTransform), typeof(Image));
-                lineGO.transform.SetParent(gridContainer, false);
-                var img = lineGO.GetComponent<Image>(); img.raycastTarget = false;
-                gridLinePool.Add(lineGO);
-            }
-            for (int sec = 0; sec < neededLines; sec++)
-            {
-                float norm = Mathf.Clamp01(sec / clipLen);
-                bool is5 = sec % 5 == 0;
-                bool is10 = sec % 10 == 0;
-                var lineGO = gridLinePool[sec];
-                lineGO.SetActive(true);
-                lineGO.name = $"Grid_{sec}s";
-                var rt = lineGO.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(norm, 0f);
-                rt.anchorMax = new Vector2(norm, 1f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.anchoredPosition = Vector2.zero;
-                rt.sizeDelta = new Vector2(is10 ? 2f : is5 ? 1.6f : 1f, 0f);
-                var img = lineGO.GetComponent<Image>();
-                if (is10) img.color = gridSec5Color;
-                else if (is5) img.color = Color.Lerp(gridSecColor, gridSec5Color, 0.5f);
-                else img.color = gridSecColor * 0.65f;
-            }
-            for (int i = neededLines; i < gridLinePool.Count; i++) if (gridLinePool[i]) gridLinePool[i].SetActive(false);
 
-            int neededLabels = 0;
-            for (int sec = 0; sec <= totalSecs; sec++)
-            {
-                bool is5 = sec % 5 == 0;
-                if (sec % labelEvery == 0 || is5) neededLabels++;
-            }
-            while (gridLabelPool.Count < neededLabels)
-            {
-                var labelGO = new GameObject($"Lbl_Pooled_{gridLabelPool.Count}", typeof(RectTransform));
-                labelGO.transform.SetParent(gridContainer, false);
-                var lrt = labelGO.GetComponent<RectTransform>();
-                lrt.pivot = new Vector2(0f, 1f);
-                lrt.sizeDelta = new Vector2(70f, 18f);
-                var tmp = labelGO.AddComponent<TextMeshProUGUI>();
-                tmp.alignment = TextAlignmentOptions.Left;
-                tmp.raycastTarget = false;
-                tmp.textWrappingMode = TextWrappingModes.NoWrap;
-                var bgGO = new GameObject("BG", typeof(RectTransform), typeof(Image));
-                bgGO.transform.SetParent(labelGO.transform, false);
-                bgGO.transform.SetAsFirstSibling();
-                var bgRT = bgGO.GetComponent<RectTransform>();
-                bgRT.anchorMin = Vector2.zero; bgRT.anchorMax = Vector2.one;
-                bgRT.offsetMin = new Vector2(-2, -1); bgRT.offsetMax = new Vector2(2, 1);
-                var bgImg = bgGO.GetComponent<Image>(); bgImg.color = new Color(0,0,0,0.28f); bgImg.raycastTarget = false;
-                gridLabelPool.Add(labelGO);
-            }
-            int labelIdx = 0;
-            for (int sec = 0; sec <= totalSecs; sec++)
-            {
-                bool is5 = sec % 5 == 0;
-                bool is10 = sec % 10 == 0;
-                if (!(sec % labelEvery == 0 || is5)) continue;
-                float norm = Mathf.Clamp01(sec / clipLen);
-                var labelGO = gridLabelPool[labelIdx++];
-                labelGO.SetActive(true);
-                labelGO.name = $"Lbl_{sec}";
-                var lrt = labelGO.GetComponent<RectTransform>();
-                lrt.anchorMin = lrt.anchorMax = new Vector2(norm, 1f);
-                lrt.anchoredPosition = new Vector2(3f, -2f);
-                var tmp = labelGO.GetComponent<TextMeshProUGUI>();
-                tmp.text = sec == 0 ? "0:00" : FormatTime(sec);
-                tmp.fontSize = is10 ? 11f : 10f;
-                tmp.color = is10 ? new Color(1,1,1,0.85f) : is5 ? new Color(1,1,1,0.65f) : new Color(1,1,1,0.45f);
-            }
-            for (int i = labelIdx; i < gridLabelPool.Count; i++) if (gridLabelPool[i]) gridLabelPool[i].SetActive(false);
-        }
-
-        public void RefreshNotes()
-        {
-            if (isDraggingNote) return;
-            if (notesContainer == null || levelData == null) return;
-            float clipLen = GetClipLength();
-            if (clipLen < 0.01f)
-            {
-                clipLen = 60f;
-                if (levelData.events.Count > 0)
-                {
-                    float maxT = 0f;
-                    foreach (var ev in levelData.events) { float ht = GetHitTime(ev); if (ht > maxT) maxT = ht; }
-                    clipLen = Mathf.Max(30f, maxT + 5f);
-                }
-            }
-
-            for (int i = levelData.events.Count; i < noteGos.Count; i++)
-            {
-                if (noteGos[i] != null) noteGos[i].SetActive(false);
-            }
-
-            while (noteGos.Count > levelData.events.Count)
-            {
-                var go = noteGos[noteGos.Count - 1];
-                noteGos.RemoveAt(noteGos.Count - 1);
-                if (go != null) { go.SetActive(false); notePool.Add(go); }
-            }
-            for (int i = 0; i < levelData.events.Count; i++)
-            {
-                var ev = levelData.events[i];
-                float hitTime = GetHitTime(ev);
-                float norm = Mathf.Clamp01(hitTime / clipLen);
-                GameObject go = null;
-                if (i < noteGos.Count && noteGos[i] != null)
-                {
-                    go = noteGos[i];
-
-                    var rt = go.GetComponent<RectTransform>();
-                    if (rt != null) { rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.anchoredPosition = Vector2.zero; }
-                    go.name = $"Note_{i}_{ev.prefabIndex}";
-
-                    UpdateNoteVisual(go, i, ev);
-                    go.SetActive(true);
-                }
-                else
-                {
-                    if (notePool.Count > 0)
-                    {
-                        go = notePool[notePool.Count - 1];
-                        notePool.RemoveAt(notePool.Count - 1);
-                        go.transform.SetParent(notesContainer, false);
-                        var rt = go.GetComponent<RectTransform>();
-                        if (rt != null) { rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.anchoredPosition = Vector2.zero; rt.sizeDelta = GetScaledNoteSize(); }
-                        go.name = $"Note_{i}_{ev.prefabIndex}";
-                        UpdateNoteVisual(go, i, ev);
-                        go.SetActive(true);
-                        if (i < noteGos.Count) noteGos[i] = go;
-                        else noteGos.Add(go);
-                    }
-                    else
-                    {
-                        go = CreateNoteGO(i, ev, norm);
-                        if (i < noteGos.Count) noteGos[i] = go;
-                        else noteGos.Add(go);
-                    }
-                }
-            }
-
-            ApplyNoteZoomScale();
-            if (selectedIndex >= 0) RefreshPropertiesPanel(); else HidePropertiesPanel();
-        }
-
-        GameObject CreateNoteGO(int index, ObstacleEvent ev, float norm)
-        {
-            GameObject go; RectTransform rt; Image img = null;
-            if (notePrefab != null)
-            {
-                go = Instantiate(notePrefab, notesContainer); go.name = $"Note_{index}_{ev.prefabIndex}";
-                rt = go.GetComponent<RectTransform>(); if (rt == null) rt = go.AddComponent<RectTransform>();
-                rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f); rt.anchoredPosition = Vector2.zero;
-                rt.sizeDelta = GetScaledNoteSize();
-                if (ev.scale != Vector3.one && ev.scale != Vector3.zero) { float avg=(ev.scale.x+ev.scale.y+ev.scale.z)/3f; rt.sizeDelta *= Mathf.Clamp(avg,0.6f,2.2f); }
-                if (rt.sizeDelta.x < 8) rt.sizeDelta = GetScaledNoteSize();
-
-                if (Mathf.Abs(ev.position.x) > 0.01f) rt.anchoredPosition += new Vector2(0, ev.position.x * 7f);
-                img = go.GetComponent<Image>(); if (img == null) img = go.GetComponentInChildren<Image>();
-                if (img != null) { Color noteCol = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex); img.color = noteCol; img.raycastTarget = true; }
-                bool isSelForView = selectedIndex == index || selectedIndices.Contains(index);
-                if (notePrefabUseCustomView)
-                {
-                    var custom = go.GetComponent<ITimelineNoteView>();
-                    if (custom != null) custom.Setup(index, ev, GetHitBeat(ev), isSelForView);
-                    else go.SendMessage("OnTimelineNoteSetup", new object[] { index, ev, GetHitBeat(ev), isSelForView }, SendMessageOptions.DontRequireReceiver);
-                }
-                bool isSelected = isSelForView;
-                Transform selTf = go.transform.Find("Selected");
-                if (selTf != null) selTf.gameObject.SetActive(isSelected);
-                else if (isSelected && go.GetComponent<Outline>() == null && img != null) { var outline = go.AddComponent<Outline>(); outline.effectColor = Color.white; outline.effectDistance = new Vector2(2, 2); }
-            }
-            else
-            {
-                go = new GameObject($"Note_{index}_{ev.prefabIndex}", typeof(RectTransform), typeof(Image), typeof(Button));
-                go.transform.SetParent(notesContainer, false);
-                rt = go.GetComponent<RectTransform>(); rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f); rt.sizeDelta = GetScaledNoteSize(); rt.anchoredPosition = Vector2.zero;
-                if (ev.scale != Vector3.one && ev.scale != Vector3.zero) { float avg=(ev.scale.x+ev.scale.y+ev.scale.z)/3f; rt.sizeDelta *= Mathf.Clamp(avg,0.6f,2.2f); }
-                if (Mathf.Abs(ev.position.x) > 0.01f) rt.anchoredPosition += new Vector2(0, ev.position.x * 7f);
-                img = go.GetComponent<Image>(); Color nc = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex); img.color = nc; img.raycastTarget = true;
-                var edgeGO = new GameObject("Edge", typeof(RectTransform), typeof(Image)); edgeGO.transform.SetParent(go.transform, false);
-                var eRT = edgeGO.GetComponent<RectTransform>(); eRT.anchorMin = new Vector2(0, 0); eRT.anchorMax = new Vector2(1, 0); eRT.pivot = new Vector2(0.5f, 0); eRT.sizeDelta = new Vector2(0, 3); eRT.anchoredPosition = Vector2.zero;
-                edgeGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.35f); edgeGO.GetComponent<Image>().raycastTarget = false;
-                bool isSelected = selectedIndex == index || selectedIndices.Contains(index);
-                if (isSelected) { var outline = go.AddComponent<Outline>(); outline.effectColor = Color.white; outline.effectDistance = new Vector2(2, 2); }
-            }
-            int captured = index;
-            var btn = go.GetComponent<Button>(); if (btn == null) btn = go.AddComponent<Button>();
-            btn.transition = Selectable.Transition.ColorTint; var colors = btn.colors; colors.highlightedColor = Color.white; btn.colors = colors;
-            btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
-            var et = go.GetComponent<EventTrigger>(); if (et == null) et = go.AddComponent<EventTrigger>();
-            var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-            entry.callback.AddListener((data) => { var ped = (PointerEventData)data; if (ped.button == PointerEventData.InputButton.Right) RemoveNoteAt(captured); });
-            et.triggers.Add(entry);
-            var hoverEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (statusLabel != null) statusLabel.text = $"{FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Ctrl+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
-            et.triggers.Add(hoverEntry);
-            var exitEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-            exitEntry.callback.AddListener((_) => ClearStatus()); et.triggers.Add(exitEntry);
-            var beginDrag = new EventTrigger.Entry { eventID = EventTriggerType.BeginDrag };
-            beginDrag.callback.AddListener((data) => { var ped = (PointerEventData)data; ped.Use(); StartNoteDrag(captured, ped); }); et.triggers.Add(beginDrag);
-            var drag = new EventTrigger.Entry { eventID = EventTriggerType.Drag };
-            drag.callback.AddListener((data) => OnNoteDrag((PointerEventData)data)); et.triggers.Add(drag);
-            var endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
-            endDrag.callback.AddListener((_) => EndNoteDrag()); et.triggers.Add(endDrag);
-            return go;
-        }
-
-        void UpdateNoteVisual(GameObject go, int index, ObstacleEvent ev)
-        {
-            if (go == null) return;
-            var rt = go.GetComponent<RectTransform>();
-            if (rt != null)
-            {
-                rt.sizeDelta = GetScaledNoteSize();
-                if (ev.scale != Vector3.one && ev.scale != Vector3.zero) { float avg=(ev.scale.x+ev.scale.y+ev.scale.z)/3f; rt.sizeDelta *= Mathf.Clamp(avg,0.6f,2.2f); }
-                if (rt.sizeDelta.x < 8) rt.sizeDelta = GetScaledNoteSize();
-
-                Vector2 basePos = Vector2.zero;
-                if (Mathf.Abs(ev.position.x) > 0.01f) basePos += new Vector2(0, ev.position.x * 7f);
-                rt.anchoredPosition = basePos;
-            }
-            var img = go.GetComponent<Image>(); if (img == null) img = go.GetComponentInChildren<Image>();
-            if (img != null)
-            {
-                Color noteCol = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex);
-                img.color = noteCol;
-            }
-            bool isSel = selectedIndex == index || selectedIndices.Contains(index);
-            if (notePrefabUseCustomView)
-            {
-                var custom = go.GetComponent<ITimelineNoteView>();
-                if (custom != null) custom.Setup(index, ev, GetHitBeat(ev), isSel);
-            }
-            Transform selTf = go.transform.Find("Selected");
-            if (selTf != null) selTf.gameObject.SetActive(isSel);
-            var outline = go.GetComponent<Outline>();
-            if (isSel)
-            {
-                if (outline == null) { outline = go.AddComponent<Outline>(); outline.effectColor = Color.white; outline.effectDistance = new Vector2(2,2); }
-                if (selTf == null) outline.enabled = true;
-            }
-            else
-            {
-                if (outline != null && selTf == null) { Destroy(outline); }
-                else if (outline != null) outline.enabled = false;
-            }
-
-            var btn = go.GetComponent<Button>();
-            if (btn != null)
-            {
-                btn.onClick.RemoveAllListeners();
-                int captured = index;
-                btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
-            }
-            var et = go.GetComponent<EventTrigger>();
-            if (et != null)
-            {
-                et.triggers.Clear();
-                int captured = index;
-                var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
-                entry.callback.AddListener((data) => { var ped = (PointerEventData)data; if (ped.button == PointerEventData.InputButton.Right) RemoveNoteAt(captured); });
-                et.triggers.Add(entry);
-                var hoverEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-                hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (statusLabel != null) statusLabel.text = $"{FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Ctrl+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
-                et.triggers.Add(hoverEntry);
-                var exitEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-                exitEntry.callback.AddListener((_) => ClearStatus()); et.triggers.Add(exitEntry);
-                var beginDrag = new EventTrigger.Entry { eventID = EventTriggerType.BeginDrag };
-                beginDrag.callback.AddListener((data) => { var ped = (PointerEventData)data; ped.Use(); StartNoteDrag(captured, ped); }); et.triggers.Add(beginDrag);
-                var drag = new EventTrigger.Entry { eventID = EventTriggerType.Drag };
-                drag.callback.AddListener((data) => OnNoteDrag((PointerEventData)data)); et.triggers.Add(drag);
-                var endDrag = new EventTrigger.Entry { eventID = EventTriggerType.EndDrag };
-                endDrag.callback.AddListener((_) => EndNoteDrag()); et.triggers.Add(endDrag);
-            }
-        }
-
-        void StartNoteDrag(int idx, PointerEventData ped)
-        {
-            if (levelData == null || idx < 0 || idx >= levelData.events.Count) return;
-            dragNoteIdx = idx; isDraggingNote = true;
-            if (!selectedIndices.Contains(idx))
-            {
-                bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftShift);
-                if (!multi) { selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; ShowPropertiesPanel(idx); }
-                else { selectedIndices.Add(idx); selectedIndex = idx; ShowPropertiesPanel(idx); }
-            }
-            if (idx >= 0 && idx < noteGos.Count && noteGos[idx] != null) dragNoteRect = noteGos[idx].GetComponent<RectTransform>(); else dragNoteRect = null;
-            isScrubbingWaveform = false;
-            dragOrigHitBeats.Clear(); dragStartHitBeat = GetHitBeat(levelData.events[idx]); dragDeltaBeat = 0f;
-            var indicesToSave = selectedIndices.Count > 0 && selectedIndices.Contains(idx) ? selectedIndices : new HashSet<int> { idx };
-            foreach (var i in indicesToSave) if (i >= 0 && i < levelData.events.Count) dragOrigHitBeats[i] = GetHitBeat(levelData.events[i]);
-            if (dragOrigHitBeats.Count == 0) dragOrigHitBeats[idx] = dragStartHitBeat;
-        }
-
-        void OnNoteDrag(PointerEventData ped)
-        {
-            if (!isDraggingNote || dragNoteIdx < 0 || levelData == null) return;
-            if (GetClipLength() < 0.01f) return;
-            float t = GetTimeFromMouse(ped.position);
-            float hitBeat = levelData.TimeToBeat(t);
-            if (ShouldSnap()) hitBeat = Mathf.Round(hitBeat / quantStep) * quantStep;
-            hitBeat = Mathf.Clamp(hitBeat, 0f, levelData.TimeToBeat(GetClipLength()));
-            float delta = hitBeat - dragStartHitBeat; dragDeltaBeat = delta;
-            HashSet<int> indices = dragOrigHitBeats.Count > 1 ? new HashSet<int>(dragOrigHitBeats.Keys) : new HashSet<int> { dragNoteIdx };
-            if (indices.Count == 1)
-            {
-                bool occupied = false;
-                for (int i = 0; i < levelData.events.Count; i++) { if (indices.Contains(i)) continue; if (Mathf.Abs(GetHitBeat(levelData.events[i]) - hitBeat) < 0.02f) { occupied = true; break; } }
-                if (occupied) return;
-            }
-            foreach (var idx in new List<int>(indices))
-            {
-                if (!dragOrigHitBeats.ContainsKey(idx)) continue;
-                float orig = dragOrigHitBeats[idx];
-                float newHb = Mathf.Clamp(orig + delta, 0f, levelData.TimeToBeat(GetClipLength()));
-                if (ShouldSnap()) newHb = Mathf.Round(newHb / quantStep) * quantStep;
-                var ev = levelData.events[idx];
-                float hitT = levelData.BeatToTime(newHb);
-                float travel = GetTravelForEvent(ev);
-                float spawnT = hitT - travel;
-                ev.beat = levelData.TimeToBeat(spawnT);
-                ev.time = spawnT;
-                levelData.events[idx] = ev;
-            }
-            foreach (var idx in indices)
-            {
-                if (idx < 0 || idx >= noteGos.Count || noteGos[idx] == null) continue;
-                var ev = levelData.events[idx];
-                float ht = GetHitTime(ev);
-                float norm2 = Mathf.Clamp01(ht / GetClipLength());
-                var r = noteGos[idx].GetComponent<RectTransform>();
-                if (r != null) { r.anchorMin = new Vector2(norm2, 0.5f); r.anchorMax = new Vector2(norm2, 0.5f); }
-            }
-            if (dragNoteRect != null) { float norm = Mathf.Clamp01(levelData.BeatToTime(hitBeat) / GetClipLength()); dragNoteRect.anchorMin = new Vector2(norm, 0.5f); dragNoteRect.anchorMax = new Vector2(norm, 0.5f); }
-            if (statusLabel != null) { if (dragOrigHitBeats.Count > 1) statusLabel.text = $"Перемещение {dragOrigHitBeats.Count} нот → {FormatTime(levelData.BeatToTime(hitBeat))} (Ctrl свободно)"; else statusLabel.text = $"Перемещение → {FormatTime(levelData.BeatToTime(hitBeat))} (Ctrl свободно)"; }
-        }
-
-        void EndNoteDrag()
-        {
-            if (!isDraggingNote) return;
-            isDraggingNote = false; dragNoteRect = null;
-            var origBeatsCopy = new Dictionary<int, float>(dragOrigHitBeats); float delta = dragDeltaBeat; dragOrigHitBeats.Clear();
-            if (levelData != null)
-            {
-                levelData.SortByTime();
-
-                if (origBeatsCopy.Count > 1)
-                {
-                    var newSelected = new HashSet<int>();
-                    foreach (var kv in origBeatsCopy)
-                    {
-                        float newHb = Mathf.Clamp(kv.Value + delta, 0f, levelData.TimeToBeat(GetClipLength()));
-                        if (ShouldSnap()) newHb = Mathf.Round(newHb / quantStep) * quantStep;
-                        int bestIdx = -1; float bestDist = float.MaxValue;
-                        for (int i = 0; i < levelData.events.Count; i++) { float hb = GetHitBeat(levelData.events[i]); float d = Mathf.Abs(hb - newHb); if (d < bestDist && d < 0.05f) { bestDist = d; bestIdx = i; } }
-                        if (bestIdx >= 0) newSelected.Add(bestIdx);
-                    }
-                    selectedIndices = newSelected; selectedIndex = newSelected.Count > 0 ? new List<int>(newSelected)[new List<int>(newSelected).Count - 1] : -1;
-                }
-                else if (dragNoteIdx >= 0)
-                {
-                    int best = dragNoteIdx; float bestDist = float.MaxValue;
-                    for (int i = 0; i < levelData.events.Count; i++) { float d = Mathf.Abs(GetHitBeat(levelData.events[i]) - (dragStartHitBeat + delta)); if (d < bestDist) { bestDist = d; best = i; } }
-                    selectedIndex = best;
-                    if (selectedIndices.Count == 1) selectedIndices.Clear();
-                    if (selectedIndices.Count <= 1) { selectedIndices.Clear(); if (best >= 0) selectedIndices.Add(best); }
-                }
-                RefreshNotes(); RefreshPropertiesPanel();
-            }
-            dragNoteIdx = -1; dragDeltaBeat = 0f;
-        }
-
-        Vector2 GetScaledNoteSize()
-        {
-            if (!scaleNotesWithZoom) return noteSize;
-            float t = Mathf.InverseLerp(0.25f, 4f, zoom);
-            float s = Mathf.Lerp(noteZoomScaleMin, noteZoomScaleMax, t);
-            if (scaleNotesWidthOnly) return new Vector2(noteSize.x * s, noteSize.y * Mathf.Lerp(1f, 1.08f, t));
-            return noteSize * s;
-        }
-        void ApplyNoteZoomScale()
-        {
-            if (!scaleNotesWithZoom || noteGos == null) return;
-            Vector2 baseScaled = GetScaledNoteSize();
-            for (int i = 0; i < noteGos.Count; i++)
-            {
-                var go = noteGos[i];
-                if (go == null) continue;
-                var rt = go.GetComponent<RectTransform>();
-                if (rt == null) continue;
-                Vector2 scaled = baseScaled;
-
-                if (levelData != null && i < levelData.events.Count)
-                {
-                    var ev = levelData.events[i];
-                    if (ev.scale != Vector3.one && ev.scale != Vector3.zero)
-                    {
-                        float avg = (ev.scale.x + ev.scale.y + ev.scale.z) / 3f;
-                        scaled *= Mathf.Clamp(avg, 0.6f, 2.2f);
-                        if (scaled.x < 8) scaled = baseScaled;
-                    }
-                }
-                rt.sizeDelta = scaled;
-            }
-        }
-        Color GetColorForPrefab(int idx) { float h = (idx * 0.37f) % 1f; return Color.HSVToRGB(h, 0.78f, 0.92f); }
 
         void HandleWheelZoom()
         {
             if (timelineViewport == null && timelineContent == null) return;
-            if (isDraggingNote || isScrubbingWaveform) return;
+            if (notesController.IsDragging || transport.IsScrubbing) return;
             float wheel = 0f;
             wheel += Input.GetAxis("Mouse ScrollWheel");
             Vector2 md = Input.mouseScrollDelta;
@@ -1256,9 +560,9 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (waveformRect != null) waveformRect.localScale = Vector3.one;
                 RefreshScrollContent();
 
-                if (Time.unscaledTime - lastGridRefreshTime > 0.05f) RefreshGrid(false);
-                ApplyNoteZoomScale();
-                UpdatePlayhead();
+                gridView.RefreshGrid(false);
+                notesController.ApplyNoteZoomScale();
+                transport.UpdatePlayhead();
                 if (_pendingZoomCursorTime >= 0f) { ApplyZoomCursorCorrection(_pendingZoomCursorTime, _pendingZoomCursorScreenPos); _pendingZoomCursorTime = -1f; }
                 else UpdateScrollToPlayhead(false);
                 return;
@@ -1267,10 +571,10 @@ namespace RKS.RhythmParkour.UI.Timeline
             zoom = Mathf.SmoothDamp(zoom, targetZoom, ref zoomVelocity, 1f / Mathf.Max(1f, zoomLerpSpeed), 10f, Time.unscaledDeltaTime);
             if (Mathf.Abs(zoom - targetZoom) < 0.005f) zoom = targetZoom;
             RefreshScrollContent();
-            ApplyNoteZoomScale();
+            notesController.ApplyNoteZoomScale();
 
-            if (Mathf.Abs(zoom - prevZoom) > 0.08f && Time.unscaledTime - lastGridRefreshTime > 0.1f) RefreshGrid(false);
-            UpdatePlayhead();
+            if (Mathf.Abs(zoom - prevZoom) > 0.08f) gridView.RefreshGrid(false);
+            transport.UpdatePlayhead();
             if (_pendingZoomCursorTime >= 0f) ApplyZoomCursorCorrection(_pendingZoomCursorTime, _pendingZoomCursorScreenPos);
             else if (autoScrollWithPlayhead) UpdateScrollToPlayhead(false);
         }
@@ -1312,7 +616,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                     RefreshAll();
                 }
             }
-            if (levelData != null && levelData.music != lastClip && levelData.music != null) RefreshAll();
+            if (levelData != null && levelData.music != waveformView.LastClip && levelData.music != null) RefreshAll();
             HandleWheelZoom();
             ProcessZoomLerp();
             if (waveformRect != null && waveformRect.localScale != Vector3.one)
@@ -1320,19 +624,16 @@ namespace RKS.RhythmParkour.UI.Timeline
                 waveformRect.localScale = Vector3.Lerp(waveformRect.localScale, Vector3.one, Time.unscaledDeltaTime * 12f);
                 if ((waveformRect.localScale - Vector3.one).sqrMagnitude < 0.0001f) waveformRect.localScale = Vector3.one;
             }
-            HandleKeyboard(); UpdateCurrentTimeFromAudio(); HandleMouseInput();
-            if (isScrubbingWaveform && enableScrubAudio && audioSource != null && audioSource.isPlaying && !scrubPausedDueToStill)
-            {
-                if (Time.unscaledTime - lastScrubMoveTime > scrubStationaryPauseDelay) { audioSource.Pause(); scrubPausedDueToStill = true; }
-            }
-            UpdatePlayhead();
+            HandleKeyboard(); transport.UpdateCurrentTimeFromAudio(); HandleMouseInput();
+            transport.TickScrubStillness();
+            transport.UpdatePlayhead();
             if (autoScrollWithPlayhead)
             {
                 if (audioSource != null && audioSource.isPlaying) UpdateScrollToPlayhead(false);
-                else if (isScrubbingWaveform) UpdateScrollToPlayhead(false);
+                else if (transport.IsScrubbing) UpdateScrollToPlayhead(false);
             }
-            UpdateLabels(); UpdatePlayPauseLabel();
-            if (loopPlayback && audioSource != null && audioSource.clip != null && audioSource.isPlaying) { if (audioSource.time >= audioSource.clip.length - 0.05f) { audioSource.time = 0f; audioSource.Play(); } }
+            transport.UpdateLabels(); transport.UpdatePlayPauseLabel();
+            transport.TickLoop();
         }
 
         void HandleKeyboard()
@@ -1343,46 +644,35 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (sel.GetComponent<TMPro.TMP_InputField>() != null) return;
                 if (sel.GetComponent<UnityEngine.UI.InputField>() != null) return;
             }
-            if (Input.GetKeyDown(KeyCode.Escape)) { if (selectedIndex >= 0) DeselectNote(); else if (notePropertiesPanel != null && notePropertiesPanel.activeSelf) HidePropertiesPanel(); }
+            if (Input.GetKeyDown(KeyCode.Escape)) { if (notesController.HasSelection()) notesController.DeselectNote(); else if (notePropertiesPanel != null && notePropertiesPanel.activeSelf) propsController.HidePropertiesPanel(); }
             if (Input.GetKeyDown(KeyCode.Space)) TogglePlayPause();
-            if (Input.GetKeyDown(addNoteKey) || Input.GetKeyDown(altAddNoteKey)) AddNoteAtCurrentPlayhead();
-            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) { if (Input.GetKeyDown(KeyCode.A)) { selectedIndices.Clear(); for (int i = 0; i < levelData.events.Count; i++) selectedIndices.Add(i); selectedIndex = selectedIndices.Count > 0 ? new List<int>(selectedIndices)[0] : -1; RefreshNotes(); if (selectedIndex >= 0) ShowPropertiesPanel(selectedIndex); FlashStatus($"Выделено {selectedIndices.Count} нот (Ctrl+A)"); return; } }
-            if (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace))
-            {
-                if (selectedIndices.Count > 1) RemoveSelectedNotes();
-                else if (selectedIndex >= 0 && selectedIndex < levelData.events.Count) RemoveNoteAt(selectedIndex);
-                else if (selectedIndices.Count == 1) { int idx = new List<int>(selectedIndices)[0]; RemoveNoteAt(idx); }
-                else RemoveNearestNote();
-            }
-            for (int k = 1; k <= 12; k++) { if (Input.GetKeyDown(KeyCode.Alpha0 + k) || Input.GetKeyDown(KeyCode.Keypad0 + k)) { SetBrush(k - 1); } }
-            if ((selectedIndex >= 0 || selectedIndices.Count > 0) && levelData != null && (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow)))
+            if (Input.GetKeyDown(addNoteKey) || Input.GetKeyDown(altAddNoteKey)) notesController.AddNoteAtCurrentPlayhead();
+            if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) { if (Input.GetKeyDown(KeyCode.A)) { notesController.SelectAllNotes(); return; } }
+            if (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace)) notesController.DeleteSelectionOrNearest();
+            for (int k = 1; k <= 12; k++) { if (Input.GetKeyDown(KeyCode.Alpha0 + k) || Input.GetKeyDown(KeyCode.Keypad0 + k)) { notesController.SetBrush(k - 1); } }
+            if (notesController.HasSelection() && levelData != null && (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow)))
             {
                 float dir = Input.GetKeyDown(KeyCode.RightArrow) ? 1f : -1f;
                 float step = Input.GetKey(KeyCode.LeftShift) ? quantStep * 0.5f : quantStep;
                 if (!ShouldSnap()) step = 0.05f;
-                if (selectedIndices.Count > 1) NudgeSelected(dir * step);
-                else { int idx = selectedIndex >= 0 ? selectedIndex : new List<int>(selectedIndices)[0]; NudgeNote(idx, dir * step); }
+                notesController.NudgeSelection(dir * step);
             }
         }
 
         void HandleMouseInput()
         {
-            if (isDraggingNote) return;
+            if (notesController.IsDragging) return;
             RectTransform headerRect = playheadHeader;
             bool headerClick = headerRect != null && RectTransformUtility.RectangleContainsScreenPoint(headerRect, Input.mousePosition, GetCanvasCamera());
             if (headerClick)
             {
-                if (Input.GetMouseButtonDown(0)) { UpdateAutoscrollLockFromScreenPos(Input.mousePosition); float t = GetTimeFromMouseHeader(Input.mousePosition); Seek(t, true); BeginScrub(); lastScrubScreenPos = Input.mousePosition; lastScrubMoveTime = Time.unscaledTime; }
-                if (Input.GetMouseButton(0) && isScrubbingWaveform)
+                if (Input.GetMouseButtonDown(0)) { UpdateAutoscrollLockFromScreenPos(Input.mousePosition); transport.BeginScrubAt(transport.GetTimeFromMouseHeader(Input.mousePosition), Input.mousePosition); }
+                if (Input.GetMouseButton(0) && transport.IsScrubbing)
                 {
                     Vector2 cur = Input.mousePosition;
-                    float sq = (cur - lastScrubScreenPos).sqrMagnitude;
-                    float t = GetTimeFromMouseHeader(cur);
-                    bool moved = sq > scrubStillThresholdPxSq || Mathf.Abs(t - currentTime) > 0.006f;
-                    if (moved) { UpdateAutoscrollLockFromScreenPos(cur); lastScrubScreenPos = cur; lastScrubMoveTime = Time.unscaledTime; if (scrubPausedDueToStill && enableScrubAudio && audioSource != null && audioSource.clip != null) { scrubPausedDueToStill = false; audioSource.volume = Mathf.Clamp01(scrubVolume); try { audioSource.time = Mathf.Clamp(t, 0f, audioSource.clip.length - 0.02f); } catch {} if (!audioSource.isPlaying) audioSource.Play(); } Seek(t, true); }
-                    else { if (enableScrubAudio && audioSource != null && audioSource.isPlaying && Time.unscaledTime - lastScrubMoveTime > scrubStationaryPauseDelay) { audioSource.Pause(); scrubPausedDueToStill = true; } }
+                    transport.ScrubMoveTo(transport.GetTimeFromMouseHeader(cur), cur);
                 }
-                if (Input.GetMouseButtonUp(0) && isScrubbingWaveform) EndScrub();
+                if (Input.GetMouseButtonUp(0) && transport.IsScrubbing) transport.EndScrub();
                 return;
             }
             RectTransform refRect = waveformRect != null ? waveformRect : timelineContent;
@@ -1392,75 +682,23 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (RectTransformUtility.RectangleContainsScreenPoint(refRect, Input.mousePosition, GetCanvasCamera()))
                 {
                     float t = GetTimeFromMouse(Input.mousePosition);
-                    if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand)) { Seek(t, true); BeginScrub(); lastScrubScreenPos = Input.mousePosition; lastScrubMoveTime = Time.unscaledTime; }
-                    else AddNoteAtTime(t);
+                    if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand)) { transport.BeginScrubAt(t, Input.mousePosition); }
+                    else notesController.AddNoteAtTime(t);
                 }
             }
-            if (Input.GetMouseButtonUp(0) && isScrubbingWaveform) EndScrub();
-            if (isScrubbingWaveform && Input.GetMouseButton(0))
+            if (Input.GetMouseButtonUp(0) && transport.IsScrubbing) transport.EndScrub();
+            if (transport.IsScrubbing && Input.GetMouseButton(0))
             {
                 Vector2 cur = Input.mousePosition;
-                float sq = (cur - lastScrubScreenPos).sqrMagnitude;
                 RectTransform scrubRect = playheadHeader != null ? playheadHeader : refRect;
-                float t = scrubRect == playheadHeader ? GetTimeFromMouseHeader(cur) : GetTimeFromMouse(cur);
-                bool moved = sq > scrubStillThresholdPxSq || Mathf.Abs(t - currentTime) > 0.006f;
-                if (moved) { lastScrubScreenPos = cur; lastScrubMoveTime = Time.unscaledTime; if (scrubPausedDueToStill && enableScrubAudio && audioSource != null && audioSource.clip != null) { scrubPausedDueToStill = false; audioSource.volume = Mathf.Clamp01(scrubVolume); try { audioSource.time = Mathf.Clamp(t, 0f, audioSource.clip.length - 0.02f); } catch {} if (!audioSource.isPlaying) audioSource.Play(); } Seek(t, true); }
-                else { if (enableScrubAudio && audioSource != null && audioSource.isPlaying && Time.unscaledTime - lastScrubMoveTime > scrubStationaryPauseDelay) { audioSource.Pause(); scrubPausedDueToStill = true; } }
+                float t = scrubRect == playheadHeader ? transport.GetTimeFromMouseHeader(cur) : GetTimeFromMouse(cur);
+                transport.ScrubMoveTo(t, cur);
             }
         }
 
-        float GetTimeFromMouseHeader(Vector2 screenPos)
-        {
-            RectTransform refRect = playheadHeader != null ? playheadHeader : (timelineContent != null ? timelineContent : waveformRect);
-            if (refRect == null) return currentTime;
-            Camera cam = GetCanvasCamera();
-            Vector2 local;
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(refRect, screenPos, cam, out local)) return currentTime;
-            Rect rect = refRect.rect;
-            float norm = Mathf.InverseLerp(rect.xMin, rect.xMax, local.x);
-            norm = Mathf.Clamp01(norm);
-            return norm * GetClipLength();
-        }
 
-        void BeginScrub()
-        {
-            if (isScrubbingWaveform) return;
-            isScrubbingWaveform = true;
-            wasPlayingBeforeScrub = audioSource != null && audioSource.isPlaying;
-            scrubWasPlaying = wasPlayingBeforeScrub;
-            lastScrubScreenPos = Input.mousePosition;
-            lastScrubMoveTime = Time.unscaledTime;
-            scrubPausedDueToStill = false;
-            if (audioSource == null || audioSource.clip == null) return;
-            if (enableScrubAudio)
-            {
-                scrubSavedVolume = audioSource.volume;
-                audioSource.volume = Mathf.Clamp01(scrubVolume);
-                float target = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f);
-                try { audioSource.time = target; } catch { audioSource.time = 0f; }
-                audioSource.loop = false;
-                if (!audioSource.isPlaying) audioSource.Play();
-                CancelInvoke(nameof(StopScrubPreview));
-            }
-            else { if (wasPlayingBeforeScrub) audioSource.Pause(); }
-        }
 
-        void EndScrub()
-        {
-            if (!isScrubbingWaveform) return;
-            isScrubbingWaveform = false;
-            if (audioSource == null || audioSource.clip == null) { wasPlayingBeforeScrub = false; return; }
-            if (enableScrubAudio)
-            {
-                audioSource.volume = scrubSavedVolume;
-                if (!wasPlayingBeforeScrub) { CancelInvoke(nameof(StopScrubPreview)); Invoke(nameof(StopScrubPreview), Mathf.Max(0.05f, scrubAudibleDuration)); }
-                else { if (!audioSource.isPlaying) { try { audioSource.time = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f); } catch {} audioSource.Play(); } }
-            }
-            else { if (wasPlayingBeforeScrub && !audioSource.isPlaying) { try { audioSource.time = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f); } catch {} audioSource.Play(); } }
-            wasPlayingBeforeScrub = false;
-        }
 
-        void StopScrubPreview() { if (isScrubbingWaveform) return; if (!scrubWasPlaying && audioSource != null && audioSource.isPlaying) { audioSource.Pause(); audioSource.volume = scrubSavedVolume; } }
 
         bool IsPointerOverNote()
         {
@@ -1472,25 +710,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             return false;
         }
 
-        void UpdateCurrentTimeFromAudio()
-        {
-            if (audioSource == null || audioSource.clip == null) { if (audioSource != null && !audioSource.isPlaying) return; }
-            if (audioSource.isPlaying) currentTime = audioSource.time;
-            else if (!isScrubbingWaveform) currentTime = audioSource.time;
-            currentTime = Mathf.Clamp(currentTime, 0f, GetClipLength() - 0.001f);
-        }
 
-        void UpdatePlayhead()
-        {
-            RectTransform refRect = waveformRect != null ? waveformRect : timelineContent;
-            if (playheadRect == null || refRect == null || GetClipLength() < 0.01f) return;
-            float norm = Mathf.Clamp01(currentTime / GetClipLength());
-            float width = refRect.rect.width;
-            if (width < 1f && refRect == timelineContent) width = refRect.sizeDelta.x;
-            float x = norm * width;
-            if (refRect == timelineContent) playheadRect.anchoredPosition = new Vector2(x, playheadRect.anchoredPosition.y);
-            else { float xMin = refRect.rect.xMin; playheadRect.anchoredPosition = new Vector2(xMin + x, playheadRect.anchoredPosition.y); }
-        }
 
         public void UpdateScrollToPlayhead(bool immediate = false)
         {
@@ -1502,7 +722,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             float contentW = timelineContent.rect.width;
             if (contentW < 1f) contentW = timelineContent.sizeDelta.x;
             if (contentW <= viewportW + 1f) return;
-            float norm = Mathf.Clamp01(currentTime / GetClipLength());
+            float norm = Mathf.Clamp01(transport.GetCurrentTime() / GetClipLength());
             float playheadX = norm * contentW;
             float offset = -timelineContent.anchoredPosition.x;
             float margin = viewportW * Mathf.Clamp01(autoScrollMargin);
@@ -1542,570 +762,37 @@ namespace RKS.RhythmParkour.UI.Timeline
         }
 
         [ContextMenu("Центрировать на плейхеде")] public void CenterScrollOnPlayhead() => UpdateScrollToPlayhead(true);
-        void UpdateLabels() { if (timeLabel != null) { float len = GetClipLength(); timeLabel.text = $"{FormatTime(currentTime)} / {FormatTime(len)}"; } if (beatLabel != null && beatLabel.gameObject.activeSelf) beatLabel.gameObject.SetActive(false); }
-        void UpdatePlayPauseLabel() { if (playPauseLabel != null) { bool playing = audioSource != null && audioSource.isPlaying; playPauseLabel.text = playing ? "■" : "►"; } }
-        string FormatTime(float t) { int m = Mathf.FloorToInt(t / 60f); int s = Mathf.FloorToInt(t % 60f); int ms = Mathf.FloorToInt((t - Mathf.Floor(t)) * 100); return $"{m:0}:{s:00}.{ms:00}"; }
-        public void OnWaveformDrag(BaseEventData data) { var ped = data as PointerEventData; if (ped != null) { Seek(GetTimeFromMouse(ped.position), true); if (!isScrubbingWaveform) BeginScrub(); lastScrubScreenPos = ped.position; lastScrubMoveTime = Time.unscaledTime; } }
-        public void OnWaveformPointerUp(BaseEventData data) { if (isScrubbingWaveform) EndScrub(); }
-        void OnHeaderPointerDown(BaseEventData data) { var ped = data as PointerEventData; if (ped == null) return; UpdateAutoscrollLockFromScreenPos(ped.position); float t = GetTimeFromMouseHeader(ped.position); Seek(t, true); BeginScrub(); lastScrubScreenPos = ped.position; lastScrubMoveTime = Time.unscaledTime; }
-        void OnHeaderDrag(BaseEventData data) { var ped = data as PointerEventData; if (ped == null) return; UpdateAutoscrollLockFromScreenPos(ped.position); float t = GetTimeFromMouseHeader(ped.position); Seek(t, true); lastScrubScreenPos = ped.position; lastScrubMoveTime = Time.unscaledTime; }
-        public void AddNoteAtCurrentPlayhead() => AddNoteAtTime(currentTime);
-        public void AddNoteAtTime(float hitTime)
-        {
-            if (levelData == null) { FlashStatus("Нет LevelData!"); return; }
-            if (levelData.music == null) { FlashStatus("Нет музыки — загрузите аудио!"); return; }
-            int gCountAdd = (catalog != null ? catalog.Count : 0); if (gCountAdd == 0) gCountAdd = levelData.PrefabCount(catalog);
-            if (gCountAdd == 0) { FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; }
-            float hitBeat = levelData.TimeToBeat(hitTime);
-            if (ShouldSnap()) hitBeat = Mathf.Round(hitBeat / quantStep) * quantStep;
-            hitBeat = Mathf.Clamp(hitBeat, 0f, levelData.TimeToBeat(levelData.music.length) - 0.1f);
-            float hitTimeQ = levelData.BeatToTime(hitBeat);
-            foreach (var ev2 in levelData.events) if (Mathf.Abs(GetHitBeat(ev2) - hitBeat) < 0.02f) { FlashStatus($"Уже есть нота на {FormatTime(hitTimeQ)}"); return; }
-            float speed = GetSpeedForBrush();
-            float travel = GetTravelForSpeed(speed);
-            float spawnTime = hitTimeQ - travel;
-            float spawnBeat = levelData.TimeToBeat(spawnTime);
+        public string FormatTime(float t) { int m = Mathf.FloorToInt(t / 60f); int s = Mathf.FloorToInt(t % 60f); int ms = Mathf.FloorToInt((t - Mathf.Floor(t)) * 100); return $"{m:0}:{s:00}.{ms:00}"; }
 
-            if (brushIndex < 0 || brushIndex >= gCountAdd) { FlashStatus($"Кисть {brushIndex} вне каталога (0–{gCountAdd - 1})"); return; }
-            var ev = ObstacleEvent.Create(spawnBeat, brushIndex, Vector3.zero, speed);
-            ev.time = spawnTime;
-            levelData.events.Add(ev);
-            levelData.SortByTime();
 
-            int newIdx = levelData.events.IndexOf(ev);
-            if (newIdx < 0) for (int i = 0; i < levelData.events.Count; i++) if (Mathf.Abs(GetHitBeat(levelData.events[i]) - hitBeat) < 0.01f) { newIdx = i; break; }
-            selectedIndex = newIdx >= 0 ? newIdx : levelData.events.Count - 1;
-            selectedIndices.Clear(); selectedIndices.Add(selectedIndex);
-            RefreshNotes();
-            ShowPropertiesPanel(selectedIndex);
-            FlashStatus($"+ Нота {FormatTime(hitTimeQ)} → спавн {FormatTime(spawnTime)}  #{brushIndex}  Ctrl — свободно");
-        }
-        public void RemoveNoteAt(int idx)
-        {
-            if (levelData == null || idx < 0 || idx >= levelData.events.Count) return;
-            levelData.events.RemoveAt(idx);
 
-            selectedIndex = Mathf.Clamp(idx - 1, -1, levelData.events.Count - 1);
-            selectedIndices.Clear();
-            if (selectedIndex >= 0) selectedIndices.Add(selectedIndex);
-            RefreshNotes();
-            if (selectedIndices.Count == 0) HidePropertiesPanel();
-            FlashStatus($"Удалена нота #{idx}");
-        }
-        public void RemoveNearestNote()
-        {
-            if (levelData == null || levelData.events.Count == 0) return;
-            float curBeat = levelData.TimeToBeat(currentTime);
-            int best = -1; float bestDist = float.MaxValue;
-            for (int i = 0; i < levelData.events.Count; i++) { float hb = GetHitBeat(levelData.events[i]); float d = Mathf.Abs(hb - curBeat); if (d < bestDist) { bestDist = d; best = i; } }
-            if (best >= 0 && bestDist <= noteDeleteThresholdBeats + 0.5f) RemoveNoteAt(best);
-            else FlashStatus("Нет ноты рядом");
-        }
-        public void SelectNote(int idx) { selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; RefreshNotes(); if (idx >= 0 && idx < levelData.events.Count) { FlashStatus($"Выбрано #{idx}  {FormatTime(GetHitTime(levelData.events[idx]))} — Ctrl+клик множ."); ShowPropertiesPanel(idx); } else HidePropertiesPanel(); }
-        public void ToggleSelectNote(int idx) { if (selectedIndices.Contains(idx)) { selectedIndices.Remove(idx); if (selectedIndex == idx) selectedIndex = selectedIndices.Count > 0 ? new List<int>(selectedIndices)[selectedIndices.Count - 1] : -1; } else { selectedIndices.Add(idx); selectedIndex = idx; } RefreshNotes(); if (selectedIndex >= 0) ShowPropertiesPanel(selectedIndex); else HidePropertiesPanel(); FlashStatus($"Выделено {selectedIndices.Count} нот"); }
-        public void DeselectNote() { selectedIndex = -1; selectedIndices.Clear(); RefreshNotes(); HidePropertiesPanel(); }
-        public static bool TryParseFloat(string s, out float v)
-        {
-            v = 0f;
-            if (string.IsNullOrWhiteSpace(s)) return false;
-            return float.TryParse(s.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out v);
-        }
 
-        Button MakePropButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick, Color bg)
-        {
-            var go = new GameObject("Btn", typeof(RectTransform), typeof(Image), typeof(Button));
-            go.transform.SetParent(parent, false);
-            go.GetComponent<Image>().color = bg;
-            var le = go.AddComponent<LayoutElement>(); le.minHeight = 30; le.flexibleWidth = 1f;
-            var txtGO = new GameObject("Text", typeof(RectTransform));
-            txtGO.transform.SetParent(go.transform, false);
-            var trt = txtGO.GetComponent<RectTransform>(); trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
-            var tmp = txtGO.AddComponent<TextMeshProUGUI>(); tmp.text = text; tmp.fontSize = 13; tmp.alignment = TextAlignmentOptions.Center; tmp.color = Color.white;
-            var btn = go.GetComponent<Button>();
-            btn.onClick.AddListener(onClick);
-            return btn;
-        }
 
-        void EnsurePropertiesUI()
-        {
-            if (notePropertiesPanel == null) return;
-            Transform parent = notePropertiesPanel.transform;
-            var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
-            if (scroll != null && scroll.content != null) parent = scroll.content;
-            if (parent.GetComponent<VerticalLayoutGroup>() == null)
-            {
-                var pvlg = parent.gameObject.AddComponent<VerticalLayoutGroup>();
-                pvlg.spacing = 6;
-                pvlg.padding = new RectOffset(8, 8, 8, 8);
-                pvlg.childAlignment = TextAnchor.UpperCenter;
-                pvlg.childControlWidth = true;
-                pvlg.childControlHeight = false;
-                pvlg.childForceExpandWidth = true;
-                pvlg.childForceExpandHeight = false;
-                var pcsf = parent.gameObject.AddComponent<ContentSizeFitter>();
-                pcsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            }
 
-            if (propTitleLabel == null)
-            {
-                var titleGO = new GameObject("Title", typeof(RectTransform));
-                titleGO.transform.SetParent(parent, false);
-                var ttmp = titleGO.AddComponent<TextMeshProUGUI>(); ttmp.fontSize = 14; ttmp.fontStyle = FontStyles.Bold; ttmp.alignment = TextAlignmentOptions.Center; ttmp.color = Color.white;
-                var tle = titleGO.AddComponent<LayoutElement>(); tle.minHeight = 24; tle.flexibleWidth = 1f;
-                propTitleLabel = ttmp;
-            }
 
-            if (propPrefabButtonLabel == null)
-            {
-                var btn = MakePropButton(parent, "Вид", () => ShowPrefabGrid(), new Color(0.16f, 0.22f, 0.32f, 1f));
-                btn.name = "PrefabButton";
-                propPrefabButtonLabel = btn.GetComponentInChildren<TextMeshProUGUI>();
-            }
-
-            EnsurePropSpeedRow();
-
-            if (parent.Find("DeleteCloseRow") == null)
-            {
-                var rowGO = new GameObject("DeleteCloseRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-                rowGO.transform.SetParent(parent, false);
-                var hlg = rowGO.GetComponent<HorizontalLayoutGroup>(); hlg.spacing = 8; hlg.childAlignment = TextAnchor.MiddleCenter; hlg.childControlWidth = true; hlg.childControlHeight = true; hlg.childForceExpandWidth = true; hlg.childForceExpandHeight = false;
-                var rle = rowGO.AddComponent<LayoutElement>(); rle.minHeight = 30;
-                var del = MakePropButton(rowGO.transform, "× Удалить", () => OnPropDelete(), new Color(0.5f, 0.2f, 0.2f, 1f));
-                del.name = "DeleteButton";
-                var close = MakePropButton(rowGO.transform, "Закрыть", () => DeselectNote(), new Color(0.25f, 0.25f, 0.28f, 1f));
-                close.name = "CloseButton";
-            }
-        }
-
-        void EnsurePropSpeedRow()
-        {
-            if (notePropertiesPanel == null) return;
-            if (propSpeedInput != null)
-            {
-                EnsurePropSpeedHint();
-                return;
-            }
-            Transform parent = notePropertiesPanel.transform;
-            var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
-            if (scroll != null && scroll.content != null) parent = scroll.content;
-            if (parent.GetComponent<VerticalLayoutGroup>() == null)
-            {
-                var pvlg = parent.gameObject.AddComponent<VerticalLayoutGroup>();
-                pvlg.spacing = 6;
-                pvlg.padding = new RectOffset(8, 8, 8, 8);
-                pvlg.childAlignment = TextAnchor.UpperCenter;
-                pvlg.childControlWidth = true;
-                pvlg.childControlHeight = false;
-                pvlg.childForceExpandWidth = true;
-                pvlg.childForceExpandHeight = false;
-                var pcsf = parent.gameObject.AddComponent<ContentSizeFitter>();
-                pcsf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            }
-
-            var rowGO = new GameObject("SpeedRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
-            rowGO.transform.SetParent(parent, false);
-            var hlg = rowGO.GetComponent<HorizontalLayoutGroup>(); hlg.spacing = 8; hlg.childAlignment = TextAnchor.MiddleLeft; hlg.childControlWidth = true; hlg.childControlHeight = true; hlg.childForceExpandWidth = false; hlg.childForceExpandHeight = false;
-            var rle = rowGO.AddComponent<LayoutElement>(); rle.minHeight = 30;
-
-            var labGO = new GameObject("Label", typeof(RectTransform));
-            labGO.transform.SetParent(rowGO.transform, false);
-            var ltmp = labGO.AddComponent<TextMeshProUGUI>(); ltmp.text = "Скорость"; ltmp.fontSize = 13; ltmp.alignment = TextAlignmentOptions.MidlineLeft; ltmp.color = new Color(1, 1, 1, 0.85f);
-            var lle = labGO.AddComponent<LayoutElement>(); lle.minWidth = 90; lle.preferredWidth = 90;
-
-            var inGO = new GameObject("SpeedInput", typeof(RectTransform), typeof(Image), typeof(TMP_InputField));
-            inGO.transform.SetParent(rowGO.transform, false);
-            var iimg = inGO.GetComponent<Image>(); iimg.color = new Color(0, 0, 0, 0.35f);
-            var input = inGO.GetComponent<TMP_InputField>();
-            var areaGO = new GameObject("TextArea", typeof(RectTransform), typeof(RectMask2D));
-            areaGO.transform.SetParent(inGO.transform, false);
-            var art = areaGO.GetComponent<RectTransform>(); art.anchorMin = Vector2.zero; art.anchorMax = Vector2.one; art.offsetMin = new Vector2(6, 2); art.offsetMax = new Vector2(-6, -2);
-            var txtGO = new GameObject("Text", typeof(RectTransform));
-            txtGO.transform.SetParent(areaGO.transform, false);
-            var trt = txtGO.GetComponent<RectTransform>(); trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
-            var ttmp = txtGO.AddComponent<TextMeshProUGUI>(); ttmp.fontSize = 13; ttmp.color = Color.white; ttmp.alignment = TextAlignmentOptions.MidlineLeft;
-            var phGO = new GameObject("Placeholder", typeof(RectTransform));
-            phGO.transform.SetParent(areaGO.transform, false);
-            var prt = phGO.GetComponent<RectTransform>(); prt.anchorMin = Vector2.zero; prt.anchorMax = Vector2.one; prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
-            var ptmp = phGO.AddComponent<TextMeshProUGUI>(); ptmp.text = "м/с"; ptmp.fontSize = 13; ptmp.color = new Color(1, 1, 1, 0.35f); ptmp.alignment = TextAlignmentOptions.MidlineLeft;
-            input.textViewport = art;
-            input.textComponent = ttmp;
-            input.placeholder = ptmp;
-            input.contentType = TMP_InputField.ContentType.DecimalNumber;
-            input.characterLimit = 7;
-            var ile = inGO.AddComponent<LayoutElement>(); ile.minHeight = 30; ile.flexibleWidth = 1f;
-            propSpeedInput = input;
-            propSpeedInput.onEndEdit.AddListener(_ => ApplyPropertiesFromPanel());
-
-            EnsurePropSpeedHint();
-        }
-
-        void EnsurePropSpeedHint()
-        {
-            if (propSpeedHintLabel != null) return;
-            if (notePropertiesPanel == null) return;
-            Transform parent = notePropertiesPanel.transform;
-            var scroll = notePropertiesPanel.GetComponentInChildren<ScrollRect>(true);
-            if (scroll != null && scroll.content != null) parent = scroll.content;
-
-            var hintGO = new GameObject("SpeedHint", typeof(RectTransform));
-            hintGO.transform.SetParent(parent, false);
-            var htmp = hintGO.AddComponent<TextMeshProUGUI>();
-            htmp.name = "SpeedHintLabel";
-            htmp.fontSize = 11;
-            htmp.alignment = TextAlignmentOptions.TopLeft;
-            htmp.color = new Color(1, 1, 1, 0.55f);
-            var hle = hintGO.AddComponent<LayoutElement>(); hle.minHeight = 16; hle.flexibleWidth = 1f;
-            propSpeedHintLabel = htmp;
-        }
-
-        void ShowPropertiesPanel(int idx)
-        {
-            if (notePropertiesPanel == null)
-            {
-
-                Debug.LogWarning("[TimelineUI] notePropertiesPanel не назначен.", this);
-                return;
-            }
-            if (levelData == null || idx < 0 || idx >= levelData.events.Count) { HidePropertiesPanel(); return; }
-            notePropertiesPanel.SetActive(true);
-            var ev = levelData.events[idx];
-            float hitTime = GetHitTime(ev);
-
-            string speedTxt = $" • {SpeedHint(ev.speed)}";
-            if (selectedIndices.Count > 1 && propTitleLabel != null) propTitleLabel.text = $"Выделено {selectedIndices.Count} нот";
-            else if (propTitleLabel != null) propTitleLabel.text = $"Нота #{idx} — {FormatTime(hitTime)} • {GetPrefabName(ev.prefabIndex)}{speedTxt}";
-
-            EnsurePropertiesUI();
-            if (propPrefabButtonLabel != null) propPrefabButtonLabel.text = $"Вид: {GetPrefabName(ev.prefabIndex)}";
-            if (propSpeedInput != null) { propSpeedInput.gameObject.SetActive(true); propSpeedInput.SetTextWithoutNotify(ev.speed.ToString("0.##", CultureInfo.InvariantCulture)); }
-            if (propSpeedHintLabel != null) propSpeedHintLabel.text = SpeedHint(ev.speed);
-            if (propPrefabDropdown != null)
-            {
-                propPrefabDropdown.gameObject.SetActive(true);
-                RefreshPrefabDropdown();
-                if (ev.prefabIndex < 0 || ev.prefabIndex >= propPrefabDropdown.options.Count)
-                {
-                    var repaired = levelData.events[idx];
-                    repaired.prefabIndex = 0;
-                    levelData.events[idx] = repaired;
-                    ev = repaired;
-                    RefreshNotes();
-                    FlashStatus("Вид ноты был вне каталога — явно сброшен в 0");
-                }
-                if (propPrefabDropdown.options.Count > 0)
-                    propPrefabDropdown.SetValueWithoutNotify(ev.prefabIndex);
-                var thumb = propPrefabDropdown.transform.Find("Thumb");
-                if (thumb == null && propPrefabDropdown.template != null) thumb = propPrefabDropdown.template.Find("Thumb");
-            }
-            if (prefabGridPanel != null) prefabGridPanel.SetActive(false);
-            EnsurePrefabGrid();
-        }
-
-        public void OnPropDelete()
-        {
-            if (selectedIndices.Count > 1) RemoveSelectedNotes();
-            else if (selectedIndex >= 0) RemoveNoteAt(selectedIndex);
-            HidePropertiesPanel();
-        }
-
-        string GetPrefabName(int idx)
-        {
-            var pf = catalog != null ? catalog.GetPrefab(idx) : null;
-            if (pf == null && levelData != null) pf = levelData.GetPrefab(idx, catalog);
-
-            return pf != null ? pf.name : "—";
-        }
-        public void HidePropertiesPanel() { if (notePropertiesPanel != null) notePropertiesPanel.SetActive(false); if (prefabGridPanel != null) prefabGridPanel.SetActive(false); }
-        void RefreshPropertiesPanel() { if (selectedIndex >= 0 && notePropertiesPanel != null && notePropertiesPanel.activeSelf) ShowPropertiesPanel(selectedIndex); }
-        public void ApplyPropertiesFromPanel()
-        {
-            if (levelData == null || selectedIndex < 0 || selectedIndex >= levelData.events.Count) return;
-            var ev = levelData.events[selectedIndex];
-
-            int total = (catalog != null ? catalog.Count : 0);
-            if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
-            if (total == 0) { FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; }
-            int newPrefab = ev.prefabIndex;
-            if (propPrefabDropdown != null && propPrefabDropdown.options.Count > 0)
-            {
-                if (propPrefabDropdown.value < 0 || propPrefabDropdown.value >= total) { FlashStatus("Вид вне каталога"); return; }
-                newPrefab = propPrefabDropdown.value;
-            }
-
-            var tgt = selectedIndices.Count > 1 ? new System.Collections.Generic.List<int>(selectedIndices) : new System.Collections.Generic.List<int>{selectedIndex};
-            float newSpeed = ev.speed;
-            bool hasSpeed = false;
-            if (propSpeedInput != null && propSpeedInput.gameObject.activeInHierarchy)
-            {
-
-                if (string.IsNullOrWhiteSpace(propSpeedInput.text)) { FlashStatus("Скорость: введите число 1–60 м/с"); return; }
-                else if (TryParseFloat(propSpeedInput.text, out float sv))
-                {
-                    if (sv < 1f || sv > 60f) { FlashStatus("Скорость: только 1–60 м/с, без округления"); return; }
-                    newSpeed = sv; hasSpeed = true;
-                }
-                else { FlashStatus("Скорость: число м/с 1–60"); return; }
-            }
-            foreach (var ti in tgt)
-            {
-                if (ti < 0 || ti >= levelData.events.Count) continue;
-                var ee = levelData.events[ti];
-                ee.prefabIndex = newPrefab;
-                if (hasSpeed && Mathf.Abs(ee.speed - newSpeed) > 0.001f)
-                {
-                    float hb = GetHitBeat(ee);
-                    ee.speed = newSpeed;
-                    float travel = GetTravelForEvent(ee);
-                    float spawnT = levelData.BeatToTime(hb) - travel;
-                    ee.beat = levelData.TimeToBeat(spawnT);
-                    ee.time = spawnT;
-                }
-                levelData.events[ti] = ee;
-            }
-            preview?.ForceRefresh();
-            levelData.SortByTime();
-
-            for (int i=0;i<levelData.events.Count;i++) if (tgt.Contains(i) || levelData.events[i].prefabIndex==newPrefab) {  }
-            RefreshNotes(); ShowPropertiesPanel(selectedIndex);
-            FlashStatus($"Вид → {GetPrefabName(newPrefab)}");
-        }
-        public void NudgeNote(int idx, float beatDelta)
-        {
-            if (levelData == null || idx < 0 || idx >= levelData.events.Count) return;
-            var ev = levelData.events[idx];
-            float hb = GetHitBeat(ev) + beatDelta;
-            hb = Mathf.Clamp(hb, 0f, levelData.TimeToBeat(GetClipLength()));
-            if (ShouldSnap()) hb = Mathf.Round(hb / quantStep) * quantStep;
-            float hitT = levelData.BeatToTime(hb);
-            float travel = GetTravelForEvent(ev);
-            float spawnT = hitT - travel;
-            ev.beat = levelData.TimeToBeat(spawnT);
-            ev.time = spawnT;
-            levelData.events[idx] = ev;
-            levelData.SortByTime();
-
-            for (int i = 0; i < levelData.events.Count; i++) if (Mathf.Abs(GetHitBeat(levelData.events[i]) - hb) < 0.01f) { selectedIndex = i; break; }
-            RefreshNotes();
-        }
-        public int ResnapAllNotes()
-        {
-            if (levelData == null || levelData.events.Count == 0) return 0;
-            float q = Mathf.Max(0.05f, quantStep);
-            float maxBeat = levelData.music != null ? levelData.TimeToBeat(levelData.music.length) : float.MaxValue;
-            int n = 0;
-            for (int i = 0; i < levelData.events.Count; i++)
-            {
-                var ev = levelData.events[i];
-                float snapped = Mathf.Clamp(Mathf.Round(GetHitBeat(ev) / q) * q, 0f, maxBeat);
-                if (Mathf.Abs(snapped - GetHitBeat(ev)) < 1e-4f) continue;
-                float travel = GetTravelForEvent(ev);
-                float spawnT = levelData.BeatToTime(snapped) - travel;
-                ev.beat = levelData.TimeToBeat(spawnT);
-                ev.time = spawnT;
-                levelData.events[i] = ev;
-                n++;
-            }
-            levelData.SortByTime();
-            selectedIndex = -1; selectedIndices.Clear();
-            RefreshNotes(); HidePropertiesPanel();
-            preview?.ForceRefresh();
-            return n;
-        }
-        public void ClearAllNotes()
-        {
-            if (levelData == null) return;
-            levelData.events.Clear();
-
-            selectedIndex = -1; selectedIndices.Clear(); RefreshNotes(); HidePropertiesPanel(); FlashStatus("Все ноты удалены");
-        }
-        public void RemoveSelectedNotes()
-        {
-            if (levelData == null || selectedIndices.Count == 0) return;
-            var sorted = new List<int>(selectedIndices); sorted.Sort((a, b) => b.CompareTo(a));
-            foreach (var idx in sorted) if (idx >= 0 && idx < levelData.events.Count) levelData.events.RemoveAt(idx);
-
-            int cnt = sorted.Count; selectedIndices.Clear(); selectedIndex = -1; HidePropertiesPanel(); RefreshNotes(); FlashStatus($"Удалено {cnt} нот");
-        }
-        public void NudgeSelected(float beatDelta)
-        {
-            if (levelData == null || selectedIndices.Count == 0) return;
-            var newHits = new Dictionary<int, float>();
-            foreach (var idx in selectedIndices)
-            {
-                if (idx < 0 || idx >= levelData.events.Count) continue;
-                float hb = GetHitBeat(levelData.events[idx]) + beatDelta;
-                hb = Mathf.Clamp(hb, 0f, levelData.TimeToBeat(GetClipLength()));
-                if (ShouldSnap()) hb = Mathf.Round(hb / quantStep) * quantStep;
-                newHits[idx] = hb;
-            }
-            foreach (var kv in newHits)
-            {
-                int idx = kv.Key; float hb = kv.Value;
-                var ev = levelData.events[idx];
-                float hitT = levelData.BeatToTime(hb);
-                float travel = GetTravelForEvent(ev);
-                float spawnT = hitT - travel;
-                ev.beat = levelData.TimeToBeat(spawnT);
-                ev.time = spawnT;
-                levelData.events[idx] = ev;
-            }
-            levelData.SortByTime();
-
-            var newSelected = new HashSet<int>();
-            foreach (var kv in newHits)
-            {
-                float hb = kv.Value;
-                if (ShouldSnap()) hb = Mathf.Round(hb / quantStep) * quantStep;
-                for (int i = 0; i < levelData.events.Count; i++) if (Mathf.Abs(GetHitBeat(levelData.events[i]) - hb) < 0.02f) { newSelected.Add(i); break; }
-            }
-            selectedIndices = newSelected;
-            if (newSelected.Count > 0) selectedIndex = new List<int>(newSelected)[0];
-            RefreshNotes(); RefreshPropertiesPanel();
-        }
-        float GetClipLength()
+        public float GetClipLength()
         {
             if (levelData != null && levelData.music != null) return levelData.music.length;
             if (audioSource != null && audioSource.clip != null) return audioSource.clip.length;
             return 0f;
         }
-        float GetTravelForSpeed(float speed)
-        {
 
-            speed = Mathf.Max(1f, speed);
-            if (manager != null) return manager.GetTravelTime(speed);
-            return 52f / speed;
-        }
-        float GetTravelForEvent(ObstacleEvent ev)
-        {
 
-            return GetTravelForSpeed(ev.speed);
-        }
-        float GetHitTime(ObstacleEvent ev) => ev.time + GetTravelForEvent(ev);
-        float GetHitBeat(ObstacleEvent ev) => levelData != null ? levelData.TimeToBeat(GetHitTime(ev)) : ev.beat;
-        float GetSpeedForBrush()
-        {
-
-            return Mathf.Clamp(defaultNoteSpeed, 1f, 60f);
-        }
-
-        public string SpeedHint(float speed)
-        {
-            float s = Mathf.Max(1f, speed);
-            float dist = manager != null ? manager.GetSpawnToHitDistance() : 52f;
-            if (dist < 1f) dist = 52f;
-            float travel = dist / s;
-            return $"{s:0.#} м/с • {travel:0.0}с полёта ({dist:0.0}м)";
-        }
-
-        public int EnsureExplicitSpeeds()
-        {
-            if (levelData == null) return 0;
-            float def = Mathf.Clamp(defaultNoteSpeed, 1f, 60f);
-            float dist = manager != null ? manager.GetSpawnToHitDistance() : 52f;
-            if (dist < 1f) dist = 52f;
-            int n = 0;
-            for (int i = 0; i < levelData.events.Count; i++)
-            {
-                var ev = levelData.events[i];
-                if (ev.speed < 0.1f)
-                {
-
-                    float oldS = def;
-                    var pf = levelData.GetPrefab(ev.prefabIndex, catalog);
-                    if (pf != null)
-                    {
-                        var ob = pf.GetComponent<Obstacle>();
-                        if (ob != null && ob.baseSpeed > 0.1f) oldS = ob.baseSpeed;
-                    }
-                    float oldTravel = dist / Mathf.Max(1f, oldS);
-                    float hitT = ev.time + oldTravel;
-                    float newTravel = dist / def;
-                    float spawnT = hitT - newTravel;
-                    ev.speed = def;
-                    ev.time = spawnT;
-                    ev.beat = levelData.TimeToBeat(spawnT);
-                    levelData.events[i] = ev;
-                    n++;
-                }
-            }
-            if (n > 0) { levelData.SortByTime(); RefreshNotes(); }
-            return n;
-        }
-        float GetTimeFromMouse(Vector2 screenPos)
+        public float GetTimeFromMouse(Vector2 screenPos)
         {
             RectTransform refRect = timelineContent != null ? timelineContent : waveformRect;
             if (refRect == null) refRect = waveformRect;
-            if (refRect == null) return currentTime;
+            if (refRect == null) return transport.GetCurrentTime();
             Camera cam = GetCanvasCamera();
             Vector2 local;
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(refRect, screenPos, cam, out local)) return currentTime;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(refRect, screenPos, cam, out local)) return transport.GetCurrentTime();
             Rect rect = refRect.rect;
             float norm = Mathf.InverseLerp(rect.xMin, rect.xMax, local.x);
             norm = Mathf.Clamp01(norm);
             return norm * GetClipLength();
         }
-        Camera GetCanvasCamera() { if (rootCanvas == null) rootCanvas = GetComponentInParent<Canvas>(); if (rootCanvas == null) return null; return rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas.worldCamera; }
-        public void Seek(float time) { Seek(time, false); }
-        public void Seek(float time, bool isScrubMove)
-        {
-            if (GetClipLength() < 0.01f) return;
-            time = Mathf.Clamp(time, 0f, GetClipLength() - 0.01f);
-            if (isScrubbingWaveform && enableScrubAudio && !isScrubMove && Mathf.Abs(time - currentTime) < 0.005f)
-            {
-                currentTime = time;
-                UpdatePlayhead();
-                if (autoScrollWithPlayhead) UpdateScrollToPlayhead(false);
-                UpdateLabels();
-                return;
-            }
-            currentTime = time;
-            if (audioSource != null && audioSource.clip != null)
-            {
-                if (isScrubbingWaveform && enableScrubAudio)
-                {
-                    if (scrubPausedDueToStill) { }
-                    else
-                    {
-                        if (Mathf.Abs(audioSource.time - time) > 0.012f) try { audioSource.time = time; } catch { audioSource.time = time; }
-                        if (!audioSource.isPlaying) audioSource.Play();
-                    }
-                }
-                else
-                {
-                    bool wasPlaying = audioSource.isPlaying;
-                    try { audioSource.time = time; } catch {}
-                    if (wasPlaying && !audioSource.isPlaying) audioSource.Play();
-                }
-            }
-            UpdatePlayhead();
-            if (autoScrollWithPlayhead) UpdateScrollToPlayhead(false);
-            UpdateLabels();
-        }
-        public void SeekNormalized(float norm) => Seek(norm * GetClipLength());
-        public float GetCurrentTime() => currentTime;
-        public float GetCurrentBeat() => levelData != null ? levelData.TimeToBeat(currentTime) : 0f;
-        public float GetNormalizedTime() => GetClipLength() > 0.01f ? currentTime / GetClipLength() : 0f;
-        public Texture2D GetWaveformTexture() => waveformTex;
-        public float[] GetWaveformData() => waveformData;
-        public int GetSelectedIndex() => selectedIndex;
-        public void Play() => PlayFromTime(currentTime);
-        public void Pause() { if (audioSource != null) audioSource.Pause(); }
-        public void PlayFromTime(float t)
-        {
-            if (GetClipLength() < 0.01f) { FlashStatus("Нет аудио"); return; }
-            AudioClip clip = levelData != null && levelData.music != null ? levelData.music : (audioSource != null ? audioSource.clip : null);
-            if (clip == null) { FlashStatus("Нет клипа"); return; }
-            if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
-            if (audioSource.clip != clip) audioSource.clip = clip;
-            audioSource.time = Mathf.Clamp(t, 0f, clip.length - 0.02f);
-            audioSource.volume = 1f;
-            audioSource.Play();
-            currentTime = audioSource.time;
-            UpdatePlayPauseLabel();
-        }
-        public void TogglePlayPause() { if (audioSource != null && audioSource.isPlaying) Pause(); else Play(); }
-        public void SetQuant(float q) { quantStep = q; RefreshGrid(true); }
-        public void SetBrush(int idx) { int c = (catalog != null ? catalog.Count : 0); if (c == 0 && levelData != null) c = levelData.PrefabCount(catalog); if (c == 0) { FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; } if (idx < 0 || idx >= c) { FlashStatus($"Кисть: только 0–{c - 1}"); return; } brushIndex = idx; FlashStatus($"Кисть {brushIndex}"); }
+        public Camera GetCanvasCamera() { if (rootCanvas == null) rootCanvas = GetComponentInParent<Canvas>(); if (rootCanvas == null) return null; return rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas.worldCamera; }
+        public void SetQuant(float q) { quantStep = q; gridView.RefreshGrid(true); }
         void OnFileLoaded(string path, AudioClip clip)
         {
             if (clip == null) return;
@@ -2121,16 +808,16 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (manager != null) manager.levelData = levelData;
                 Debug.Log("[Timeline] Создан новый LevelData (был null) при загрузке аудио", this);
             }
-            bool isNewClip = lastClip != clip;
+            bool isNewClip = waveformView.LastClip != clip;
             bool wasEmptyLevel = levelData.events.Count > 0 && string.IsNullOrEmpty(levelData.fullTitle) && string.IsNullOrEmpty(levelData.songAuthor);
             levelData.music = clip; levelData.audioPath = path;
 
-            if (wasEmptyLevel || (isNewClip && levelData.events.Count > 0 && lastClip == null))
+            if (wasEmptyLevel || (isNewClip && levelData.events.Count > 0 && waveformView.LastClip == null))
             {
                 levelData.events.Clear();
-                selectedIndex = -1; selectedIndices.Clear();
+                notesController.DeselectNote();
             }
-            if (audioSource != null) { audioSource.clip = clip; audioSource.Stop(); currentTime = 0f; }
+            if (audioSource != null) { audioSource.clip = clip; audioSource.Stop(); transport.SetTime(0f); }
 
             if (showBpmAfterLoad && clip != null)
             {
@@ -2146,22 +833,22 @@ namespace RKS.RhythmParkour.UI.Timeline
                     if (bpmOutputText != null) bpmOutputText.text = bpmTxt;
                     Debug.Log($"[BPM] {clip.name} -> {det.bpm:0.##} conf {det.confidence:0.##} (сохранен {levelData.bpm:0})", this);
                     FlashStatus($"Загружено: {clip.name}  {clip.length:0.0}с • {bpmTxt} — ставь ноты (Enter/Space/клик)");
-                    lastClip = null; lastWaveformGenWidth = -1; lastGridClipLen = -1f;
+                    waveformView.Invalidate(); gridView.Invalidate();
                     RefreshAll();
                     if (bpmOutputText != null) bpmOutputText.text = bpmTxt;
                     return;
                 } catch (System.Exception e) { Debug.LogWarning($"[BPM] detect failed: {e.Message}"); }
             }
 
-            lastClip = null; lastWaveformGenWidth = -1; lastGridClipLen = -1f;
+            waveformView.Invalidate(); gridView.Invalidate();
             RefreshAll();
             FlashStatus($"Загружено: {clip.name}  {clip.length:0.0}с • BPM {levelData.bpm:0.##} — ставь ноты (Enter/Space/клик)");
         }
-        void FlashStatus(string msg) { if (statusLabel != null) statusLabel.text = msg; Debug.Log($"[Timeline] {msg}", this); CancelInvoke(nameof(ClearStatus)); Invoke(nameof(ClearStatus), 3f); }
-        void ClearStatus() { if (statusLabel != null) statusLabel.text = ""; }
+        public void FlashStatus(string msg) { if (statusLabel != null) statusLabel.text = msg; Debug.Log($"[Timeline] {msg}", this); CancelInvoke(nameof(ClearStatus)); Invoke(nameof(ClearStatus), 3f); }
+        public void ClearStatus() { if (statusLabel != null) statusLabel.text = ""; }
 
-        [ContextMenu("Перестроить вейвформу")] void ContextRebuild() { lastClip = null; lastWaveformGenWidth = -1; RefreshAll(); }
-        [ContextMenu("Добавить ноту")] void ContextAdd() => AddNoteAtCurrentPlayhead();
-        [ContextMenu("Очистить")] void ContextClear() => ClearAllNotes();
+        [ContextMenu("Перестроить вейвформу")] void ContextRebuild() { waveformView.Invalidate(); gridView.Invalidate(); RefreshAll(); }
+        [ContextMenu("Добавить ноту")] void ContextAdd() => notesController.AddNoteAtCurrentPlayhead();
+        [ContextMenu("Очистить")] void ContextClear() => notesController.ClearAllNotes();
     }
 }
