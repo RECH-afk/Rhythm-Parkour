@@ -107,6 +107,7 @@ namespace RKS.RhythmParkour.UI
         private Coroutine _layoutRebuildRoutine;
         private int _previewSeq;
         private bool _previewVideoReady;
+        private Coroutine _autoFinishRoutine;
         private double _lastVideoTime;
         private float _lastResyncTime;
         private int _detailsSeq;
@@ -974,6 +975,7 @@ namespace RKS.RhythmParkour.UI
             _previewSeq++;
             if (wasShowingVideo) FadeBackgroundBlend(0f, 0.35f);
             _previewRoutine = StartCoroutine(PreviewRoutine(audioPath, videoPath, _previewSeq));
+            StartAutoFinishWatcher();
         }
 
         public void StopLevelPreview()
@@ -995,9 +997,49 @@ namespace RKS.RhythmParkour.UI
                 StopCoroutine(_previewRoutine);
                 _previewRoutine = null;
             }
+            StopAutoFinishWatcher();
             if (Audio != null) Audio.StopMusic();
             if (previewVideo != null) previewVideo.Stop();
             if (_bgMat != null) _bgMat.DOKill();
+        }
+
+        private void StartAutoFinishWatcher()
+        {
+            StopAutoFinishWatcher();
+            _autoFinishRoutine = StartCoroutine(AutoFinishWatcher());
+        }
+
+        private void StopAutoFinishWatcher()
+        {
+            if (_autoFinishRoutine != null)
+            {
+                StopCoroutine(_autoFinishRoutine);
+                _autoFinishRoutine = null;
+            }
+        }
+
+        private IEnumerator AutoFinishWatcher()
+        {
+            bool heard = false;
+            while (true)
+            {
+                while (_previewRoutine != null) yield return null;
+                if (IsPreviewPlaying) heard = true;
+                if (!heard)
+                {
+                    yield return null;
+                    continue;
+                }
+                yield return new WaitUntil(() => !IsPreviewPlaying);
+                if (_previewRoutine != null) continue;
+                if (PreviewPaused || RepeatEnabled)
+                {
+                    yield return new WaitUntil(() => IsPreviewPlaying || _previewRoutine != null);
+                    continue;
+                }
+                StopLevelPreview();
+                yield break;
+            }
         }
 
         private IEnumerator PreviewRoutine(string audioPath, string videoPath, int seq)

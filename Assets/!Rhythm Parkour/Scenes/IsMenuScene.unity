@@ -2994,6 +2994,7 @@ GameObject:
   - component: {fileID: 352069267}
   - component: {fileID: 352069266}
   - component: {fileID: 352069265}
+  - component: {fileID: 352069269}
   m_Layer: 5
   m_Name: ButtonPopUp
   m_TagString: Untagged
@@ -3062,7 +3063,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -3088,6 +3089,22 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 352069263}
   m_CullTransparentMesh: 1
+--- !u!114 &352069269
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 352069263}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d845adb13111883468b43fb03d35d148, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIGradient
+  m_color1: {r: 0, g: 0, b: 0, a: 1}
+  m_color2: {r: 0.23137255, g: 0.23137255, b: 0.23137255, a: 1}
+  m_angle: 0
+  m_ignoreRatio: 0
 --- !u!1 &358524679
 GameObject:
   m_ObjectHideFlags: 0
@@ -4498,7 +4515,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 779569864}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1932041119}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.TopPanelController, Assembly-CSharp
+        m_MethodName: RepeatToggleButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!222 &553204886
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -5112,7 +5141,7 @@ GameObject:
   - component: {fileID: 619593060}
   - component: {fileID: 619593059}
   m_Layer: 5
-  m_Name: LabelText
+  m_Name: TimeLabelText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5248,6 +5277,7 @@ GameObject:
   m_Component:
   - component: {fileID: 629720117}
   - component: {fileID: 629720118}
+  - component: {fileID: 629720119}
   m_Layer: 5
   m_Name: Content
   m_TagString: Untagged
@@ -5290,6 +5320,32 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
   m_HorizontalFit: 0
   m_VerticalFit: 2
+--- !u!114 &629720119
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 629720116}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.VerticalLayoutGroup
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 130
+    m_Bottom: 0
+  m_ChildAlignment: 1
+  m_Spacing: 50
+  m_ChildForceExpandWidth: 1
+  m_ChildForceExpandHeight: 1
+  m_ChildControlWidth: 1
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 1
+  m_ChildScaleHeight: 1
+  m_ReverseArrangement: 0
 --- !u!1 &682056741
 GameObject:
   m_ObjectHideFlags: 0
@@ -5832,6 +5888,7 @@ GameObject:
   - component: {fileID: 779569864}
   - component: {fileID: 779569863}
   - component: {fileID: 779569862}
+  - component: {fileID: 779569866}
   m_Layer: 5
   m_Name: ButtonPopUp
   m_TagString: Untagged
@@ -5900,7 +5957,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -5926,6 +5983,22 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 779569860}
   m_CullTransparentMesh: 1
+--- !u!114 &779569866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 779569860}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d845adb13111883468b43fb03d35d148, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIGradient
+  m_color1: {r: 0, g: 0, b: 0, a: 1}
+  m_color2: {r: 0.23137255, g: 0.23137255, b: 0.23137255, a: 1}
+  m_angle: 0
+  m_ignoreRatio: 0
 --- !u!1 &793631255
 GameObject:
   m_ObjectHideFlags: 0
@@ -6227,7 +6300,7 @@ MonoBehaviour:
   _logoTransform: {fileID: 302931595}
   _mainMenuButtonsContainer: {fileID: 498915265}
   _levelListMenuRoot: {fileID: 1053851176}
-  _levelListContainer: {fileID: 971041829}
+  _levelListContainer: {fileID: 629720117}
   _levelButtonPrefab: {fileID: 7178840455604156779, guid: 8b6aef1b851c3f44c94d75253c6e2cde,
     type: 3}
   _selectedButtonColor: {r: 0.7283019, g: 0.7283019, b: 0.7283019, a: 1}
@@ -6916,7 +6989,7 @@ GameObject:
   - component: {fileID: 947620977}
   - component: {fileID: 947620979}
   m_Layer: 5
-  m_Name: LabelText
+  m_Name: TrackLabelText
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7332,7 +7405,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 971041828}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 59f8146938fff824cb5fd77236b75775, type: 3}
   m_Name: 
@@ -8615,7 +8688,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 352069267}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1932041119}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.TopPanelController, Assembly-CSharp
+        m_MethodName: PlayToggleButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!222 &1108999507
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -9639,7 +9724,19 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 2008112440}
   m_OnClick:
     m_PersistentCalls:
-      m_Calls: []
+      m_Calls:
+      - m_Target: {fileID: 1932041119}
+        m_TargetAssemblyTypeName: RKS.RhythmParkour.UI.TopPanelController, Assembly-CSharp
+        m_MethodName: MinimizeToggleButton
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 0
+        m_CallState: 2
 --- !u!222 &1282916289
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -13978,22 +14075,20 @@ MonoBehaviour:
   root: {fileID: 1593122038}
   trackText: {fileID: 947620977}
   timeText: {fileID: 619593059}
-  playButton: {fileID: 1108999505}
   playIcon: {fileID: 2021629370}
   playLabel: {fileID: 358524681}
   playSprite: {fileID: 21300000, guid: a6ff27521d6a41840b1ea0ead63d3bdc, type: 3}
   pauseSprite: {fileID: 21300000, guid: e03385c4adf82824d92d5f024ca3312b, type: 3}
-  repeatButton: {fileID: 553204884}
   repeatIcon: {fileID: 2114987385}
-  repeatOnSprite: {fileID: 0}
-  repeatOffSprite: {fileID: 0}
   repeatOnColor: {r: 1, g: 1, b: 1, a: 1}
   repeatOffColor: {r: 0.09411765, g: 0.09411765, b: 0.09411765, a: 1}
-  minimizeButton: {fileID: 1282916288}
   minimizeIcon: {fileID: 954291858}
   minimizeOnColor: {r: 1, g: 1, b: 1, a: 1}
   minimizeOffColor: {r: 0.09411765, g: 0.09411765, b: 0.09411765, a: 1}
-  minimizedScale: 0.62
+  infoTarget: {fileID: 2127795445}
+  minimizedLeft: 1603.05
+  minimizedRight: -40.48
+  minimizeDuration: 0.3
   slideDuration: 0.4
   shownY: -12
   parkedY: 140
@@ -14646,6 +14741,7 @@ GameObject:
   - component: {fileID: 2008112440}
   - component: {fileID: 2008112439}
   - component: {fileID: 2008112438}
+  - component: {fileID: 2008112442}
   m_Layer: 5
   m_Name: ButtonPopUp
   m_TagString: Untagged
@@ -14714,7 +14810,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -14740,6 +14836,22 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2008112436}
   m_CullTransparentMesh: 1
+--- !u!114 &2008112442
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2008112436}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d845adb13111883468b43fb03d35d148, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIGradient
+  m_color1: {r: 0, g: 0, b: 0, a: 1}
+  m_color2: {r: 0.23137255, g: 0.23137255, b: 0.23137255, a: 1}
+  m_angle: 0
+  m_ignoreRatio: 0
 --- !u!1 &2021629368
 GameObject:
   m_ObjectHideFlags: 0
@@ -15263,7 +15375,7 @@ GameObject:
   - component: {fileID: 2127795448}
   - component: {fileID: 2127795449}
   m_Layer: 5
-  m_Name: Background
+  m_Name: Info
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

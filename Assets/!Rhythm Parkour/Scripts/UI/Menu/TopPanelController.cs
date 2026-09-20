@@ -10,42 +10,35 @@ namespace RKS.RhythmParkour.UI
     public class TopPanelController : RKSBehaviour
     {
         [Header("Panel")]
-        [Tooltip("Корень панели из сцены")]
         public RectTransform root;
 
         [Header("Track Info")]
-        [Tooltip("Строка «сейчас играет трек»")]
         public TextMeshProUGUI trackText;
-        [Tooltip("Строка времени «текущее / длина»")]
         public TextMeshProUGUI timeText;
 
         [Header("Play Control")]
-        public Button playButton;
         public Image playIcon;
         public TextMeshProUGUI playLabel;
         public Sprite playSprite;
         public Sprite pauseSprite;
 
         [Header("Repeat Control")]
-        public Button repeatButton;
         public Image repeatIcon;
-        [Tooltip("Цвет иконки повтора когда включён")]
-        public Color repeatOnColor = Color.white;
-        [Tooltip("Цвет иконки повтора когда выключен")]
-        public Color repeatOffColor = new Color(1f, 1f, 1f, 0.35f);
+        public Color repeatOnColor;
+        public Color repeatOffColor;
 
         [Header("Minimize Control")]
-        public Button minimizeButton;
         public Image minimizeIcon;
-        [Tooltip("Цвет иконки сворачивания когда панель свернута")]
-        public Color minimizeOnColor = Color.white;
-        [Tooltip("Цвет иконки сворачивания когда панель развёрнута")]
-        public Color minimizeOffColor = new Color(1f, 1f, 1f, 0.35f);
+        public Color minimizeOnColor;
+        public Color minimizeOffColor;
+
+        [Header("Minimize Target")]
+        public RectTransform infoTarget;
+        public float minimizedLeft;
+        public float minimizedRight;
+        public float minimizeDuration = 0.35f;
 
         [Header("Motion")]
-        [Tooltip("Масштаб панели в свёрнутом виде")]
-        public float minimizedScale = 0.62f;
-        [Tooltip("Длительность выезда сверху")]
         public float slideDuration = 0.4f;
         public float shownY = -12f;
         public float parkedY = 140f;
@@ -54,12 +47,15 @@ namespace RKS.RhythmParkour.UI
         private bool shown;
         private bool minimized;
         private string lastTrackKey = "";
-        private bool lastPlaying = true;
+        private bool lastPlaying;
         private bool lastRepeatState = true;
         private string lastTimeText = "";
         private float lastKnownTime = -1f;
         private Tween slideTween;
         private Tween minTween;
+        private Vector2 expandedMin;
+        private Vector2 expandedMax;
+        private bool expandedCaptured;
 
         [Inject]
         public void ConstructPanel(MenuController menuController)
@@ -69,21 +65,19 @@ namespace RKS.RhythmParkour.UI
 
         protected override void OnReady()
         {
-            if (menu == null) menu = FindFirstObjectByType<MenuController>();
-            ResolveRefs();
             if (root == null)
             {
                 Debug.LogWarning("[TopPanel] Root не назначен.", this);
                 return;
             }
-            playButton?.onClick.RemoveListener(OnPlayPressed);
-            playButton?.onClick.AddListener(OnPlayPressed);
-            repeatButton?.onClick.RemoveListener(OnRepeatPressed);
-            repeatButton?.onClick.AddListener(OnRepeatPressed);
-            minimizeButton?.onClick.RemoveListener(OnMinimizePressed);
-            minimizeButton?.onClick.AddListener(OnMinimizePressed);
             root.anchoredPosition = new Vector2(root.anchoredPosition.x, parkedY);
             root.gameObject.SetActive(false);
+            if (infoTarget != null)
+            {
+                expandedMin = infoTarget.offsetMin;
+                expandedMax = infoTarget.offsetMax;
+                expandedCaptured = true;
+            }
             RefreshPlayIcon();
             RefreshRepeatIcon();
             RefreshMinimizeIcon();
@@ -97,12 +91,7 @@ namespace RKS.RhythmParkour.UI
 
         protected override void Update()
         {
-            if (menu == null)
-            {
-                menu = FindFirstObjectByType<MenuController>();
-                if (menu == null) return;
-            }
-            if (root == null) return;
+            if (menu == null || root == null) return;
             bool want = menu.HasPreview
                 && (menu.IsPreviewPlaying || menu.PreviewPaused)
                 && menu.IsMainMenuVisible
@@ -143,61 +132,12 @@ namespace RKS.RhythmParkour.UI
             }
         }
 
-        void ResolveRefs()
-        {
-            if (root == null)
-            {
-                var go = GameObject.Find("TopPanel");
-                if (go != null) root = go.GetComponent<RectTransform>();
-            }
-            if (root == null) return;
-            if (trackText == null) trackText = FindInRoot<TextMeshProUGUI>("TrackText");
-            if (playButton == null) playButton = FindButton("PlayButton");
-            if (repeatButton == null) repeatButton = FindButton("RepeatButton");
-            if (minimizeButton == null) minimizeButton = FindButton("MinimizeButton");
-            if (playIcon == null && playButton != null) playIcon = FindInButtons(playButton, "Icon");
-            if (repeatIcon == null && repeatButton != null) repeatIcon = FindInButtons(repeatButton, "Icon");
-            if (minimizeIcon == null && minimizeButton != null) minimizeIcon = FindInButtons(minimizeButton, "Icon");
-            if (playLabel == null && playButton != null) playLabel = playButton.GetComponentInChildren<TextMeshProUGUI>(true);
-            if (timeText == null) timeText = FindInRoot<TextMeshProUGUI>("TimeText");
-        }
-
-        T FindInRoot<T>(string name) where T : Component
-        {
-            var t = root.transform.Find(name);
-            if (t != null)
-            {
-                var c = t.GetComponent<T>();
-                if (c != null) return c;
-            }
-            return root.GetComponentInChildren<T>(true);
-        }
-
-        Button FindButton(string name)
-        {
-            var t = root.transform.Find(name);
-            if (t != null)
-            {
-                var b = t.GetComponent<Button>();
-                if (b != null) return b;
-            }
-            return null;
-        }
-
-        Image FindInButtons(Button btn, string childName)
-        {
-            if (btn == null) return null;
-            var t = btn.transform.Find(childName);
-            if (t != null) return t.GetComponent<Image>();
-            return null;
-        }
-
-        void OnPlayPressed()
+        public void PlayToggleButton()
         {
             if (menu != null) menu.TogglePreviewPlayback();
         }
 
-        void OnRepeatPressed()
+        public void RepeatToggleButton()
         {
             if (menu != null) menu.ToggleRepeat();
         }
@@ -222,9 +162,29 @@ namespace RKS.RhythmParkour.UI
             return $"{total / 60:0}:{total % 60:00}";
         }
 
-        void OnMinimizePressed()
+        public void MinimizeToggleButton()
         {
-            ToggleMinimize();
+            if (root == null || infoTarget == null) return;
+            minimized = !minimized;
+            if (minTween != null && minTween.IsActive()) minTween.Kill();
+            Vector2 fromMin = infoTarget.offsetMin;
+            Vector2 fromMax = infoTarget.offsetMax;
+            Vector2 toMin = minimized ? new Vector2(minimizedLeft, expandedMin.y) : expandedMin;
+            Vector2 toMax = minimized ? new Vector2(minimizedRight, expandedMax.y) : expandedMax;
+            minTween = DOTween.To(
+                () => 0f,
+                t =>
+                {
+                    if (infoTarget == null) return;
+                    float eased = t * t * t * (t * (t * 6f - 15f) + 10f);
+                    infoTarget.offsetMin = Vector2.LerpUnclamped(fromMin, toMin, eased);
+                    infoTarget.offsetMax = Vector2.LerpUnclamped(fromMax, toMax, eased);
+                },
+                1f,
+                Mathf.Max(0.01f, minimizeDuration))
+                .SetEase(Ease.Linear)
+                .SetUpdate(true);
+            RefreshMinimizeIcon();
         }
 
         void RefreshPlayIcon()
@@ -240,6 +200,11 @@ namespace RKS.RhythmParkour.UI
         {
             if (root == null || shown) return;
             shown = true;
+            lastTrackKey = "";
+            lastTimeText = "";
+            lastKnownTime = -1f;
+            RefreshPlayIcon();
+            RefreshRepeatIcon();
             root.gameObject.SetActive(true);
             if (slideTween != null && slideTween.IsActive()) slideTween.Kill();
             var ap = root.anchoredPosition;
@@ -256,14 +221,5 @@ namespace RKS.RhythmParkour.UI
                 .OnComplete(() => { if (!shown && root != null) root.gameObject.SetActive(false); });
         }
 
-        void ToggleMinimize()
-        {
-            if (root == null) return;
-            minimized = !minimized;
-            if (minTween != null && minTween.IsActive()) minTween.Kill();
-            float target = minimized ? minimizedScale : 1f;
-            minTween = root.DOScale(Vector3.one * target, 0.3f).SetEase(Ease.OutCubic).SetUpdate(true);
-            RefreshMinimizeIcon();
-        }
     }
 }
