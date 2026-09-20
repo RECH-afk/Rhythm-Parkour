@@ -330,6 +330,33 @@ namespace RKS.RhythmParkour.Core.Managers
             return -1f;
         }
 
+        private readonly float[] _musicSpectrum = new float[64];
+        private float _musicLevel;
+
+        public float GetMusicLevel()
+        {
+            AudioSource src = null;
+            AudioSource next = isPlayingMusicA ? musicSourceB : musicSourceA;
+            if (next != null && next.isPlaying && next.clip != null) src = next;
+            else
+            {
+                AudioSource active = isPlayingMusicA ? musicSourceA : musicSourceB;
+                if (active != null && active.isPlaying && active.clip != null) src = active;
+            }
+            float target = 0f;
+            if (src != null)
+            {
+                src.GetSpectrumData(_musicSpectrum, 0, FFTWindow.BlackmanHarris);
+                float bass = 0f;
+                const int bins = 8;
+                for (int i = 0; i < bins && i < _musicSpectrum.Length; i++) bass += _musicSpectrum[i];
+                bass /= bins;
+                target = Mathf.Clamp01(bass * 6f);
+            }
+            _musicLevel = Mathf.Lerp(_musicLevel, target, Time.unscaledDeltaTime * 8f);
+            return _musicLevel;
+        }
+
         private IEnumerator CrossfadeMusic(AudioClip newClip, float fadeTime, float startTime)
         {
             AudioSource active = isPlayingMusicA ? musicSourceA : musicSourceB;

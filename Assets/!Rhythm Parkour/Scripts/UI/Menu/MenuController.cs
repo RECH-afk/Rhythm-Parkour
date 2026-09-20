@@ -35,6 +35,14 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private RectTransform _logoTransform;
         [SerializeField] private RectTransform _mainMenuButtonsContainer;
 
+        [Header("Logo Pulse")]
+        [SerializeField] private RectTransform _logoPulse;
+        [SerializeField] private float _pulseThreshold = 0.3f;
+        [SerializeField] private float _pulseScaleAmount = 0.18f;
+        [SerializeField] private float _pulseFadeDuration = 0.6f;
+        [SerializeField] private float _pulseMaxAlpha = 0.55f;
+        [SerializeField] private float _pulseCooldown = 0.18f;
+
         [Header("Level List Menu")]
         [SerializeField] private GameObject _levelListMenuRoot;
         [SerializeField] private Transform _levelListContainer;
@@ -79,6 +87,12 @@ namespace RKS.RhythmParkour.UI
         private const float DoubleClickThreshold = 0.35f;
 
         private bool _isTransitioning = false;
+        private Image _pulseImage;
+        private Vector3 _pulseBaseScale = Vector3.one;
+        private float _pulseT = 999f;
+        private float _pulseCooldownT;
+        private float _prevBassEnergy;
+        private float _pulseSearchT;
 
         private Sequence _transitionSequence;
         private Tween _detailsRefreshTween;
@@ -196,6 +210,73 @@ namespace RKS.RhythmParkour.UI
                 }
             }
             SyncPreviewVideo();
+            TickLogoPulse();
+        }
+
+        private void ResolveLogoPulse()
+        {
+            if (_logoPulse == null)
+            {
+                var go = GameObject.Find("Logo pulse");
+                if (go == null) go = GameObject.Find("LogoPulse");
+                if (go != null) _logoPulse = go.GetComponent<RectTransform>();
+            }
+            if (_logoPulse == null) return;
+            _pulseImage = _logoPulse.GetComponent<Image>();
+            if (_logoPulse.localScale.sqrMagnitude > 0.001f) _pulseBaseScale = _logoPulse.localScale;
+            _logoPulse.gameObject.SetActive(false);
+            _pulseT = 999f;
+            _pulseCooldownT = 0f;
+            _prevBassEnergy = 0f;
+        }
+
+        private void TickLogoPulse()
+        {
+            if (_logoPulse == null)
+            {
+                _pulseSearchT -= Time.unscaledDeltaTime;
+                if (_pulseSearchT > 0f) return;
+                _pulseSearchT = 2f;
+                ResolveLogoPulse();
+            }
+            if (_logoPulse == null) return;
+            float energy = 0f;
+            bool music = Audio != null && Audio.IsMusicPlaying();
+            if (music) energy = Audio.GetMusicLevel();
+            float dt = Time.unscaledDeltaTime;
+            _pulseCooldownT -= dt;
+            if (music && _pulseCooldownT <= 0f && energy >= _pulseThreshold && _prevBassEnergy < _pulseThreshold)
+            {
+                _pulseCooldownT = Mathf.Max(0.05f, _pulseCooldown);
+                _pulseT = 0f;
+                if (!_logoPulse.gameObject.activeSelf) _logoPulse.gameObject.SetActive(true);
+                _logoPulse.localScale = _pulseBaseScale * (1f + Mathf.Max(0f, _pulseScaleAmount));
+                SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)));
+            }
+            _prevBassEnergy = energy;
+            if (!_logoPulse.gameObject.activeSelf) return;
+            if (!music)
+            {
+                _logoPulse.gameObject.SetActive(false);
+                _pulseT = 999f;
+                return;
+            }
+            _pulseT += dt;
+            float dur = Mathf.Max(0.05f, _pulseFadeDuration);
+            float k = Mathf.Clamp01(_pulseT / dur);
+            float e = (1f - k) * (1f - k);
+            _logoPulse.localScale = _pulseBaseScale * (1f + Mathf.Max(0f, _pulseScaleAmount) * e);
+            SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)) * e);
+            if (k >= 1f) _logoPulse.gameObject.SetActive(false);
+        }
+
+        private void SetPulseAlpha(float a)
+        {
+            if (_pulseImage == null) _pulseImage = _logoPulse.GetComponent<Image>();
+            if (_pulseImage == null) return;
+            Color c = _pulseImage.color;
+            c.a = a;
+            _pulseImage.color = c;
         }
 
         private void SyncPreviewVideo()

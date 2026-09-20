@@ -53,6 +53,8 @@ namespace RKS.RhythmParkour.UI
         private float lastKnownTime = -1f;
         private Tween slideTween;
         private Tween minTween;
+        private Tween rootNudgeTween;
+        private float baseRootX;
         private Vector2 expandedMin;
         private Vector2 expandedMax;
         private bool expandedCaptured;
@@ -71,6 +73,7 @@ namespace RKS.RhythmParkour.UI
                 return;
             }
             root.anchoredPosition = new Vector2(root.anchoredPosition.x, parkedY);
+            baseRootX = root.anchoredPosition.x;
             root.gameObject.SetActive(false);
             if (infoTarget != null)
             {
@@ -87,6 +90,16 @@ namespace RKS.RhythmParkour.UI
         {
             if (slideTween != null && slideTween.IsActive()) slideTween.Kill();
             if (minTween != null && minTween.IsActive()) minTween.Kill();
+            if (rootNudgeTween != null && rootNudgeTween.IsActive()) rootNudgeTween.Kill();
+        }
+
+        void NudgeRoot()
+        {
+            if (root == null) return;
+            if (rootNudgeTween != null && rootNudgeTween.IsActive()) rootNudgeTween.Kill();
+            rootNudgeTween = DOTween.Sequence()
+                .Append(root.DOAnchorPosX(baseRootX + 28f, 0.16f).SetEase(Ease.OutQuad).SetUpdate(true))
+                .Append(root.DOAnchorPosX(baseRootX, 0.55f).SetEase(Ease.OutBack, 1.2f).SetUpdate(true));
         }
 
         protected override void Update()
@@ -176,14 +189,14 @@ namespace RKS.RhythmParkour.UI
                 t =>
                 {
                     if (infoTarget == null) return;
-                    float eased = t * t * t * (t * (t * 6f - 15f) + 10f);
-                    infoTarget.offsetMin = Vector2.LerpUnclamped(fromMin, toMin, eased);
-                    infoTarget.offsetMax = Vector2.LerpUnclamped(fromMax, toMax, eased);
+                    infoTarget.offsetMin = Vector2.LerpUnclamped(fromMin, toMin, t);
+                    infoTarget.offsetMax = Vector2.LerpUnclamped(fromMax, toMax, t);
                 },
                 1f,
                 Mathf.Max(0.01f, minimizeDuration))
-                .SetEase(Ease.Linear)
+                .SetEase(Ease.OutBack, 0.9f)
                 .SetUpdate(true);
+            NudgeRoot();
             RefreshMinimizeIcon();
         }
 
@@ -209,7 +222,7 @@ namespace RKS.RhythmParkour.UI
             if (slideTween != null && slideTween.IsActive()) slideTween.Kill();
             var ap = root.anchoredPosition;
             root.anchoredPosition = new Vector2(ap.x, parkedY);
-            slideTween = root.DOAnchorPosY(shownY, slideDuration).SetEase(Ease.OutCubic).SetUpdate(true);
+            slideTween = root.DOAnchorPosY(shownY, slideDuration).SetEase(Ease.OutBack, 1.1f).SetUpdate(true);
         }
 
         void Hide()
