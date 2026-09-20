@@ -6353,6 +6353,7 @@ GameObject:
   m_Component:
   - component: {fileID: 820601935}
   - component: {fileID: 820601936}
+  - component: {fileID: 820601937}
   m_Layer: 0
   m_Name: MenuManager
   m_TagString: Untagged
@@ -6417,6 +6418,14 @@ MonoBehaviour:
   _editorSceneName: IsLevelEditorScene
   _gameSceneName: IsGameScene
   _animDuration: 0.4
+  bgBasePhaseSpeed: 0.15
+  bgEnergySpeedBoost: 1.4
+  bgBeatThreshold: 0.35
+  bgBeatCooldown: 0.2
+  bgKickAmount: 1.6
+  bgKickDecay: 3
+  bgPatternBeatScale: 0.3
+  bgPatternBeatDecay: 4
   transfer:
     levelData:
       music: {fileID: 0}
@@ -6449,6 +6458,18 @@ MonoBehaviour:
   blendFadeDuration: 1.2
   previewFadeTime: 0.7
   resyncThreshold: 0.35
+--- !u!114 &820601937
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 820601934}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 891d6e713fcfdfc4a95271fdee018e94, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.BackgroundBeatDriver
 --- !u!1 &838400845
 GameObject:
   m_ObjectHideFlags: 0
@@ -14181,6 +14202,7 @@ MonoBehaviour:
   repeatOnColor: {r: 1, g: 1, b: 1, a: 1}
   repeatOffColor: {r: 0.09411765, g: 0.09411765, b: 0.09411765, a: 1}
   minimizeIcon: {fileID: 954291858}
+  minimizeLabel: {fileID: 0}
   minimizeOnColor: {r: 1, g: 1, b: 1, a: 1}
   minimizeOffColor: {r: 0.09411765, g: 0.09411765, b: 0.09411765, a: 1}
   infoTarget: {fileID: 2127795445}

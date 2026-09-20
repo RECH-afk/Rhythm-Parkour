@@ -84,4 +84,6 @@ MonoBehaviour:
     type: 3}
   transitionPrefab: {fileID: 2916447733952838655, guid: 7a1ee29e668c7b444a6873473bdb9060,
     type: 3}
+  customCursorPrefab: {fileID: -3374613629523069881, guid: e857c005bbca30d40bfc481e266d8336,
+    type: 3}
   obstacleCatalog: {fileID: 11400000, guid: c31b00e2c10bc6b409a1b04044debf1b, type: 2}

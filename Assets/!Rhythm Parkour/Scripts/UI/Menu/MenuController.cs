@@ -43,6 +43,16 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private float _pulseMaxAlpha = 0.55f;
         [SerializeField] private float _pulseCooldown = 0.18f;
 
+        [Header("Background Beat")]
+        [SerializeField] private float bgBasePhaseSpeed = 0.15f;
+        [SerializeField] private float bgEnergySpeedBoost = 1.4f;
+        [SerializeField] private float bgBeatThreshold = 0.35f;
+        [SerializeField] private float bgBeatCooldown = 0.2f;
+        [SerializeField] private float bgKickAmount = 1.6f;
+        [SerializeField] private float bgKickDecay = 3f;
+        [SerializeField] private float bgPatternBeatScale = 0.3f;
+        [SerializeField] private float bgPatternBeatDecay = 4f;
+
         [Header("Level List Menu")]
         [SerializeField] private GameObject _levelListMenuRoot;
         [SerializeField] private Transform _levelListContainer;
@@ -117,6 +127,15 @@ namespace RKS.RhythmParkour.UI
         public float resyncThreshold = 0.35f;
 
         private Material _bgMat;
+        private bool _bgHasPhase;
+        private bool _bgHasPatternSize;
+        private bool _bgPhaseChecked;
+        private float _bgPatternBase = 0.8f;
+        private float _bgSizePunch;
+        private float _bgPhase;
+        private float _bgKick;
+        private float _bgPrevEnergy;
+        private float _bgCooldownT;
         private Coroutine _previewRoutine;
         private Coroutine _layoutRebuildRoutine;
         private int _previewSeq;
@@ -186,7 +205,6 @@ namespace RKS.RhythmParkour.UI
             CacheOriginalPosition(_quitConfirmationWindow);
             if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
             if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
-            if (GetComponent<TopPanelController>() == null) gameObject.AddComponent<TopPanelController>();
         }
 
         protected override void OnReady()
@@ -211,6 +229,45 @@ namespace RKS.RhythmParkour.UI
             }
             SyncPreviewVideo();
             TickLogoPulse();
+            TickBackgroundBeat();
+        }
+
+        private void TickBackgroundBeat()
+        {
+            if (_bgMat == null)
+            {
+                if (backgroundImage == null) return;
+                _bgMat = backgroundImage.material;
+                if (_bgMat == null) return;
+                _bgPhaseChecked = false;
+            }
+            if (!_bgPhaseChecked)
+            {
+                _bgPhaseChecked = true;
+                _bgHasPhase = _bgMat.HasProperty("_Phase");
+                _bgHasPatternSize = _bgMat.HasProperty("_PatternSize");
+                if (_bgHasPatternSize) _bgPatternBase = Mathf.Clamp(_bgMat.GetFloat("_PatternSize"), 0.05f, 1f);
+            }
+            float dt = Time.unscaledDeltaTime;
+            bool playing = Audio != null && Audio.IsMusicPlaying();
+            float energy = playing ? Audio.GetMusicLevel() : 0f;
+            _bgCooldownT -= dt;
+            if (playing && _bgCooldownT <= 0f && energy >= bgBeatThreshold && _bgPrevEnergy < bgBeatThreshold)
+            {
+                _bgCooldownT = Mathf.Max(0.05f, bgBeatCooldown);
+                _bgKick = Mathf.Max(_bgKick, Mathf.Max(0f, bgKickAmount));
+                _bgSizePunch = 1f;
+            }
+            _bgPrevEnergy = energy;
+            _bgPhase += dt * (bgBasePhaseSpeed + energy * Mathf.Max(0f, bgEnergySpeedBoost) + _bgKick);
+            if (_bgKick > 0f) _bgKick = Mathf.Max(0f, _bgKick - _bgKick * Mathf.Max(0.1f, bgKickDecay) * dt);
+            if (_bgHasPhase) _bgMat.SetFloat("_Phase", _bgPhase);
+            if (_bgHasPatternSize)
+            {
+                if (_bgSizePunch > 0f) _bgSizePunch = Mathf.Max(0f, _bgSizePunch - _bgSizePunch * Mathf.Max(0.1f, bgPatternBeatDecay) * dt);
+                float e = _bgSizePunch * _bgSizePunch;
+                _bgMat.SetFloat("_PatternSize", Mathf.Clamp(_bgPatternBase * (1f + Mathf.Max(0f, bgPatternBeatScale) * e), 0.05f, 1f));
+            }
         }
 
         private void ResolveLogoPulse()

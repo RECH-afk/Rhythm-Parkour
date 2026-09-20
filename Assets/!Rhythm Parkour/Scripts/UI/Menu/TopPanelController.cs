@@ -29,6 +29,7 @@ namespace RKS.RhythmParkour.UI
 
         [Header("Minimize Control")]
         public Image minimizeIcon;
+        public TextMeshProUGUI minimizeLabel;
         public Color minimizeOnColor;
         public Color minimizeOffColor;
 
@@ -67,11 +68,6 @@ namespace RKS.RhythmParkour.UI
 
         protected override void OnReady()
         {
-            if (root == null)
-            {
-                Debug.LogWarning("[TopPanel] Root не назначен.", this);
-                return;
-            }
             root.anchoredPosition = new Vector2(root.anchoredPosition.x, parkedY);
             baseRootX = root.anchoredPosition.x;
             root.gameObject.SetActive(false);
@@ -114,11 +110,13 @@ namespace RKS.RhythmParkour.UI
             if (!shown) return;
             if (trackText != null)
             {
-                string key = menu.CurrentPreviewTitle + "|" + menu.CurrentPreviewArtist;
+                bool trackPlaying = menu.IsPreviewPlaying;
+                string key = (trackPlaying ? "play|" : "pause|") + menu.CurrentPreviewTitle + "|" + menu.CurrentPreviewArtist;
                 if (key != lastTrackKey)
                 {
                     lastTrackKey = key;
-                    trackText.text = $"сейчас играет трек: {menu.CurrentPreviewTitle} от {menu.CurrentPreviewArtist}";
+                    string prefix = trackPlaying ? "сейчас играет трек:" : "сейчас на паузе трек:";
+                    trackText.text = $"{prefix} {menu.CurrentPreviewTitle} от {menu.CurrentPreviewArtist}";
                 }
             }
             bool playing = menu.IsPreviewPlaying;
@@ -164,8 +162,10 @@ namespace RKS.RhythmParkour.UI
 
         void RefreshMinimizeIcon()
         {
-            if (minimizeIcon == null) return;
-            minimizeIcon.color = minimized ? minimizeOnColor : minimizeOffColor;
+            if (minimizeIcon != null)
+                minimizeIcon.color = minimized ? minimizeOnColor : minimizeOffColor;
+            if (minimizeLabel != null)
+                minimizeLabel.text = minimized ? "РАСКРЫТЬ" : "СКРЫТЬ";
         }
 
         static string FormatTime(float seconds)
