@@ -189,8 +189,7 @@ if (hideWhenPlaying && manager != null && manager.isPlaying)
 
                     if (i < ghosts.Count && ghosts[i] != null)
                     {
-                        var pf = level.GetPrefab(level.events[i].prefabIndex, catalog);
-                        if (pf == null) pf = catalog.GetPrefab(level.events[i].prefabIndex);
+                        var pf = level.GetEventPrefab(level.events[i], catalog);
                         if (pf != null && !ghosts[i].name.Contains(pf.name)) { needRebuild = true; break; }
                     }
                 }
@@ -232,8 +231,7 @@ if (hideWhenPlaying && manager != null && manager.isPlaying)
             for (int i=0;i<level.events.Count;i++)
             {
                 var ev = level.events[i];
-                var prefab = level.GetPrefab(ev.prefabIndex, catalog);
-                if (prefab == null) prefab = catalog.GetPrefab(ev.prefabIndex);
+                var prefab = level.GetEventPrefab(ev, catalog);
                 if (prefab == null) continue;
 
                 var go = Instantiate(prefab, previewRoot);
@@ -251,7 +249,8 @@ if (useGhostMaterial)
                     var rends = go.GetComponentsInChildren<Renderer>();
                     List<Material> mats = new List<Material>();
                     Color targetCol = Color.clear;
-                    if (ev.HasCustomColor) targetCol = ev.color;
+                    if (ev.isTrigger) targetCol = ev.triggerType == 2 ? new Color(0.3f, 0.55f, 1f, 1f) : new Color(1f, 0.85f, 0.2f, 1f);
+                    else if (ev.HasCustomColor) targetCol = ev.color;
                     else if (level.obstacleColor != Color.white) targetCol = level.obstacleColor;
                     foreach (var r in rends)
                     {
@@ -371,8 +370,7 @@ if (dir.sqrMagnitude > 0.001f)
                 if (ev.rotation != Vector3.zero)
                     go.transform.localRotation *= Quaternion.Euler(ev.rotation);
 
-                var prefabForScale = level.GetPrefab(ev.prefabIndex, catalog);
-                if (prefabForScale == null) prefabForScale = catalog.GetPrefab(ev.prefabIndex);
+                var prefabForScale = level.GetEventPrefab(ev, catalog);
                 Vector3 baseScale = prefabForScale != null ? prefabForScale.transform.localScale : Vector3.one;
                 if (ev.scale != Vector3.zero && ev.scale != Vector3.one)
                     go.transform.localScale = Vector3.Scale(baseScale, ev.scale);

@@ -156,8 +156,15 @@ namespace EasyPeasyFirstPersonController
         public Transform playerCamera;
         public Transform cameraParent;
 
+        [Header("Gravity Flip")]
+        [Tooltip("1 = обычная гравитация, -1 = перевёрнутая. Ставится триггерами уровня")]
+        public float gravityDirection = 1f;
+        [Tooltip("Скорость доворота камеры при перевороте (ролл 0/180)")]
+        public float gravityRollSpeed = 3f;
 
         private float rotX, rotY, xVelocity, yVelocity;
+        private float gravityRoll;
+        private bool gravityInverted;
         private CharacterController characterController;
         private CapsuleCollider playerCapsule;
         private Vector3 moveDirection = Vector3.zero;
@@ -453,9 +460,13 @@ namespace EasyPeasyFirstPersonController
                 landingShakeOffset = Vector3.Lerp(landingShakeOffset, Vector3.zero, Time.deltaTime * 15f);
             }
 
-            if (isGrounded && moveDirection.y < 0)
+            if (isGrounded && gravityDirection >= 0f && moveDirection.y < 0f)
             {
                 moveDirection.y = -2f;
+            }
+            else if (isGrounded && gravityDirection < 0f && moveDirection.y > 0f)
+            {
+                moveDirection.y = 2f;
             }
 
             HandleLook();
@@ -476,7 +487,7 @@ namespace EasyPeasyFirstPersonController
 
             mouseXSway = Mathf.Lerp(mouseXSway, mouseX, Time.deltaTime * 10f);
             rotX += mouseX * 10 * currentSensitivity * Time.deltaTime;
-            rotY -= mouseY * 10 * currentSensitivity * Time.deltaTime;
+            rotY -= mouseY * (gravityInverted ? -1f : 1f) * 10 * currentSensitivity * Time.deltaTime;
             rotY = Mathf.Clamp(rotY, -90f, 90f);
 
             xVelocity = Mathf.Lerp(xVelocity, rotX, snappiness * Time.deltaTime);
@@ -485,7 +496,8 @@ namespace EasyPeasyFirstPersonController
             float targetTiltAngle = isSliding ? slideTiltAngle : 0f;
             currentTiltAngle = Mathf.SmoothDamp(currentTiltAngle, targetTiltAngle, ref tiltVelocity, 0.15f);
 
-            playerCamera.transform.localRotation = Quaternion.Euler(yVelocity - currentTiltAngle, 0f, 0f);
+            gravityRoll = Mathf.Lerp(gravityRoll, gravityInverted ? 180f : 0f, Time.deltaTime * Mathf.Max(0.1f, gravityRollSpeed));
+            playerCamera.transform.localRotation = Quaternion.Euler(yVelocity - currentTiltAngle, 0f, gravityRoll);
             transform.rotation = Quaternion.Euler(0f, xVelocity, 0f);
         }
 
@@ -615,7 +627,7 @@ namespace EasyPeasyFirstPersonController
             }
             else
             {
-                moveDirection.y -= gravity * Time.deltaTime;
+                moveDirection.y -= gravity * gravityDirection * Time.deltaTime;
             }
 
             characterController.Move(moveDirection * Time.deltaTime);
@@ -632,7 +644,7 @@ namespace EasyPeasyFirstPersonController
                 targetFov = sprintFov + (slideFovBoost * Mathf.Lerp(0f, 1f, 1f - slideProgress));
             }
 
-            float fallFovBoost = (!isGrounded && moveDirection.y < -5f) ? Mathf.Clamp(Mathf.Abs(moveDirection.y) * 0.4f, 0f, 15f) : 0f;
+            float fallFovBoost = (!isGrounded && moveDirection.y * gravityDirection < -5f) ? Mathf.Clamp(Mathf.Abs(moveDirection.y) * 0.4f, 0f, 15f) : 0f;
             targetFov += fallFovBoost + beatFovKick;
 
             currentFov = Mathf.SmoothDamp(currentFov, targetFov, ref fovVelocity, 1f / fovChangeSpeed);
@@ -735,7 +747,7 @@ namespace EasyPeasyFirstPersonController
         {
             RhythmGrade g = CheckRhythmAction();
             float boost = g == RhythmGrade.Perfect ? Mathf.Max(1f, beatJumpBoost) : 1f;
-            moveDirection.y = jumpSpeed * boost;
+            moveDirection.y = jumpSpeed * boost * gravityDirection;
             jumpBufferTimer = 0f;
             jumpQueued = false;
             coyoteTimer = 0f;
@@ -948,6 +960,14 @@ namespace EasyPeasyFirstPersonController
         public void SetControl(bool newState) { SetLookControl(newState); SetMoveControl(newState); }
         public void SetLookControl(bool newState) { isLook = newState; }
         public void SetMoveControl(bool newState) { isMove = newState; }
+
+        public void SetGravityInverted(bool inverted)
+        {
+            gravityInverted = inverted;
+            gravityDirection = inverted ? -1f : 1f;
+        }
+
+        public void ResetGravityFlip() => SetGravityInverted(false);
 
         public void SetCursorVisibility(bool newVisibility)
         {

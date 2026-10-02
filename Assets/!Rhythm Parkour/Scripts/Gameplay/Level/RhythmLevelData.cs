@@ -22,6 +22,13 @@ namespace RKS.RhythmParkour.Rhythm
         public float speed;
         public Color color;
         public string comment;
+        public bool isTrigger;
+        public int triggerType;
+        public int triggerPrefabIndex;
+
+        public const int TriggerNone = 0;
+        public const int TriggerGravityNormal = 1;
+        public const int TriggerGravityInverted = 2;
 
         public bool HasCustomColor => color.a > 0.01f;
         public Color EffectiveColor(Color fallback) => HasCustomColor ? color : fallback;
@@ -89,6 +96,24 @@ namespace RKS.RhythmParkour.Rhythm
         {
             if (catalog == null) return 0;
             return catalog.Count;
+        }
+
+        public GameObject GetTriggerPrefab(int index, GlobalObstacleCatalog catalog = null)
+        {
+            if (catalog == null) return null;
+            return catalog.GetTriggerPrefab(index);
+        }
+
+        public int TriggerPrefabCount(GlobalObstacleCatalog catalog = null)
+        {
+            if (catalog == null) return 0;
+            return catalog.TriggerCount;
+        }
+
+        public GameObject GetEventPrefab(ObstacleEvent ev, GlobalObstacleCatalog catalog = null)
+        {
+            if (ev.isTrigger) return GetTriggerPrefab(ev.triggerPrefabIndex, catalog);
+            return GetPrefab(ev.prefabIndex, catalog);
         }
 
         public void OnValidate() => bpm = Mathf.Max(1f, bpm);

@@ -87,6 +87,7 @@ namespace RKS.RhythmParkour.Rhythm
         private List<ObstacleEvent> sortedEvents;
         private readonly List<Obstacle> active = new List<Obstacle>();
         private readonly Dictionary<int, Queue<Obstacle>> pools = new Dictionary<int, Queue<Obstacle>>();
+        private const int TriggerPoolOffset = 100000;
         private Vector3 dirNormalized;
 
         [HideInInspector]
@@ -309,29 +310,49 @@ namespace RKS.RhythmParkour.Rhythm
                     var prefab = i < sourcePrefabs.Count ? sourcePrefabs[i] : null;
                     if (prefab == null) prefab = data.GetPrefab(i, catalog);
                     if (prefab == null) continue;
-                    var q = new Queue<Obstacle>();
-                    for (int k = 0; k < poolSizePerPrefab; k++)
-                    {
-                        GameObject go;
-                        if (Container != null)
-                            go = Container.InstantiatePrefab(prefab, spawnParent);
-                        else
-                            go = Instantiate(prefab, spawnParent, false);
-                        go.transform.localPosition = prefab.transform.localPosition;
-                        go.transform.localRotation = prefab.transform.localRotation;
-                        go.transform.localScale = prefab.transform.localScale;
-                        go.SetActive(false);
-                        var ob = go.GetComponent<Obstacle>();
-                        if (ob == null) ob = go.AddComponent<Obstacle>();
-                        if (Container != null) Container.InjectGameObject(go);
-                        q.Enqueue(ob);
-                    }
-                    pools[i] = q;
+                    pools[i] = BuildPool(prefab);
+                }
+            }
+
+            int triggerCount = catalog != null ? catalog.TriggerCount : 0;
+            List<GameObject> sourceTriggers = null;
+            if (triggerCount > 0) sourceTriggers = catalog.GetAllTriggers();
+
+            if (sourceTriggers != null)
+            {
+                for (int i = 0; i < triggerCount; i++)
+                {
+                    var prefab = i < sourceTriggers.Count ? sourceTriggers[i] : null;
+                    if (prefab == null) prefab = data.GetTriggerPrefab(i, catalog);
+                    if (prefab == null) continue;
+                    pools[TriggerPoolOffset + i] = BuildPool(prefab);
                 }
             }
 
 
             if (visual != null) visual.Apply(data, videoPlayer, false, trackFloor, null);
+        }
+
+        Queue<Obstacle> BuildPool(GameObject prefab)
+        {
+            var q = new Queue<Obstacle>();
+            for (int k = 0; k < poolSizePerPrefab; k++)
+            {
+                GameObject go;
+                if (Container != null)
+                    go = Container.InstantiatePrefab(prefab, spawnParent);
+                else
+                    go = Instantiate(prefab, spawnParent, false);
+                go.transform.localPosition = prefab.transform.localPosition;
+                go.transform.localRotation = prefab.transform.localRotation;
+                go.transform.localScale = prefab.transform.localScale;
+                go.SetActive(false);
+                var ob = go.GetComponent<Obstacle>();
+                if (ob == null) ob = go.AddComponent<Obstacle>();
+                if (Container != null) Container.InjectGameObject(go);
+                q.Enqueue(ob);
+            }
+            return q;
         }
 
         void MigrateSpeeds(RhythmLevelData data)
@@ -341,7 +362,7 @@ namespace RKS.RhythmParkour.Rhythm
                 var e = data.events[i];
                 if (e.speed < 0.01f)
                 {
-                    var prefab = data.GetPrefab(e.prefabIndex, catalog);
+                    var prefab = data.GetEventPrefab(e, catalog);
                     float prefSpeed = 0f;
                     if (prefab != null)
                     {
@@ -378,6 +399,7 @@ namespace RKS.RhythmParkour.Rhythm
             isPlaying = true;
             currentTime = 0f;
             levelFinished = false;
+            if (playerController != null) playerController.ResetGravityFlip();
             foreach (var o in active.ToArray()) ReturnToPool(o);
             active.Clear();
 
@@ -499,12 +521,14 @@ namespace RKS.RhythmParkour.Rhythm
 
         void Spawn(ObstacleEvent evt)
         {
-            GameObject prefab = levelData.GetPrefab(evt.prefabIndex, catalog);
+            int poolKey = evt.isTrigger ? TriggerPoolOffset + Mathf.Max(0, evt.triggerPrefabIndex) : Mathf.Max(0, evt.prefabIndex);
+            GameObject prefab = levelData.GetEventPrefab(evt, catalog);
             if (prefab == null) return;
 
-            Obstacle ob = GetFromPool(evt.prefabIndex, prefab);
+            Obstacle ob = GetFromPool(poolKey, prefab);
             if (ob == null) return;
             if (Container != null) Container.InjectGameObject(ob.gameObject);
+            ob.poolKey = poolKey;
 
             Transform sp = spawnPoint != null ? spawnPoint : transform;
             float centerX = (trackMinX + trackMaxX) * 0.5f;
@@ -579,6 +603,7 @@ namespace RKS.RhythmParkour.Rhythm
             {
                 Color toApply = Color.clear;
                 if (evt.HasCustomColor) toApply = evt.color;
+                else if (evt.isTrigger) toApply = evt.triggerType == 2 ? new Color(0.3f, 0.55f, 1f, 1f) : new Color(1f, 0.85f, 0.2f, 1f);
                 else if (levelData != null && levelData.obstacleColor != Color.white) toApply = levelData.obstacleColor;
                 else if (levelData != null && levelData.obstacleColor == Color.white) toApply = Color.white;
 
@@ -609,6 +634,8 @@ namespace RKS.RhythmParkour.Rhythm
             ob.noteId = nextEventIndex;
             float spd = evt.speed > 0.01f ? evt.speed : (ob.baseSpeed > 0.01f ? ob.baseSpeed : defaultObstacleSpeed);
             ob.Init(this, dirNormalized, spd, despawnPoint, evt.time);
+            ob.isTrigger = evt.isTrigger;
+            ob.triggerType = evt.triggerType;
             active.Add(ob);
         }
 
@@ -644,14 +671,18 @@ namespace RKS.RhythmParkour.Rhythm
             ob.gameObject.SetActive(false);
             ob.transform.SetParent(spawnParent != null ? spawnParent : transform);
 
-            int idx = 0;
-
-            int gCount = catalog != null ? catalog.Count : 0;
-            if (gCount > 0)
+            int idx = ob.poolKey;
+            if (!pools.ContainsKey(idx) || pools[idx] == null)
             {
-                var all = catalog.GetAll();
-                for (int i = 0; i < all.Count; i++)
-                    if (all[i] != null && ob.name.Contains(all[i].name)) { idx = i; break; }
+                idx = 0;
+
+                int gCount = catalog != null ? catalog.Count : 0;
+                if (gCount > 0)
+                {
+                    var all = catalog.GetAll();
+                    for (int i = 0; i < all.Count; i++)
+                        if (all[i] != null && ob.name.Contains(all[i].name)) { idx = i; break; }
+                }
             }
             if (!pools.ContainsKey(idx)) pools[idx] = new Queue<Obstacle>();
             pools[idx].Enqueue(ob);

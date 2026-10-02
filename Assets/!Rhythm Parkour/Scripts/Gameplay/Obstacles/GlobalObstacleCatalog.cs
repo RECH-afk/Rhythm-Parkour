@@ -17,6 +17,8 @@ namespace RKS.RhythmParkour.Rhythm
     {
         [Tooltip("Общий пул объектов для всех уровней (как в GD). Порядок важен — индекс сохраняется в .rksl")]
         public List<GameObject> prefabs = new List<GameObject>();
+        [Tooltip("Отдельные префабы триггеров (не дамажат). Порядок важен — triggerPrefabIndex сохраняется в .rksl")]
+        public List<GameObject> triggerPrefabs = new List<GameObject>();
         [Tooltip("Доступные материалы для препятствий. Первый = дефолтный")]
         public List<Material> obstacleMaterials = new List<Material>();
 
@@ -119,6 +121,17 @@ public int Count => prefabs != null ? prefabs.Count : 0;
         }
 
         public List<GameObject> GetAll() => prefabs ?? new List<GameObject>();
+
+        public int TriggerCount => triggerPrefabs != null ? triggerPrefabs.Count : 0;
+
+        public GameObject GetTriggerPrefab(int index)
+        {
+            if (triggerPrefabs == null || triggerPrefabs.Count == 0) return null;
+            if (index < 0 || index >= triggerPrefabs.Count) return null;
+            return triggerPrefabs[index];
+        }
+
+        public List<GameObject> GetAllTriggers() => triggerPrefabs ?? new List<GameObject>();
 
         public Material GetMaterial(string name)
         {

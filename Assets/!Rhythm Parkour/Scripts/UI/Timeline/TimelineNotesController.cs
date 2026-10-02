@@ -138,7 +138,7 @@ namespace RKS.RhythmParkour.UI.Timeline
 
                 if (Mathf.Abs(ev.position.x) > 0.01f) rt.anchoredPosition += new Vector2(0, ev.position.x * 7f);
                 img = go.GetComponent<Image>(); if (img == null) img = go.GetComponentInChildren<Image>();
-                if (img != null) { Color noteCol = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex); img.color = noteCol; img.raycastTarget = true; }
+                if (img != null) { img.color = GetNoteColor(ev); img.raycastTarget = true; }
                 bool isSelForView = selectedIndex == index || selectedIndices.Contains(index);
                 if (ui.notePrefabUseCustomView)
                 {
@@ -158,7 +158,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                 rt = go.GetComponent<RectTransform>(); rt.anchorMin = new Vector2(norm, 0.5f); rt.anchorMax = new Vector2(norm, 0.5f); rt.pivot = new Vector2(0.5f, 0.5f); rt.sizeDelta = GetScaledNoteSize(); rt.anchoredPosition = Vector2.zero;
                 if (ev.scale != Vector3.one && ev.scale != Vector3.zero) { float avg = (ev.scale.x + ev.scale.y + ev.scale.z) / 3f; rt.sizeDelta *= Mathf.Clamp(avg, 0.6f, 2.2f); }
                 if (Mathf.Abs(ev.position.x) > 0.01f) rt.anchoredPosition += new Vector2(0, ev.position.x * 7f);
-                img = go.GetComponent<Image>(); Color nc = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex); img.color = nc; img.raycastTarget = true;
+                img = go.GetComponent<Image>(); img.color = GetNoteColor(ev); img.raycastTarget = true;
                 var edgeGO = new GameObject("Edge", typeof(RectTransform), typeof(Image)); edgeGO.transform.SetParent(go.transform, false);
                 var eRT = edgeGO.GetComponent<RectTransform>(); eRT.anchorMin = new Vector2(0, 0); eRT.anchorMax = new Vector2(1, 0); eRT.pivot = new Vector2(0.5f, 0); eRT.sizeDelta = new Vector2(0, 3); eRT.anchoredPosition = Vector2.zero;
                 edgeGO.GetComponent<Image>().color = new Color(0, 0, 0, 0.35f); edgeGO.GetComponent<Image>().raycastTarget = false;
@@ -204,8 +204,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             var img = go.GetComponent<Image>(); if (img == null) img = go.GetComponentInChildren<Image>();
             if (img != null)
             {
-                Color noteCol = ev.HasCustomColor ? ev.color : GetColorForPrefab(ev.prefabIndex);
-                img.color = noteCol;
+                img.color = GetNoteColor(ev);
             }
             bool isSel = selectedIndex == index || selectedIndices.Contains(index);
             if (ui.notePrefabUseCustomView)
@@ -393,6 +392,13 @@ namespace RKS.RhythmParkour.UI.Timeline
         }
 
         public Color GetColorForPrefab(int idx) { float h = (idx * 0.37f) % 1f; return Color.HSVToRGB(h, 0.78f, 0.92f); }
+
+        public Color GetNoteColor(ObstacleEvent ev)
+        {
+            if (ev.isTrigger) return ev.triggerType == 2 ? new Color(0.3f, 0.55f, 1f, 1f) : new Color(1f, 0.85f, 0.2f, 1f);
+            if (ev.HasCustomColor) return ev.color;
+            return GetColorForPrefab(ev.prefabIndex);
+        }
 
         public void SelectNote(int idx) { var levelData = ui.levelData; selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; RefreshNotes(); if (idx >= 0 && levelData != null && idx < levelData.events.Count) { ui.FlashStatus($"Выбрано #{idx}  {ui.FormatTime(GetHitTime(levelData.events[idx]))} — Ctrl+клик множ."); props.ShowPropertiesPanel(idx); } else props.HidePropertiesPanel(); }
         public bool HasSelection() => selectedIndex >= 0 || selectedIndices.Count > 0;
@@ -653,7 +659,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (ev.speed < 0.1f)
                 {
                     float oldS = def;
-                    var pf = levelData.GetPrefab(ev.prefabIndex, catalog);
+                    var pf = levelData.GetEventPrefab(ev, catalog);
                     if (pf != null)
                     {
                         var ob = pf.GetComponent<Obstacle>();

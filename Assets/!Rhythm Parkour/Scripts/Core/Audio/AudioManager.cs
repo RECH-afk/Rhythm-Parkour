@@ -330,11 +330,127 @@ namespace RKS.RhythmParkour.Core.Managers
             return -1f;
         }
 
-        private readonly float[] _musicSpectrum = new float[64];
+        private readonly float[] _musicSpectrum = new float[512];
+        private readonly float[] _fluxHistory = new float[64];
+        private int _fluxIndex;
+        private float _prevBassEnergy;
         private float _musicLevel;
+        private float _beatCooldownT;
+        private int _bassFrame = -1;
+        private float _gridLastBpm = -1f;
+        private float _gridLastOffset;
+        private int _gridLastBeat = -1;
+        private bool _beatArmed = true;
 
-        public float GetMusicLevel()
+        public float GetMusicLevel() => GetBassLevel();
+
+        public float GetBassLevel()
         {
+            EnsureBassFrame();
+            return _musicLevel;
+        }
+
+        public bool PollBassBeat(out float intensity)
+        {
+            return PollBassBeat(1.4f, 0.12f, out intensity);
+        }
+
+        public bool PollBassBeat(float sensitivity, float cooldown, out float intensity)
+        {
+            const float floor = 0.004f;
+            intensity = 0f;
+            EnsureBassFrame();
+            _beatCooldownT -= Time.unscaledDeltaTime;
+            if (_beatCooldownT > 0f) return false;
+            FluxStats(out float mean, out float std, out float latest);
+            float threshold = mean + Mathf.Max(0.5f, sensitivity) * (std + 1e-4f);
+            float triggerAt = Mathf.Max(threshold, floor);
+            if (latest > triggerAt)
+            {
+                intensity = Mathf.Clamp01((latest - triggerAt) / Mathf.Max(triggerAt, 1e-6f));
+                _beatCooldownT = Mathf.Max(0.05f, cooldown);
+                return true;
+            }
+            return false;
+        }
+
+        public bool PollBassBeat(float bpm, float offset, float sensitivity, float cooldown, out float intensity)
+        {
+            const float floor = 0.004f;
+            intensity = 0f;
+            EnsureBassFrame();
+            float t = GetMusicTime();
+            if (t < 0f) return false;
+            if (Mathf.Abs(bpm - _gridLastBpm) > 0.01f || Mathf.Abs(offset - _gridLastOffset) > 0.001f)
+            {
+                _gridLastBpm = bpm;
+                _gridLastOffset = offset;
+                _gridLastBeat = -1;
+                _beatArmed = true;
+            }
+            _beatCooldownT -= Time.unscaledDeltaTime;
+            FluxStats(out float mean, out float std, out float latest);
+            float threshold = mean + Mathf.Max(0.5f, sensitivity) * (std + 1e-4f);
+            float triggerAt = Mathf.Max(threshold, floor);
+            float spb = 60f / Mathf.Max(1f, bpm);
+            float beatFloat = (t - offset) / spb;
+            int beatIdx = Mathf.FloorToInt(beatFloat);
+            float frac = beatFloat - beatIdx;
+            float dist = Mathf.Min(frac, 1f - frac);
+            bool crossed = beatIdx != _gridLastBeat;
+            if (crossed) _gridLastBeat = beatIdx;
+            float onset = latest > triggerAt ? latest - triggerAt : 0f;
+            if (latest < triggerAt * 0.8f) _beatArmed = true;
+            bool fire = false;
+            float strength = 0f;
+            if (_beatCooldownT <= 0f && _beatArmed)
+            {
+                if (onset > 0f && dist <= 0.12f)
+                {
+                    fire = true;
+                    strength = Mathf.Clamp01(onset / Mathf.Max(triggerAt, 1e-6f)) * (1f - dist / 0.12f);
+                }
+                else if (onset > 0f && latest > triggerAt * 1.6f)
+                {
+                    fire = true;
+                    strength = Mathf.Clamp01(onset / Mathf.Max(triggerAt, 1e-6f));
+                }
+                else if (crossed && latest > triggerAt * 0.6f)
+                {
+                    fire = true;
+                    strength = 0.25f * Mathf.Clamp01(latest / Mathf.Max(triggerAt, 1e-6f));
+                }
+            }
+            if (fire)
+            {
+                intensity = Mathf.Clamp01(strength);
+                _beatCooldownT = Mathf.Max(0.05f, cooldown);
+                _beatArmed = false;
+                return true;
+            }
+            return false;
+        }
+
+        private void FluxStats(out float mean, out float std, out float latest)
+        {
+            mean = 0f;
+            for (int i = 0; i < _fluxHistory.Length; i++) mean += _fluxHistory[i];
+            mean /= _fluxHistory.Length;
+            float variance = 0f;
+            for (int i = 0; i < _fluxHistory.Length; i++)
+            {
+                float d = _fluxHistory[i] - mean;
+                variance += d * d;
+            }
+            variance /= _fluxHistory.Length;
+            std = Mathf.Sqrt(variance);
+            latest = _fluxHistory[(_fluxIndex + _fluxHistory.Length - 1) % _fluxHistory.Length];
+        }
+
+        private void EnsureBassFrame()
+        {
+            if (_bassFrame == Time.frameCount) return;
+            _bassFrame = Time.frameCount;
             AudioSource src = null;
             AudioSource next = isPlayingMusicA ? musicSourceB : musicSourceA;
             if (next != null && next.isPlaying && next.clip != null) src = next;
@@ -343,18 +459,23 @@ namespace RKS.RhythmParkour.Core.Managers
                 AudioSource active = isPlayingMusicA ? musicSourceA : musicSourceB;
                 if (active != null && active.isPlaying && active.clip != null) src = active;
             }
-            float target = 0f;
+            float energy = 0f;
             if (src != null)
             {
                 src.GetSpectrumData(_musicSpectrum, 0, FFTWindow.BlackmanHarris);
-                float bass = 0f;
-                const int bins = 8;
-                for (int i = 0; i < bins && i < _musicSpectrum.Length; i++) bass += _musicSpectrum[i];
-                bass /= bins;
-                target = Mathf.Clamp01(bass * 6f);
+                float binHz = (float)AudioSettings.outputSampleRate * 0.5f / _musicSpectrum.Length;
+                int from = Mathf.Clamp(Mathf.FloorToInt(50f / Mathf.Max(1f, binHz)), 1, _musicSpectrum.Length - 1);
+                int to = Mathf.Clamp(Mathf.CeilToInt(200f / Mathf.Max(1f, binHz)), from, _musicSpectrum.Length - 1);
+                float sumSq = 0f;
+                int count = 0;
+                for (int i = from; i <= to; i++) { sumSq += _musicSpectrum[i] * _musicSpectrum[i]; count++; }
+                if (count > 0) energy = Mathf.Sqrt(sumSq / count);
             }
-            _musicLevel = Mathf.Lerp(_musicLevel, target, Time.unscaledDeltaTime * 8f);
-            return _musicLevel;
+            float flux = Mathf.Max(0f, energy - _prevBassEnergy);
+            _prevBassEnergy = energy;
+            _fluxHistory[_fluxIndex] = flux;
+            _fluxIndex = (_fluxIndex + 1) % _fluxHistory.Length;
+            _musicLevel = Mathf.Lerp(_musicLevel, Mathf.Clamp01(energy * 8f), Time.unscaledDeltaTime * 8f);
         }
 
         private IEnumerator CrossfadeMusic(AudioClip newClip, float fadeTime, float startTime)

@@ -52,6 +52,12 @@ namespace RKS.RhythmParkour.Rhythm
         [Tooltip("Расширение хитбокса от визуала со всех сторон (м). Можно в минус — тогда хитбокс МЕНЬШЕ картинки (прощение)")]
         public float hitboxPadding = 0.05f;
 
+        [Header("Trigger Note")]
+        [Tooltip("Если вкл — касание не бьёт, а срабатывает триггер (тип задаёт событие уровня)")]
+        public bool isTrigger = false;
+        [Tooltip("0=нет, 1=гравитация нормальная, 2=гравитация перевёрнутая. Ставит менеджер из события")]
+        public int triggerType = 0;
+
         [Header("Key Note (tap)")]
         [Tooltip("Если вкл — урона касанием нет, надо нажать клавишу в момент пролёта мимо игрока")]
         public bool isKeyNote = false;
@@ -94,6 +100,7 @@ namespace RKS.RhythmParkour.Rhythm
         [Header("Score (osu)")]
         [Tooltip("Уникальный id ноты в текущем прохождении. Ставит менеджер при спавне")]
         [HideInInspector] public int noteId = -1;
+        [HideInInspector] public int poolKey = 0;
         [Tooltip("По этой ноте уже засчитан Miss (повторный урон не плодит миссы)")]
         [HideInInspector] public bool countedAsMiss;
         [Tooltip("Препятствие реально задело игрока (даже если HP-урон заблокирован неуязвимостью) — Perfect уже невозможен")]
@@ -291,6 +298,11 @@ namespace RKS.RhythmParkour.Rhythm
         {
             if (!moving || ph == null || isKeyNote) return;
             touchedPlayer = true;
+            if (isTrigger)
+            {
+                FireTrigger();
+                return;
+            }
             if (Time.time - lastDamageTime < damageCooldown) return;
             if (isSpawning && spawnAnimTimer < 0.18f) return;
 
@@ -304,6 +316,23 @@ namespace RKS.RhythmParkour.Rhythm
                 if (sm != null) sm.RegisterMiss();
             }
             if (destroyOnHit) Despawn();
+        }
+
+        void FireTrigger()
+        {
+            if (countedAsMiss) return;
+            countedAsMiss = true;
+            var sm = score ?? manager?.score;
+            if (sm != null && sm.isLevelActive && !sm.isFinished) sm.RegisterPerfect();
+            var fpc = playerFpc;
+            if (fpc == null && manager?.playerController != null)
+                fpc = manager.playerController;
+            if (fpc != null)
+            {
+                if (triggerType == ObstacleEvent.TriggerGravityInverted) fpc.SetGravityInverted(true);
+                else fpc.SetGravityInverted(false);
+            }
+            Despawn();
         }
 
         public void Init(RhythmParkourManager mgr, Vector3 dir, float evtSpeed, Transform despawn, float time)
@@ -325,6 +354,8 @@ namespace RKS.RhythmParkour.Rhythm
             countedAsMiss = false;
             touchedPlayer = false;
             lastDamageTime = -999f;
+            isTrigger = false;
+            triggerType = 0;
             minGap = float.MaxValue;
             keyJudged = false;
             keyCrossed = false;
@@ -751,6 +782,7 @@ namespace RKS.RhythmParkour.Rhythm
                             if (!keyJudged) JudgeKeyNote();
                         }
 
+                        else if (isTrigger) { countedAsMiss = true; }
                         else if (touchedPlayer) { countedAsMiss = true; sm.RegisterMiss(); }
                         else sm.RegisterPerfect();
                     }

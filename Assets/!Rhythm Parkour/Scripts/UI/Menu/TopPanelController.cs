@@ -165,7 +165,7 @@ namespace RKS.RhythmParkour.UI
             if (minimizeIcon != null)
                 minimizeIcon.color = minimized ? minimizeOnColor : minimizeOffColor;
             if (minimizeLabel != null)
-                minimizeLabel.text = minimized ? "РАСКРЫТЬ" : "СКРЫТЬ";
+                minimizeLabel.text = minimized ? "РАЗВЕРНУТЬ" : "СВЕРНУТЬ";
         }
 
         static string FormatTime(float seconds)

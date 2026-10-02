@@ -37,7 +37,7 @@ namespace RKS.RhythmParkour.UI
 
         [Header("Logo Pulse")]
         [SerializeField] private RectTransform _logoPulse;
-        [SerializeField] private float _pulseThreshold = 0.3f;
+        [SerializeField] private float _pulseSensitivity = 1.4f;
         [SerializeField] private float _pulseScaleAmount = 0.18f;
         [SerializeField] private float _pulseFadeDuration = 0.6f;
         [SerializeField] private float _pulseMaxAlpha = 0.55f;
@@ -50,6 +50,15 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private float clapVolume = 0.7f;
         [SerializeField] private string clapSoundName = "clap";
         [SerializeField] private float logoBeatScaleAmount = 0.06f;
+
+        [Header("Logo Melody Sway")]
+        [SerializeField] private float swayDropThreshold = 0.3f;
+        [SerializeField] private float swayPositionAmount = 6f;
+        [SerializeField] private float swayRotationAmount = 1.5f;
+        [SerializeField] private float swayMinSpeed = 0.4f;
+        [SerializeField] private float swayMaxSpeed = 1.6f;
+        [SerializeField] private float pulseSwayAlpha = 0.3f;
+        [SerializeField] private float swayBlendSpeed = 2.5f;
 
         [Header("Background Beat")]
         [SerializeField] private float bgBasePhaseSpeed = 0.15f;
@@ -101,6 +110,7 @@ namespace RKS.RhythmParkour.UI
 
         private readonly List<string> _foundPaths = new();
         private string _selectedLevelPath;
+        private string _lastSelectedLevelPath;
         private float _lastClickTime;
         private const float DoubleClickThreshold = 0.35f;
 
@@ -108,12 +118,24 @@ namespace RKS.RhythmParkour.UI
         private Image _pulseImage;
         private Vector3 _pulseBaseScale = Vector3.one;
         private float _pulseT = 999f;
-        private float _pulseCooldownT;
-        private float _prevBassEnergy;
+        private float _previewBpm = 128f;
+        private float _previewOffset;
         private float _pulseSearchT;
+        private float _pulseHitScale;
+        private float _pulseDurNow = 0.6f;
+        private float _logoBeatStrength;
         private float _logoExcite;
         private bool _exciteWasActive;
         private Canvas _menuCanvas;
+        private float _swayClock;
+        private float _swayEnergySm;
+        private float _swayPhase;
+        private float _swaySpeedNow = 0.4f;
+        private float _swayBlend;
+        private bool _swayWasActive;
+        private bool _swayHoldPulse;
+        private Vector2 _swayLastDrift;
+        private float _swayLastRot;
         private float _logoBeatPulse;
         private bool _logoBeatWasActive;
         private Vector3 _logoBaseScale = Vector3.zero;
@@ -296,15 +318,12 @@ namespace RKS.RhythmParkour.UI
             if (_logoPulse.localScale.sqrMagnitude > 0.001f) _pulseBaseScale = _logoPulse.localScale;
             _logoPulse.gameObject.SetActive(false);
             _pulseT = 999f;
-            _pulseCooldownT = 0f;
-            _prevBassEnergy = 0f;
         }
 
         private void TickLogoPulse()
         {
             float dt = Time.unscaledDeltaTime;
             bool music = Audio != null && Audio.IsMusicPlaying();
-            float energy = music ? Audio.GetMusicLevel() : 0f;
             TickLogoBeatScale(dt);
             if (_logoPulse == null)
             {
@@ -313,16 +332,22 @@ namespace RKS.RhythmParkour.UI
                 _pulseSearchT = 2f;
                 ResolveLogoPulse();
             }
-            if (_logoPulse == null) return;
-            _pulseCooldownT -= dt;
-            if (music && _pulseCooldownT <= 0f && energy >= _pulseThreshold && _prevBassEnergy < _pulseThreshold)
+            float strength = 0f;
+            bool beat = music && Audio.PollBassBeat(_previewBpm, _previewOffset, _pulseSensitivity, _pulseCooldown, out strength);
+            strength = Mathf.Clamp01(strength);
+            if (beat)
             {
-                _pulseCooldownT = Mathf.Max(0.05f, _pulseCooldown);
-                _pulseT = 0f;
-                if (!_logoPulse.gameObject.activeSelf) _logoPulse.gameObject.SetActive(true);
-                _logoPulse.localScale = _pulseBaseScale * (1f + Mathf.Max(0f, _pulseScaleAmount));
-                SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)));
-                _logoBeatPulse = 1f;
+                if (_logoPulse != null)
+                {
+                    _pulseT = 0f;
+                    _pulseHitScale = Mathf.Max(0f, _pulseScaleAmount) * (0.5f + strength);
+                    _pulseDurNow = Mathf.Max(0.05f, _pulseFadeDuration) * (1.15f - 0.45f * strength);
+                    _logoBeatPulse = 1f;
+                    _logoBeatStrength = strength;
+                    if (!_logoPulse.gameObject.activeSelf) _logoPulse.gameObject.SetActive(true);
+                    _logoPulse.localScale = _pulseBaseScale * (1f + _pulseHitScale);
+                    SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)));
+                }
                 if (IsLogoHovered())
                 {
                     _logoExcite = 1f;
@@ -333,22 +358,81 @@ namespace RKS.RhythmParkour.UI
                     }
                 }
             }
-            _prevBassEnergy = energy;
             TickLogoExcite(dt);
-            if (!_logoPulse.gameObject.activeSelf) return;
-            if (!music)
+            if (_logoPulse != null)
             {
-                _logoPulse.gameObject.SetActive(false);
-                _pulseT = 999f;
+                if (_logoPulse.gameObject.activeSelf)
+                {
+                    if (!music)
+                    {
+                        _logoPulse.gameObject.SetActive(false);
+                        _pulseT = 999f;
+                    }
+                    else
+                    {
+                        _pulseT += dt;
+                        float k = Mathf.Clamp01(_pulseT / _pulseDurNow);
+                        float e = (1f - k) * (1f - k);
+                        _logoPulse.localScale = _pulseBaseScale * (1f + _pulseHitScale * e);
+                        SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)) * e);
+                        if (k >= 1f && !_swayHoldPulse) _logoPulse.gameObject.SetActive(false);
+                    }
+                }
+            }
+            TickLogoSway(dt, music, beat);
+        }
+
+        private void TickLogoSway(float dt, bool music, bool beat)
+        {
+            _swayClock += dt;
+            _swayHoldPulse = false;
+            float energy = music ? Audio.GetMusicLevel() : 0f;
+            _swayEnergySm = Mathf.Lerp(_swayEnergySm, energy, Mathf.Clamp01(dt * 3f));
+            bool drop = music && _swayEnergySm >= swayDropThreshold;
+            _swayBlend = Mathf.MoveTowards(_swayBlend, drop ? 1f : 0f, dt * Mathf.Max(0.1f, swayBlendSpeed));
+            float b = _swayBlend * _swayBlend * (3f - 2f * _swayBlend);
+            float energyNorm = Mathf.Clamp01(_swayEnergySm / Mathf.Max(0.05f, swayDropThreshold * 1.5f));
+            float targetSpeed = Mathf.Lerp(Mathf.Max(0.05f, swayMinSpeed), Mathf.Max(Mathf.Max(0.05f, swayMinSpeed), swayMaxSpeed), energyNorm);
+            _swaySpeedNow = Mathf.Lerp(_swaySpeedNow, targetSpeed, Mathf.Clamp01(dt * 2.5f));
+            _swayPhase += dt * _swaySpeedNow;
+            float t = _swayPhase;
+            Vector2 drift = new Vector2(Mathf.Sin(t), Mathf.Cos(t * 0.7f + 1f)) * Mathf.Max(0f, swayPositionAmount) * b;
+            float rot = Mathf.Sin(t * 0.5f) * swayRotationAmount * b;
+            Vector2 dDrift = drift - _swayLastDrift;
+            float dRot = rot - _swayLastRot;
+            _swayLastDrift = drift;
+            _swayLastRot = rot;
+            bool logoOk = _logoTransform != null && !DOTween.IsTweening(_logoTransform);
+            if (_swayBlend <= 0.001f)
+            {
+                if (_swayWasActive)
+                {
+                    _swayWasActive = false;
+                    if (logoOk && _originalPositions.TryGetValue(_logoTransform.gameObject, out var lb))
+                    {
+                        _logoTransform.anchoredPosition = lb;
+                        _logoTransform.localRotation = Quaternion.identity;
+                    }
+                    if (!beat && _logoPulse != null && _logoPulse.gameObject.activeSelf && _pulseT >= _pulseDurNow)
+                        _logoPulse.gameObject.SetActive(false);
+                }
                 return;
             }
-            _pulseT += dt;
-            float dur = Mathf.Max(0.05f, _pulseFadeDuration);
-            float k = Mathf.Clamp01(_pulseT / dur);
-            float e = (1f - k) * (1f - k);
-            _logoPulse.localScale = _pulseBaseScale * (1f + Mathf.Max(0f, _pulseScaleAmount) * e);
-            SetPulseAlpha(Mathf.Max(0f, Mathf.Min(1f, _pulseMaxAlpha)) * e);
-            if (k >= 1f) _logoPulse.gameObject.SetActive(false);
+            _swayWasActive = true;
+            if (logoOk && (dDrift.sqrMagnitude > 0.0000001f || Mathf.Abs(dRot) > 0.00001f))
+            {
+                _logoTransform.anchoredPosition += dDrift;
+                _logoTransform.localRotation *= Quaternion.Euler(0f, 0f, dRot);
+            }
+            if (_logoPulse != null)
+            {
+                if (!_logoPulse.gameObject.activeSelf) _logoPulse.gameObject.SetActive(true);
+                _logoPulse.anchoredPosition += dDrift * 0.7f;
+                float curA = _pulseImage != null ? _pulseImage.color.a : 0f;
+                float breathe = Mathf.Max(0f, Mathf.Min(1f, pulseSwayAlpha)) * (0.65f + 0.35f * Mathf.Sin(t * 1.3f)) * b;
+                if (breathe > curA) SetPulseAlpha(breathe);
+                _swayHoldPulse = true;
+            }
         }
 
         private bool IsLogoHovered()
@@ -366,13 +450,13 @@ namespace RKS.RhythmParkour.UI
 
         private void TickLogoBeatScale(float dt)
         {
-            _logoBeatPulse = Mathf.Max(0f, _logoBeatPulse - dt * Mathf.Max(0.1f, exciteDecay));
+            _logoBeatPulse = Mathf.Max(0f, _logoBeatPulse - dt * Mathf.Max(0.1f, exciteDecay) * (0.8f + 0.6f * _logoBeatStrength));
             if (_logoTransform == null || DOTween.IsTweening(_logoTransform)) return;
             if (_logoBaseScale == Vector3.zero) _logoBaseScale = _logoTransform.localScale;
             if (_logoBeatPulse > 0.003f)
             {
                 float e = _logoBeatPulse * _logoBeatPulse;
-                _logoTransform.localScale = _logoBaseScale * (1f + Mathf.Max(0f, logoBeatScaleAmount) * e);
+                _logoTransform.localScale = _logoBaseScale * (1f + Mathf.Max(0f, logoBeatScaleAmount) * (0.5f + _logoBeatStrength) * e);
                 _logoBeatWasActive = true;
             }
             else if (_logoBeatWasActive)
@@ -731,6 +815,7 @@ namespace RKS.RhythmParkour.UI
                 && _levelDetailsRoot != null
                 && _levelDetailsRoot.activeSelf;
             _selectedLevelPath = path;
+            _lastSelectedLevelPath = path;
             _detailsSeq++;
             SetSelectedButton(path);
             UpdateDetailsButtonsState();
@@ -883,7 +968,42 @@ namespace RKS.RhythmParkour.UI
 
             for (int i = 0; i < _foundPaths.Count; i++) CreateLevelListItem(_foundPaths[i], i);
 
+            if (IsPreviewPlaying || PreviewPaused)
+            {
+                RestoreLastSelection();
+                MaybeOpenPlayingDetails();
+            }
+            else
+            {
+                _lastSelectedLevelPath = null;
+                _selectedLevelPath = null;
+                SetSelectedButton(null);
+                UpdateDetailsButtonsState();
+            }
             RequestLayoutRefresh();
+        }
+
+        private void RestoreLastSelection()
+        {
+            string restore = _lastSelectedLevelPath;
+            if (string.IsNullOrEmpty(restore) || !_foundPaths.Contains(restore)) return;
+            _lastSelectedLevelPath = restore;
+            _selectedLevelPath = restore;
+            SetSelectedButton(restore);
+            UpdateDetailsButtonsState();
+        }
+
+        private void MaybeOpenPlayingDetails()
+        {
+            if (!IsPreviewPlaying && !PreviewPaused) return;
+            if (string.IsNullOrEmpty(_lastPreviewRkslPath) || !_foundPaths.Contains(_lastPreviewRkslPath)) return;
+            string path = _lastPreviewRkslPath;
+            _selectedLevelPath = path;
+            _lastSelectedLevelPath = path;
+            SetSelectedButton(path);
+            UpdateDetailsButtonsState();
+            PopulateDetails(path);
+            TransitionTo(_levelDetailsRoot);
         }
 
         private void RequestLayoutRefresh()
@@ -1045,6 +1165,8 @@ namespace RKS.RhythmParkour.UI
             if (_detailAuthorText) _detailAuthorText.text = (man != null && !string.IsNullOrEmpty(man.creator)) ? man.creator : "N/A";
             if (_detailArtistText) _detailArtistText.text = (man != null && !string.IsNullOrEmpty(man.artist)) ? man.artist : "N/A";
             if (_detailTrackText) _detailTrackText.text = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : "N/A";
+            _previewBpm = man != null ? Mathf.Max(1f, man.bpm) : 128f;
+            _previewOffset = man != null ? man.offset : 0f;
             string topTitle = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
             if (string.IsNullOrEmpty(topTitle)) topTitle = "Без названия";
             CurrentPreviewTitle = topTitle;
@@ -1473,6 +1595,7 @@ namespace RKS.RhythmParkour.UI
                 Save.Write();
             }
 
+            if (_selectedLevelPath == _lastSelectedLevelPath) _lastSelectedLevelPath = null;
             _selectedLevelPath = null;
             SetSelectedButton(null);
             UpdateDetailsButtonsState();

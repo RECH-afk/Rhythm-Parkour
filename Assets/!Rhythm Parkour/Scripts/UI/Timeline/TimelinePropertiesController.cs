@@ -14,6 +14,8 @@ namespace RKS.RhythmParkour.UI.Timeline
         private TimelineNotesController notes;
         private TextMeshProUGUI propSpeedHintLabel;
         private TextMeshProUGUI propPrefabButtonLabel;
+        private int prefabGridTab;
+        private int triggerTypePick = 1;
 
         protected override void Awake()
         {
@@ -214,27 +216,30 @@ namespace RKS.RhythmParkour.UI.Timeline
             float hitTime = notes.GetHitTime(ev);
             string speedTxt = $" • {notes.SpeedHint(ev.speed)}";
             if (notes.GetApplyTargets().Count > 1 && ui.propTitleLabel != null) ui.propTitleLabel.text = $"Выделено {notes.GetApplyTargets().Count} нот";
-            else if (ui.propTitleLabel != null) ui.propTitleLabel.text = $"Нота #{idx} — {ui.FormatTime(hitTime)} • {GetPrefabName(ev.prefabIndex)}{speedTxt}";
+            else if (ui.propTitleLabel != null) ui.propTitleLabel.text = $"Нота #{idx} — {ui.FormatTime(hitTime)} • {GetEventPrefabName(ev)}{speedTxt}" + (ev.isTrigger ? (ev.triggerType == 2 ? " • ТРИГГЕР переверн." : " • ТРИГГЕР норм.") : "");
 
             EnsurePropertiesUI();
-            if (propPrefabButtonLabel != null) propPrefabButtonLabel.text = $"Вид: {GetPrefabName(ev.prefabIndex)}";
+            if (propPrefabButtonLabel != null) propPrefabButtonLabel.text = $"Вид: {GetEventPrefabName(ev)}";
             if (ui.propSpeedInput != null) { ui.propSpeedInput.gameObject.SetActive(true); ui.propSpeedInput.SetTextWithoutNotify(ev.speed.ToString("0.##", CultureInfo.InvariantCulture)); }
             if (propSpeedHintLabel != null) propSpeedHintLabel.text = notes.SpeedHint(ev.speed);
             if (ui.propPrefabDropdown != null)
             {
                 ui.propPrefabDropdown.gameObject.SetActive(true);
                 RefreshPrefabDropdown();
-                if (ev.prefabIndex < 0 || ev.prefabIndex >= ui.propPrefabDropdown.options.Count)
+                int curIdx = ev.isTrigger ? ev.triggerPrefabIndex : ev.prefabIndex;
+                if (curIdx < 0 || curIdx >= ui.propPrefabDropdown.options.Count)
                 {
                     var repaired = levelData.events[idx];
-                    repaired.prefabIndex = 0;
+                    if (ev.isTrigger) repaired.triggerPrefabIndex = 0;
+                    else repaired.prefabIndex = 0;
                     levelData.events[idx] = repaired;
                     ev = repaired;
+                    curIdx = 0;
                     notes.RefreshNotes();
                     ui.FlashStatus("Вид ноты был вне каталога — явно сброшен в 0");
                 }
                 if (ui.propPrefabDropdown.options.Count > 0)
-                    ui.propPrefabDropdown.SetValueWithoutNotify(ev.prefabIndex);
+                    ui.propPrefabDropdown.SetValueWithoutNotify(curIdx);
                 var thumb = ui.propPrefabDropdown.transform.Find("Thumb");
                 if (thumb == null && ui.propPrefabDropdown.template != null) thumb = ui.propPrefabDropdown.template.Find("Thumb");
             }
@@ -257,6 +262,21 @@ namespace RKS.RhythmParkour.UI.Timeline
             var pf = catalog != null ? catalog.GetPrefab(idx) : null;
             if (pf == null && levelData != null) pf = levelData.GetPrefab(idx, catalog);
             return pf != null ? pf.name : "—";
+        }
+
+        string GetTriggerPrefabName(int idx)
+        {
+            var catalog = ui.catalog;
+            var levelData = ui.levelData;
+            var pf = catalog != null ? catalog.GetTriggerPrefab(idx) : null;
+            if (pf == null && levelData != null) pf = levelData.GetTriggerPrefab(idx, catalog);
+            return pf != null ? pf.name : "—";
+        }
+
+        string GetEventPrefabName(ObstacleEvent ev)
+        {
+            if (ev.isTrigger) return GetTriggerPrefabName(ev.triggerPrefabIndex);
+            return GetPrefabName(ev.prefabIndex);
         }
 
         public void HidePropertiesPanel()
@@ -282,10 +302,20 @@ namespace RKS.RhythmParkour.UI.Timeline
             var ev = levelData.events[selectedIndex];
             var catalog = ui.catalog;
 
-            int total = (catalog != null ? catalog.Count : 0);
-            if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
-            if (total == 0) { ui.FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; }
-            int newPrefab = ev.prefabIndex;
+            bool triggersMode = ev.isTrigger;
+            int total = 0;
+            if (triggersMode)
+            {
+                total = (catalog != null ? catalog.TriggerCount : 0);
+                if (total == 0 && levelData != null) total = levelData.TriggerPrefabCount(catalog);
+            }
+            else
+            {
+                total = (catalog != null ? catalog.Count : 0);
+                if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
+            }
+            if (total == 0) { ui.FlashStatus(triggersMode ? "Нет префабов триггеров! Заполни triggerPrefabs в GlobalObstacleCatalog" : "Нет префабов! Заполни GlobalObstacleCatalog в Resources/"); return; }
+            int newPrefab = triggersMode ? ev.triggerPrefabIndex : ev.prefabIndex;
             if (ui.propPrefabDropdown != null && ui.propPrefabDropdown.options.Count > 0)
             {
                 if (ui.propPrefabDropdown.value < 0 || ui.propPrefabDropdown.value >= total) { ui.FlashStatus("Вид вне каталога"); return; }
@@ -309,7 +339,16 @@ namespace RKS.RhythmParkour.UI.Timeline
             {
                 if (ti < 0 || ti >= levelData.events.Count) continue;
                 var ee = levelData.events[ti];
-                ee.prefabIndex = newPrefab;
+                if (triggersMode)
+                {
+                    if (!ee.isTrigger) continue;
+                    ee.triggerPrefabIndex = newPrefab;
+                }
+                else
+                {
+                    if (ee.isTrigger) continue;
+                    ee.prefabIndex = newPrefab;
+                }
                 if (hasSpeed && Mathf.Abs(ee.speed - newSpeed) > 0.001f)
                 {
                     float hb = notes.GetHitBeat(ee);
@@ -327,7 +366,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             for (int i = 0; i < levelData.events.Count; i++) if (tgt.Contains(i) || levelData.events[i].prefabIndex == newPrefab) { }
             notes.RefreshNotes();
             ShowPropertiesPanel(selectedIndex);
-            ui.FlashStatus($"Вид → {GetPrefabName(newPrefab)}");
+            ui.FlashStatus(triggersMode ? $"Триггер → {GetTriggerPrefabName(newPrefab)}" : $"Вид → {GetPrefabName(newPrefab)}");
         }
 
         public void TogglePrefabGrid()
@@ -344,6 +383,14 @@ namespace RKS.RhythmParkour.UI.Timeline
             EnsureRefs();
             EnsurePrefabGrid();
             if (ui.prefabGridPanel == null) return;
+            int sel = notes.GetSelectedIndex();
+            var levelData = ui.levelData;
+            if (levelData != null && sel >= 0 && sel < levelData.events.Count && levelData.events[sel].isTrigger)
+            {
+                prefabGridTab = 1;
+                triggerTypePick = levelData.events[sel].triggerType == 2 ? 2 : 1;
+            }
+            EnsurePrefabGridTabs();
             RefreshPrefabGridThumbs();
             ui.prefabGridPanel.SetActive(true);
             var rootCanvas = ui.rootCanvas;
@@ -419,6 +466,127 @@ namespace RKS.RhythmParkour.UI.Timeline
             }
         }
 
+        void EnsurePrefabGridTabs()
+        {
+            if (ui.prefabGridPanel == null) return;
+            if (ui.prefabGridPanel.transform.Find("TabRow") != null && ui.prefabGridPanel.transform.Find("TrigTypeRow") != null)
+            {
+                RefreshPrefabGridTabs();
+                RefreshTrigTypeRow();
+                return;
+            }
+            Transform tabRowTf = ui.prefabGridPanel.transform.Find("TabRow");
+            GameObject tabRow;
+            if (tabRowTf != null)
+            {
+                tabRow = tabRowTf.gameObject;
+            }
+            else
+            {
+                tabRow = new GameObject("TabRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+                tabRow.transform.SetParent(ui.prefabGridPanel.transform, false);
+                tabRow.transform.SetSiblingIndex(1);
+            }
+            var hlg = tabRow.GetComponent<HorizontalLayoutGroup>();
+            if (hlg == null) hlg = tabRow.AddComponent<HorizontalLayoutGroup>();
+            hlg.spacing = 8;
+            hlg.childAlignment = TextAnchor.MiddleCenter;
+            hlg.childControlWidth = true;
+            hlg.childControlHeight = true;
+            hlg.childForceExpandWidth = true;
+            hlg.childForceExpandHeight = false;
+            var rle = tabRow.GetComponent<LayoutElement>();
+            if (rle == null) rle = tabRow.AddComponent<LayoutElement>();
+            rle.minHeight = 32;
+            if (tabRow.transform.Find("GridTab_0") == null)
+            {
+                var b0 = MakePropButton(tabRow.transform, "Препятствия", () => SetPrefabGridTab(0), new Color(0.16f, 0.22f, 0.32f, 1f));
+                b0.name = "GridTab_0";
+            }
+            if (tabRow.transform.Find("GridTab_1") == null)
+            {
+                var b1 = MakePropButton(tabRow.transform, "Триггеры", () => SetPrefabGridTab(1), new Color(0.16f, 0.22f, 0.32f, 1f));
+                b1.name = "GridTab_1";
+            }
+            Transform typeRowTf = ui.prefabGridPanel.transform.Find("TrigTypeRow");
+            GameObject typeRow;
+            if (typeRowTf != null)
+            {
+                typeRow = typeRowTf.gameObject;
+            }
+            else
+            {
+                typeRow = new GameObject("TrigTypeRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+                typeRow.transform.SetParent(ui.prefabGridPanel.transform, false);
+                typeRow.transform.SetSiblingIndex(2);
+            }
+            var tlg = typeRow.GetComponent<HorizontalLayoutGroup>();
+            if (tlg == null) tlg = typeRow.AddComponent<HorizontalLayoutGroup>();
+            tlg.spacing = 8;
+            tlg.childAlignment = TextAnchor.MiddleCenter;
+            tlg.childControlWidth = true;
+            tlg.childControlHeight = true;
+            tlg.childForceExpandWidth = true;
+            tlg.childForceExpandHeight = false;
+            var tle = typeRow.GetComponent<LayoutElement>();
+            if (tle == null) tle = typeRow.AddComponent<LayoutElement>();
+            tle.minHeight = 32;
+            if (typeRow.transform.Find("TrigType_1") == null)
+            {
+                var tb1 = MakePropButton(typeRow.transform, "Грав.Норм", () => SetTriggerTypePick(1), new Color(0.16f, 0.22f, 0.32f, 1f));
+                tb1.name = "TrigType_1";
+            }
+            if (typeRow.transform.Find("TrigType_2") == null)
+            {
+                var tb2 = MakePropButton(typeRow.transform, "Грав.Перев", () => SetTriggerTypePick(2), new Color(0.16f, 0.22f, 0.32f, 1f));
+                tb2.name = "TrigType_2";
+            }
+            RefreshPrefabGridTabs();
+            RefreshTrigTypeRow();
+        }
+
+        public void SetPrefabGridTab(int tab)
+        {
+            prefabGridTab = Mathf.Clamp(tab, 0, 1);
+            RefreshPrefabGridTabs();
+            RefreshTrigTypeRow();
+            RefreshPrefabGridThumbs();
+        }
+
+        public void SetTriggerTypePick(int type)
+        {
+            triggerTypePick = Mathf.Clamp(type, 1, 2);
+            RefreshTrigTypeRow();
+        }
+
+        void RefreshTrigTypeRow()
+        {
+            if (ui.prefabGridPanel == null) return;
+            var row = ui.prefabGridPanel.transform.Find("TrigTypeRow");
+            if (row == null) return;
+            row.gameObject.SetActive(prefabGridTab == 1);
+            for (int t = 1; t <= 2; t++)
+            {
+                var tf = row.Find("TrigType_" + t);
+                if (tf == null) continue;
+                var img = tf.GetComponent<Image>();
+                if (img != null) img.color = t == triggerTypePick ? new Color(0.2f, 0.6f, 0.3f, 1f) : new Color(0.16f, 0.22f, 0.32f, 1f);
+            }
+        }
+
+        void RefreshPrefabGridTabs()
+        {
+            if (ui.prefabGridPanel == null) return;
+            for (int t = 0; t <= 1; t++)
+            {
+                var tf = ui.prefabGridPanel.transform.Find("TabRow/GridTab_" + t);
+                if (tf == null) tf = ui.prefabGridPanel.transform.Find("GridTab_" + t);
+                if (tf == null) continue;
+                var img = tf.GetComponent<Image>();
+                if (img != null) img.color = t == prefabGridTab ? new Color(0.2f, 0.6f, 0.3f, 1f) : new Color(0.16f, 0.22f, 0.32f, 1f);
+            }
+        }
+
         void RefreshPrefabGridThumbs()
         {
             var prefabGridContainer = ui.prefabGridContainer;
@@ -427,17 +595,36 @@ namespace RKS.RhythmParkour.UI.Timeline
             var catalog = ui.catalog;
 
             for (int i = prefabGridContainer.childCount - 1; i >= 0; i--) Destroy(prefabGridContainer.GetChild(i).gameObject);
-            int total = (catalog != null ? catalog.Count : 0);
-            if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
+            bool triggersTab = prefabGridTab == 1;
+            int total = 0;
+            if (triggersTab)
+            {
+                total = (catalog != null ? catalog.TriggerCount : 0);
+                if (total == 0 && levelData != null) total = levelData.TriggerPrefabCount(catalog);
+            }
+            else
+            {
+                total = (catalog != null ? catalog.Count : 0);
+                if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
+            }
             if (total == 0)
             {
-                ui.FlashStatus("Нет префабов! Заполни GlobalObstacleCatalog в Resources/");
+                ui.FlashStatus(triggersTab ? "Нет префабов триггеров! Заполни triggerPrefabs в GlobalObstacleCatalog" : "Нет префабов! Заполни GlobalObstacleCatalog в Resources/");
                 return;
             }
             for (int i = 0; i < total; i++)
             {
-                var pf = catalog != null ? catalog.GetPrefab(i) : null;
-                if (pf == null && levelData != null) pf = levelData.GetPrefab(i, catalog);
+                GameObject pf = null;
+                if (triggersTab)
+                {
+                    pf = catalog != null ? catalog.GetTriggerPrefab(i) : null;
+                    if (pf == null && levelData != null) pf = levelData.GetTriggerPrefab(i, catalog);
+                }
+                else
+                {
+                    pf = catalog != null ? catalog.GetPrefab(i) : null;
+                    if (pf == null && levelData != null) pf = levelData.GetPrefab(i, catalog);
+                }
                 if (pf == null) continue;
                 string name = pf.name;
                 GameObject btnGO;
@@ -483,7 +670,13 @@ namespace RKS.RhythmParkour.UI.Timeline
                 btn.onClick.AddListener(() => { OnThumbClicked(idx); });
 
                 int sel = notes.GetSelectedIndex();
-                if (levelData != null && sel >= 0 && sel < levelData.events.Count && levelData.events[sel].prefabIndex == i)
+                bool selMatch = false;
+                if (levelData != null && sel >= 0 && sel < levelData.events.Count)
+                {
+                    var sev = levelData.events[sel];
+                    selMatch = triggersTab ? (sev.isTrigger && sev.triggerPrefabIndex == i) : (!sev.isTrigger && sev.prefabIndex == i);
+                }
+                if (selMatch)
                 {
                     var ol = btnGO.GetComponent<Outline>(); if (ol == null) ol = btnGO.AddComponent<Outline>();
                     ol.effectColor = Color.green; ol.effectDistance = new Vector2(3, 3);
@@ -497,13 +690,32 @@ namespace RKS.RhythmParkour.UI.Timeline
             int selectedIndex = notes.GetSelectedIndex();
             if (levelData == null || selectedIndex < 0 || selectedIndex >= levelData.events.Count) return;
             var tgt = notes.GetApplyTargets();
-            foreach (var ti in tgt) { if (ti < 0 || ti >= levelData.events.Count) continue; var e = levelData.events[ti]; e.prefabIndex = idx; levelData.events[ti] = e; }
+            bool triggersTab = prefabGridTab == 1;
+            foreach (var ti in tgt)
+            {
+                if (ti < 0 || ti >= levelData.events.Count) continue;
+                var e = levelData.events[ti];
+                if (triggersTab)
+                {
+                    e.isTrigger = true;
+                    e.triggerPrefabIndex = idx;
+                    e.triggerType = triggerTypePick;
+                }
+                else
+                {
+                    e.isTrigger = false;
+                    e.triggerType = 0;
+                    e.prefabIndex = idx;
+                }
+                levelData.events[ti] = e;
+            }
             if (ui.propPrefabDropdown != null && ui.propPrefabDropdown.options.Count > idx) ui.propPrefabDropdown.SetValueWithoutNotify(idx);
             notes.RefreshNotes();
             ShowPropertiesPanel(selectedIndex);
             if (ui.closeGridOnSelect) HidePrefabGrid();
             ui.preview?.ForceRefresh();
-            ui.FlashStatus($"Вид → {GetPrefabName(idx)}");
+            if (triggersTab) ui.FlashStatus($"Триггер → {GetTriggerPrefabName(idx)}");
+            else ui.FlashStatus($"Вид → {GetPrefabName(idx)}");
         }
 
         void OnColorButtonClicked()
@@ -532,15 +744,35 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (propPrefabDropdown == null) return;
             var levelData = ui.levelData;
             var catalog = ui.catalog;
+            int sel = notes.GetSelectedIndex();
+            bool triggersMode = levelData != null && sel >= 0 && sel < levelData.events.Count && levelData.events[sel].isTrigger;
             propPrefabDropdown.ClearOptions();
-            int total = (catalog != null ? catalog.Count : 0);
-            if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
+            int total = 0;
+            if (triggersMode)
+            {
+                total = (catalog != null ? catalog.TriggerCount : 0);
+                if (total == 0 && levelData != null) total = levelData.TriggerPrefabCount(catalog);
+            }
+            else
+            {
+                total = (catalog != null ? catalog.Count : 0);
+                if (total == 0 && levelData != null) total = levelData.PrefabCount(catalog);
+            }
             if (total == 0) return;
             var opts = new List<string>();
             for (int i = 0; i < total; i++)
             {
-                var pf = catalog != null ? catalog.GetPrefab(i) : null;
-                if (pf == null && levelData != null) pf = levelData.GetPrefab(i, catalog);
+                GameObject pf = null;
+                if (triggersMode)
+                {
+                    pf = catalog != null ? catalog.GetTriggerPrefab(i) : null;
+                    if (pf == null && levelData != null) pf = levelData.GetTriggerPrefab(i, catalog);
+                }
+                else
+                {
+                    pf = catalog != null ? catalog.GetPrefab(i) : null;
+                    if (pf == null && levelData != null) pf = levelData.GetPrefab(i, catalog);
+                }
                 if (pf == null) continue;
                 string name = $"{i}: {pf.name}";
                 opts.Add(name);
