@@ -238,7 +238,8 @@ namespace RKS.RhythmParkour.Rhythm
             {
                 if (transfer.fromEditor || levelData == null)
                 {
-                    levelData = transfer.levelData;
+                    try { levelData = transfer.levelData.CloneDeep(); }
+                    catch { levelData = transfer.levelData; }
                     Debug.Log($"[Transfer] IsGameScene взял уровень '{levelData.fullTitle}' из редактора ({transfer.sourceScene})");
                 }
             }
@@ -468,6 +469,12 @@ namespace RKS.RhythmParkour.Rhythm
             else if (sm == null) Debug.Log("[Rhythm] Уровень завершён (нет RhythmScoreManager)", this);
         }
 
+        void LoadSceneThroughTransition(string sceneName)
+        {
+            if (Transition != null) Transition.LoadScene(sceneName);
+            else SceneManager.LoadScene(sceneName);
+        }
+
         protected override void Update()
         {
 
@@ -491,11 +498,11 @@ namespace RKS.RhythmParkour.Rhythm
                         if (n == target || n == "IsLevelEditorScene" || n == "LevelEditor")
                         { found = n; canLoad = true; break; }
                     }
-                    if (canLoad) SceneManager.LoadScene(found);
+                    if (canLoad) LoadSceneThroughTransition(found);
                     else
                     {
 
-                        try { SceneManager.LoadScene(target); } catch { SceneManager.LoadScene("IsLevelEditorScene"); }
+                        try { LoadSceneThroughTransition(target); } catch { LoadSceneThroughTransition("IsLevelEditorScene"); }
                     }
                     return;
                 }
@@ -705,62 +712,5 @@ namespace RKS.RhythmParkour.Rhythm
             Spawn(evt);
         }
 
-#if UNITY_EDITOR
-        void OnDrawGizmos()
-        {
-            UpdateTrackBounds();
-
-            if (trackFloor != null)
-            {
-                Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.15f);
-                Vector3 center = trackFloor.position;
-                Vector3 size = new Vector3(Mathf.Abs(trackMaxX - trackMinX) + 0.1f, 0.2f, trackFloor.localScale.z);
-                Gizmos.DrawCube(center, size);
-                Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.6f);
-                Gizmos.DrawWireCube(center, size);
-            }
-            else
-            {
-                Gizmos.color = new Color(0.2f, 0.6f, 1f, 0.15f);
-                float w = Mathf.Abs(trackMaxX - trackMinX);
-                Gizmos.DrawCube(new Vector3((trackMinX + trackMaxX) * 0.5f, 0f, 25f), new Vector3(w, 0.2f, 60f));
-            }
-            if (spawnPoint != null)
-            {
-                Gizmos.color = Color.green;
-                Gizmos.DrawWireCube(spawnPoint.position, Vector3.one * 1.2f);
-                Gizmos.DrawLine(spawnPoint.position, spawnPoint.position + dirNormalized * 3f);
-                UnityEditor.Handles.Label(spawnPoint.position + Vector3.up * 1.5f, "SPAWN");
-
-                Gizmos.color = new Color(0, 1, 0, 0.25f);
-                Gizmos.DrawLine(new Vector3(trackMinX, spawnPoint.position.y, spawnPoint.position.z), new Vector3(trackMaxX, spawnPoint.position.y, spawnPoint.position.z));
-            }
-            if (despawnPoint != null)
-            {
-                Gizmos.color = Color.red;
-                Gizmos.DrawWireCube(despawnPoint.position, Vector3.one * 1.2f);
-                UnityEditor.Handles.Label(despawnPoint.position + Vector3.up * 1.5f, "DESPAWN");
-            }
-            if (hitTrigger != null)
-            {
-                Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.9f);
-                Gizmos.DrawWireCube(hitTrigger.position, new Vector3(6f, 2f, 1f));
-                UnityEditor.Handles.Label(hitTrigger.position + Vector3.up * 2.2f, "HIT TRIGGER — тут нота в момент бита");
-                Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.25f);
-                Gizmos.DrawLine(hitTrigger.position + Vector3.left * 3f, hitTrigger.position + Vector3.right * 3f);
-            }
-            if (spawnPoint != null && despawnPoint != null)
-            {
-                Gizmos.color = new Color(0, 1, 0.6f, 0.35f);
-                Gizmos.DrawLine(spawnPoint.position, despawnPoint.position);
-                if (hitTrigger != null)
-                {
-                    Gizmos.color = new Color(1f, 0.85f, 0.15f, 0.5f);
-                    Gizmos.DrawLine(spawnPoint.position, hitTrigger.position);
-                    UnityEditor.Handles.Label(Vector3.Lerp(spawnPoint.position, hitTrigger.position, 0.5f) + Vector3.up * 0.5f, $"{GetSpawnToHitDistance():0.0}м");
-                }
-            }
-        }
-#endif
     }
 }

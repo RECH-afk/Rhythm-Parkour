@@ -168,13 +168,13 @@ namespace RKS.RhythmParkour.UI.Timeline
             int captured = index;
             var btn = go.GetComponent<Button>(); if (btn == null) btn = go.AddComponent<Button>();
             btn.transition = Selectable.Transition.ColorTint; var colors = btn.colors; colors.highlightedColor = Color.white; btn.colors = colors;
-            btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
+            btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
             var et = go.GetComponent<EventTrigger>(); if (et == null) et = go.AddComponent<EventTrigger>();
             var entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
             entry.callback.AddListener((data) => { var ped = (PointerEventData)data; if (ped.button == PointerEventData.InputButton.Right) RemoveNoteAt(captured); });
             et.triggers.Add(entry);
             var hoverEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (ui.statusLabel != null) ui.statusLabel.text = $"{ui.FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Ctrl+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
+            hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (ui.statusLabel != null) ui.statusLabel.text = $"{ui.FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Alt+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
             et.triggers.Add(hoverEntry);
             var exitEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
             exitEntry.callback.AddListener((_) => ui.ClearStatus()); et.triggers.Add(exitEntry);
@@ -231,7 +231,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             {
                 btn.onClick.RemoveAllListeners();
                 int captured = index;
-                btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
+                btn.onClick.AddListener(() => { bool multi = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.LeftShift); if (multi) ToggleSelectNote(captured); else SelectNote(captured); });
             }
             var et = go.GetComponent<EventTrigger>();
             if (et != null)
@@ -242,7 +242,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                 entry.callback.AddListener((data) => { var ped = (PointerEventData)data; if (ped.button == PointerEventData.InputButton.Right) RemoveNoteAt(captured); });
                 et.triggers.Add(entry);
                 var hoverEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-                hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (ui.statusLabel != null) ui.statusLabel.text = $"{ui.FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Ctrl+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
+                hoverEntry.callback.AddListener((_) => { float ht = GetHitTime(ev); if (ui.statusLabel != null) ui.statusLabel.text = $"{ui.FormatTime(ht)} • #{ev.prefabIndex} • {ev.speed:0}m/s — ЛКМ выбор, Alt+клик множ., ПКМ удалить, тащи (Ctrl свободно)"; });
                 et.triggers.Add(hoverEntry);
                 var exitEntry = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
                 exitEntry.callback.AddListener((_) => ui.ClearStatus()); et.triggers.Add(exitEntry);
@@ -262,7 +262,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             dragNoteIdx = idx; isDraggingNote = true;
             if (!selectedIndices.Contains(idx))
             {
-                bool multi = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftShift);
+                bool multi = Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.LeftShift);
                 if (!multi) { selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; props.ShowPropertiesPanel(idx); }
                 else { selectedIndices.Add(idx); selectedIndex = idx; props.ShowPropertiesPanel(idx); }
             }
@@ -400,7 +400,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             return GetColorForPrefab(ev.prefabIndex);
         }
 
-        public void SelectNote(int idx) { var levelData = ui.levelData; selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; RefreshNotes(); if (idx >= 0 && levelData != null && idx < levelData.events.Count) { ui.FlashStatus($"Выбрано #{idx}  {ui.FormatTime(GetHitTime(levelData.events[idx]))} — Ctrl+клик множ."); props.ShowPropertiesPanel(idx); } else props.HidePropertiesPanel(); }
+        public void SelectNote(int idx) { var levelData = ui.levelData; selectedIndices.Clear(); selectedIndices.Add(idx); selectedIndex = idx; RefreshNotes(); if (idx >= 0 && levelData != null && idx < levelData.events.Count) { ui.FlashStatus($"Выбрано #{idx}  {ui.FormatTime(GetHitTime(levelData.events[idx]))} — Alt+клик множ."); props.ShowPropertiesPanel(idx); } else props.HidePropertiesPanel(); }
         public bool HasSelection() => selectedIndex >= 0 || selectedIndices.Count > 0;
 
         public void SelectAllNotes()

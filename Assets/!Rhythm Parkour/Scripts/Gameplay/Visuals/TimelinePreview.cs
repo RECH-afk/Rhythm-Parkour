@@ -29,8 +29,6 @@ namespace RKS.RhythmParkour.Rhythm
         public bool previewEnabled = false;
         [Header("Indicator")]
         public TextMeshProUGUI previewToggleLabel;
-        public Color enabledColor = new Color(0.2f, 0.7f, 0.3f, 1f);
-        public Color disabledColor = new Color(0.3f, 0.3f, 0.3f, 1f);
         [Tooltip("Показывать препятствия за N секунд до хита и после")]
         public float visibleAhead = 10f;
         public float visibleBehind = 2f;

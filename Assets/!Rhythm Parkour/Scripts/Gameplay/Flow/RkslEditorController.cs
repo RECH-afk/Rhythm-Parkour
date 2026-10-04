@@ -57,8 +57,17 @@ namespace RKS.RhythmParkour.Rhythm
         public TextMeshProUGUI statusText;
 
         [Header("Test Play")]
-        public Button testPlayButton;
         public string gameSceneName = "IsGameScene";
+
+        [Header("Exit")]
+        public GameObject exitConfirmWindow;
+        public string menuSceneName = "IsMenuScene";
+
+        Button testPlayButton;
+        Button saveButton;
+        Button exitButton;
+        int savedFingerprint;
+        bool hasSavedState;
 
         string currentAudioPath;
         string currentVideoPath;
@@ -100,9 +109,10 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             if (audioLoader != null) audioLoader.onFileLoaded.AddListener(OnAudioLoaded);
             if (videoLoader != null) videoLoader.onFileLoaded.AddListener((p, c) => { currentVideoPath = p; UpdateStatus($"Видео: {Path.GetFileName(p)}"); if (levelData != null) levelData.videoPath = p; PreviewVideo(p); });
             if (coverLoader != null) coverLoader.onFileLoaded.AddListener((p, c) => { currentCoverPath = p; UpdateStatus($"Обложка: {Path.GetFileName(p)}"); LoadCoverPreview(p); });
+            SubscribeRkslLoaders();
 
             EnsureVisualSettings();
-            WireTestButton();
+            if (exitConfirmWindow != null) exitConfirmWindow.SetActive(false);
             RestorePathsFromData();
 
             if (levelData != null) PopulateUIFromData();
@@ -112,8 +122,36 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             UpdateStatus("Готов — загрузите аудио и создавайте уровень (SAVE .RKSL)");
 
             if (transfer != null && transfer.hasLevel && transfer.levelData != null && timelineUI != null) { timelineUI.levelData = transfer.levelData; timelineUI.RefreshAll(); }
+            RestoreTimelineAudio();
 
             if (levelData != null && visual != null) visual.Apply(levelData, previewVideo, true);
+            CaptureSavedState();
+
+            if (titleInput != null) titleInput.onValueChanged.AddListener(OnMetadataInputChanged);
+            if (artistInput != null) artistInput.onValueChanged.AddListener(OnMetadataInputChanged);
+            if (creatorInput != null) creatorInput.onValueChanged.AddListener(OnMetadataInputChanged);
+            if (timelineUI != null && timelineUI.fileLoader != null) timelineUI.fileLoader.onFileLoaded.AddListener(OnTimelineFileLoaded);
+            ResolveButtons();
+        }
+
+        void SubscribeRkslLoaders()
+        {
+            foreach (var fl in UnityEngine.Object.FindObjectsByType<FileLoader>(UnityEngine.FindObjectsSortMode.None))
+            {
+                if (fl == null) continue;
+                if ((fl.AllowedTypes & AllowedFileTypes.Rksl) == 0) continue;
+                fl.onRkslLoaded.RemoveListener(LoadRkslFromPath);
+                fl.onRkslLoaded.AddListener(LoadRkslFromPath);
+            }
+        }
+
+        void UnsubscribeRkslLoaders()
+        {
+            foreach (var fl in UnityEngine.Object.FindObjectsByType<FileLoader>(UnityEngine.FindObjectsSortMode.None))
+            {
+                if (fl == null) continue;
+                fl.onRkslLoaded.RemoveListener(LoadRkslFromPath);
+            }
         }
 
         void ValidateLoader(FileLoader loader, AllowedFileTypes expected, string field)
@@ -128,27 +166,146 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             if (visualSettings == null) Debug.LogWarning("[RkslEditor] LevelEditorVisualSettings не забинден — добавь в EditorInstaller.", this);
         }
 
-        void WireTestButton()
+        void ResolveButtons()
         {
             if (testPlayButton == null)
             {
                 var go = GameObject.Find("ButtonTest");
                 if (go != null) testPlayButton = go.GetComponent<Button>();
             }
-            if (testPlayButton == null) return;
-            testPlayButton.interactable = true;
-            testPlayButton.onClick.RemoveListener(TestPlayLevel);
-            testPlayButton.onClick.AddListener(TestPlayLevel);
+            if (saveButton == null)
+            {
+                var go = GameObject.Find("ButtonSave");
+                if (go != null) saveButton = go.GetComponent<Button>();
+            }
+            if (exitButton == null)
+            {
+                var go = GameObject.Find("ButtonExit");
+                if (go != null) exitButton = go.GetComponent<Button>();
+            }
+            if (testPlayButton != null && testPlayButton.onClick.GetPersistentEventCount() == 0)
+            {
+                testPlayButton.onClick.RemoveListener(TestPlayLevel);
+                testPlayButton.onClick.AddListener(TestPlayLevel);
+            }
+            if (exitButton != null && exitButton.onClick.GetPersistentEventCount() == 0)
+            {
+                exitButton.onClick.RemoveListener(RequestExit);
+                exitButton.onClick.AddListener(RequestExit);
+            }
+            RefreshButtonStates();
         }
+
+        void OnMetadataInputChanged(string _) => RefreshButtonStates();
+
+        void OnTimelineFileLoaded(string _p, AudioClip _c) => RefreshButtonStates();
+
+        void RefreshButtonStates()
+        {
+            if (timelineUI != null && timelineUI.levelData != null && levelData == null) levelData = timelineUI.levelData;
+            string title = titleInput != null ? titleInput.text : (levelData != null ? levelData.fullTitle : "");
+            var music = levelData != null ? levelData.music : null;
+            if (music == null) music = currentAudioClip;
+            bool ready = !string.IsNullOrEmpty(title) && music != null;
+            if (testPlayButton != null) testPlayButton.interactable = ready;
+            if (saveButton != null) saveButton.interactable = ready;
+        }
+
+        public void RequestExit()
+        {
+            SyncLevelFromUI();
+            if (IsLevelEmpty() || !HasUnsavedChanges()) ExitNow();
+            else if (exitConfirmWindow != null) exitConfirmWindow.SetActive(true);
+            else ExitNow();
+        }
+
+        public void ConfirmExit()
+        {
+            ExitNow();
+        }
+
+        public void CancelExit()
+        {
+            if (exitConfirmWindow != null) exitConfirmWindow.SetActive(false);
+        }
+
+        void ExitNow()
+        {
+            if (exitConfirmWindow != null) exitConfirmWindow.SetActive(false);
+            if (Transition != null) Transition.LoadScene(menuSceneName);
+            else UnityEngine.SceneManagement.SceneManager.LoadScene(menuSceneName);
+        }
+
+        void SyncLevelFromUI()
+        {
+            if (timelineUI != null && timelineUI.levelData != null) levelData = timelineUI.levelData;
+            if (levelData == null) return;
+            if (titleInput != null) levelData.fullTitle = titleInput.text;
+            if (artistInput != null) levelData.songAuthor = artistInput.text;
+            if (creatorInput != null) levelData.mapAuthor = creatorInput.text;
+            if (levelData.music == null && currentAudioClip != null) levelData.music = currentAudioClip;
+        }
+
+        bool HasRequiredMetadata()
+        {
+            SyncLevelFromUI();
+            if (levelData == null) return false;
+            return !string.IsNullOrEmpty(levelData.fullTitle) && levelData.music != null;
+        }
+
+        bool IsLevelEmpty()
+        {
+            if (levelData == null) return true;
+            return levelData.events.Count == 0 && levelData.music == null && currentAudioClip == null;
+        }
+
+        int ComputeLevelFingerprint()
+        {
+            unchecked
+            {
+                int h = 17;
+                if (levelData == null) return h;
+                h = h * 31 + (levelData.fullTitle ?? "").GetHashCode();
+                h = h * 31 + (levelData.songAuthor ?? "").GetHashCode();
+                h = h * 31 + (levelData.mapAuthor ?? "").GetHashCode();
+                h = h * 31 + (levelData.audioPath ?? "").GetHashCode();
+                h = h * 31 + (levelData.videoPath ?? "").GetHashCode();
+                h = h * 31 + (levelData.music != null ? levelData.music.name.GetHashCode() : 0);
+                h = h * 31 + levelData.events.Count;
+                foreach (var e in levelData.events)
+                {
+                    h = h * 31 + e.time.GetHashCode();
+                    h = h * 31 + e.beat.GetHashCode();
+                    h = h * 31 + e.prefabIndex;
+                    h = h * 31 + e.speed.GetHashCode();
+                    h = h * 31 + e.triggerType + (e.isTrigger ? 100000 : 0) + e.triggerPrefabIndex * 10;
+                }
+                return h;
+            }
+        }
+
+        void CaptureSavedState()
+        {
+            SyncLevelFromUI();
+            savedFingerprint = ComputeLevelFingerprint();
+            hasSavedState = true;
+        }
+
+        bool HasUnsavedChanges()
+        {
+            if (!hasSavedState) return !IsLevelEmpty();
+            SyncLevelFromUI();
+            return ComputeLevelFingerprint() != savedFingerprint;
+        }
+
+
 
         void RestorePathsFromData()
         {
             if (levelData == null) return;
+            if (levelData.music != null) currentAudioClip = levelData.music;
             if (!string.IsNullOrEmpty(levelData.audioPath) && File.Exists(levelData.audioPath))
-            {
                 currentAudioPath = levelData.audioPath;
-                if (levelData.music != null) currentAudioClip = levelData.music;
-            }
             if (!string.IsNullOrEmpty(levelData.videoPath) && File.Exists(levelData.videoPath))
                 currentVideoPath = levelData.videoPath;
             if (levelData.cover != null)
@@ -158,18 +315,22 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             }
         }
 
+        void RestoreTimelineAudio()
+        {
+            if (timelineUI == null || levelData == null) return;
+            if (timelineUI.audioSource != null && levelData.music != null)
+            {
+                timelineUI.audioSource.clip = levelData.music;
+                timelineUI.audioSource.Stop();
+            }
+            timelineUI.Seek(0);
+        }
+
         public void TestPlayLevel()
         {
             if (timelineUI != null && timelineUI.levelData != null) levelData = timelineUI.levelData;
             if (levelData == null) { UpdateStatus("Нет данных уровня для теста"); return; }
-            if (levelData.music == null)
-            {
-                if (currentAudioClip != null) levelData.music = currentAudioClip;
-                else { UpdateStatus("Загрузите аудио перед тестом"); return; }
-            }
-            if (titleInput != null) levelData.fullTitle = titleInput.text;
-            if (artistInput != null) levelData.songAuthor = artistInput.text;
-            if (creatorInput != null) levelData.mapAuthor = creatorInput.text;
+            if (!HasRequiredMetadata()) { UpdateStatus("Заполните метаданные: название трека и аудио"); return; }
             if (string.IsNullOrEmpty(levelData.audioPath)) levelData.audioPath = currentAudioPath;
             if (string.IsNullOrEmpty(levelData.videoPath)) levelData.videoPath = currentVideoPath;
             if (timelineUI != null) timelineUI.levelData = levelData;
@@ -193,8 +354,14 @@ if (titleInput == null || artistInput == null || creatorInput == null)
 
         protected override void OnDestroy()
         {
+            if (titleInput != null) titleInput.onValueChanged.RemoveListener(OnMetadataInputChanged);
+            if (artistInput != null) artistInput.onValueChanged.RemoveListener(OnMetadataInputChanged);
+            if (creatorInput != null) creatorInput.onValueChanged.RemoveListener(OnMetadataInputChanged);
+            if (timelineUI != null && timelineUI.fileLoader != null) timelineUI.fileLoader.onFileLoaded.RemoveListener(OnTimelineFileLoaded);
+            UnsubscribeRkslLoaders();
             if (audioLoader != null) audioLoader.onFileLoaded.RemoveListener(OnAudioLoaded);
             if (testPlayButton != null) testPlayButton.onClick.RemoveListener(TestPlayLevel);
+            if (exitButton != null) exitButton.onClick.RemoveListener(RequestExit);
             base.OnDestroy();
         }
 
@@ -213,6 +380,7 @@ if (timelineUI.levelData.events.Count > 0 && string.IsNullOrEmpty(timelineUI.lev
                 }
             }
             UpdateStatus($"Аудио: {Path.GetFileName(path)} {clip.length:0.0}с");
+            RefreshButtonStates();
         }
 
         void LoadCoverPreview(string path)
@@ -280,15 +448,20 @@ if (timelineUI.levelData.events.Count > 0 && string.IsNullOrEmpty(timelineUI.lev
                 timelineUI.levelData = levelData;
                 timelineUI.RefreshAll();
             }
+            if (audioLoader != null) audioLoader.Clear();
+            if (videoLoader != null) videoLoader.Clear();
+            if (coverLoader != null) coverLoader.Clear();
             UpdateStatus("Новый уровень — загрузите аудио");
+            CaptureSavedState();
+            RefreshButtonStates();
         }
 
-        public void SaveRksl()
+        public bool SaveRksl()
         {
 
             if (timelineUI != null && timelineUI.levelData != null) levelData = timelineUI.levelData;
             if (levelData == null && timelineUI != null) levelData = timelineUI.levelData;
-            if (levelData == null) { UpdateStatus("Нет данных уровня"); return; }
+            if (levelData == null) { UpdateStatus("Нет данных уровня"); return false; }
 
             if (timelineUI != null && timelineUI.levelData != levelData) timelineUI.levelData = levelData;
 
@@ -296,17 +469,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             if (artistInput != null) levelData.songAuthor = artistInput.text;
             if (creatorInput != null) levelData.mapAuthor = creatorInput.text;
 
-            if (string.IsNullOrEmpty(levelData.fullTitle))
-            {
-                UpdateStatus("Введите название трека!");
-                return;
-            }
-            if (levelData.music == null && currentAudioClip != null) levelData.music = currentAudioClip;
-            if (levelData.music == null)
-            {
-                UpdateStatus("Загрузите аудио!");
-                return;
-            }
+            if (!HasRequiredMetadata()) { UpdateStatus("Заполните метаданные: название трека и аудио"); return false; }
 
             if (string.IsNullOrEmpty(currentAudioPath) && audioLoader != null) currentAudioPath = audioLoader.CurrentPath;
             if (string.IsNullOrEmpty(currentVideoPath) && videoLoader != null) currentVideoPath = videoLoader.CurrentPath;
@@ -319,7 +482,7 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
 
 #if UNITY_EDITOR
             string path = EditorUtility.SaveFilePanel("Сохранить .rksl", "", defaultName + ".rksl", "rksl");
-            if (string.IsNullOrEmpty(path)) return;
+            if (string.IsNullOrEmpty(path)) return false;
 #else
             string dir = Path.Combine(Application.persistentDataPath, "Levels");
             Directory.CreateDirectory(dir);
@@ -334,8 +497,14 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             string videoSrc = !string.IsNullOrEmpty(currentVideoPath) ? currentVideoPath : levelData.videoPath;
             string coverSrc = !string.IsNullOrEmpty(currentCoverPath) ? currentCoverPath : null;
             bool ok = Store.Save(path, manifest, audioSrc, videoSrc, coverSrc, currentCoverSprite ?? levelData.cover);
-            if (ok) UpdateStatus($"Сохранено: {Path.GetFileName(path)}");
+            if (ok) { UpdateStatus($"Сохранено: {Path.GetFileName(path)}"); CaptureSavedState(); }
             else UpdateStatus("Ошибка сохранения");
+            return ok;
+        }
+
+        public void SaveAndExit()
+        {
+            if (SaveRksl()) ExitNow();
         }
 
         public void LoadRkslDialog()
@@ -391,19 +560,26 @@ AudioClip clip = null;
 var data = Store.ToRuntimeData(manifest, clip, null, coverSpr);
             data.audioPath = audioPath;
             data.videoPath = videoPath;
+            if (string.IsNullOrEmpty(data.fullTitle))
+                data.fullTitle = Path.GetFileNameWithoutExtension(rkslPath);
 
 levelData = data;
             if (timelineUI != null) timelineUI.levelData = data;
             if (previewManager != null) previewManager.levelData = data;
 
-            if (titleInput != null) titleInput.text = manifest.title;
-            if (artistInput != null) artistInput.text = manifest.artist;
-            if (creatorInput != null) creatorInput.text = manifest.creator;
-            if (coverPreviewImage != null && coverSpr != null) coverPreviewImage.sprite = coverSpr;
-
             currentAudioPath = audioPath; currentVideoPath = videoPath; currentCoverPath = coverPath;
             currentAudioClip = clip; currentCoverSprite = coverSpr;
+            RestorePathsFromData();
 
+            if (audioLoader != null) audioLoader.SetLoadedFile(audioPath);
+            if (videoLoader != null) videoLoader.SetLoadedFile(videoPath);
+            if (coverLoader != null) coverLoader.SetLoadedFile(coverPath);
+            if (titleInput != null) titleInput.text = data.fullTitle;
+            if (artistInput != null) artistInput.text = data.songAuthor;
+            if (creatorInput != null) creatorInput.text = data.mapAuthor;
+            if (coverPreviewImage != null && coverSpr != null) coverPreviewImage.sprite = coverSpr;
+
+            RestoreTimelineAudio();
             if (timelineUI != null)
             {
                 timelineUI.RefreshAll();
@@ -415,7 +591,9 @@ levelData = data;
             if (!string.IsNullOrEmpty(videoPath) && File.Exists(videoPath))
                 PreviewVideo(videoPath);
 
-            UpdateStatus($"Загружен: {manifest.title} ({manifest.events.Count} нот)");
+            UpdateStatus($"Загружен: {data.fullTitle} ({manifest.events.Count} нот)");
+            CaptureSavedState();
+            RefreshButtonStates();
 
             if (Save != null)
             {

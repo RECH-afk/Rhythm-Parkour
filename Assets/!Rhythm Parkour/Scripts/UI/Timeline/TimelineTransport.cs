@@ -14,10 +14,8 @@ namespace RKS.RhythmParkour.UI.Timeline
         private float scrubSavedVolume = 1f;
         private bool scrubWasPlaying;
         private Vector2 lastScrubScreenPos;
-        private float lastScrubMoveTime;
-        private bool scrubPausedDueToStill;
+        private float lastScrubTargetTime;
         private const float scrubStillThresholdPxSq = 4f;
-        private const float scrubStationaryPauseDelay = 0.18f;
 
         protected override void Awake()
         {
@@ -54,12 +52,8 @@ namespace RKS.RhythmParkour.UI.Timeline
             {
                 if (isScrubbingWaveform && ui.enableScrubAudio)
                 {
-                    if (scrubPausedDueToStill) { }
-                    else
-                    {
-                        if (Mathf.Abs(audioSource.time - time) > 0.012f) try { audioSource.time = time; } catch { audioSource.time = time; }
-                        if (!audioSource.isPlaying) audioSource.Play();
-                    }
+                    if (Mathf.Abs(audioSource.time - time) > 0.012f) try { audioSource.time = time; } catch { audioSource.time = time; }
+                    if (!audioSource.isPlaying) audioSource.Play();
                 }
                 else
                 {
@@ -96,6 +90,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (audioSource.clip != clip) audioSource.clip = clip;
             audioSource.time = Mathf.Clamp(t, 0f, clip.length - 0.02f);
             audioSource.volume = 1f;
+            audioSource.loop = ui.loopPlayback;
             audioSource.Play();
             currentTime = audioSource.time;
             UpdatePlayPauseLabel();
@@ -115,8 +110,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             wasPlayingBeforeScrub = audioSource != null && audioSource.isPlaying;
             scrubWasPlaying = wasPlayingBeforeScrub;
             lastScrubScreenPos = Input.mousePosition;
-            lastScrubMoveTime = Time.unscaledTime;
-            scrubPausedDueToStill = false;
+            lastScrubTargetTime = currentTime;
             if (audioSource == null || audioSource.clip == null) return;
             if (ui.enableScrubAudio)
             {
@@ -144,6 +138,7 @@ namespace RKS.RhythmParkour.UI.Timeline
                 else { if (!audioSource.isPlaying) { try { audioSource.time = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f); } catch { } audioSource.Play(); } }
             }
             else { if (wasPlayingBeforeScrub && !audioSource.isPlaying) { try { audioSource.time = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f); } catch { } audioSource.Play(); } }
+            if (audioSource != null && audioSource.clip != null) audioSource.loop = ui.loopPlayback;
             wasPlayingBeforeScrub = false;
         }
 
@@ -159,45 +154,19 @@ namespace RKS.RhythmParkour.UI.Timeline
             Seek(t, true);
             BeginScrub();
             lastScrubScreenPos = screenPos;
-            lastScrubMoveTime = Time.unscaledTime;
+            lastScrubTargetTime = t;
         }
 
         public void ScrubMoveTo(float t, Vector2 screenPos)
         {
-            var audioSource = ui.audioSource;
             float sq = (screenPos - lastScrubScreenPos).sqrMagnitude;
-            bool moved = sq > scrubStillThresholdPxSq || Mathf.Abs(t - currentTime) > 0.006f;
-            if (moved)
-            {
-                ui.UpdateAutoscrollLockFromScreenPos(screenPos);
-                lastScrubScreenPos = screenPos;
-                lastScrubMoveTime = Time.unscaledTime;
-                if (scrubPausedDueToStill && ui.enableScrubAudio && audioSource != null && audioSource.clip != null)
-                {
-                    scrubPausedDueToStill = false;
-                    audioSource.volume = Mathf.Clamp01(ui.scrubVolume);
-                    try { audioSource.time = Mathf.Clamp(t, 0f, audioSource.clip.length - 0.02f); } catch { audioSource.time = t; }
-                    if (!audioSource.isPlaying) audioSource.Play();
-                }
-                Seek(t, true);
-            }
-            else
-            {
-                if (ui.enableScrubAudio && audioSource != null && audioSource.isPlaying && Time.unscaledTime - lastScrubMoveTime > scrubStationaryPauseDelay)
-                {
-                    audioSource.Pause();
-                    scrubPausedDueToStill = true;
-                }
-            }
-        }
-
-        public void TickScrubStillness()
-        {
-            var audioSource = ui.audioSource;
-            if (isScrubbingWaveform && ui.enableScrubAudio && audioSource != null && audioSource.isPlaying && !scrubPausedDueToStill)
-            {
-                if (Time.unscaledTime - lastScrubMoveTime > scrubStationaryPauseDelay) { audioSource.Pause(); scrubPausedDueToStill = true; }
-            }
+            bool screenMoved = sq > scrubStillThresholdPxSq;
+            bool timeJumped = Mathf.Abs(t - lastScrubTargetTime) > 0.006f;
+            if (!screenMoved && !timeJumped) return;
+            lastScrubScreenPos = screenPos;
+            lastScrubTargetTime = t;
+            ui.UpdateAutoscrollLockFromScreenPos(screenPos);
+            Seek(t, true);
         }
 
         public void TickLoop()
@@ -245,18 +214,7 @@ namespace RKS.RhythmParkour.UI.Timeline
 
         public float GetTimeFromMouseHeader(Vector2 screenPos)
         {
-            var playheadHeader = ui.playheadHeader;
-            var timelineContent = ui.timelineContent;
-            var waveformRect = ui.waveformRect;
-            RectTransform refRect = playheadHeader != null ? playheadHeader : (timelineContent != null ? timelineContent : waveformRect);
-            if (refRect == null) return currentTime;
-            Camera cam = ui.GetCanvasCamera();
-            Vector2 local;
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(refRect, screenPos, cam, out local)) return currentTime;
-            Rect rect = refRect.rect;
-            float norm = Mathf.InverseLerp(rect.xMin, rect.xMax, local.x);
-            norm = Mathf.Clamp01(norm);
-            return norm * ui.GetClipLength();
+            return ui.GetTimeFromMouse(screenPos);
         }
 
         public void OnHeaderPointerDown(BaseEventData data)
@@ -276,7 +234,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             float t = GetTimeFromMouseHeader(ped.position);
             Seek(t, true);
             lastScrubScreenPos = ped.position;
-            lastScrubMoveTime = Time.unscaledTime;
+            lastScrubTargetTime = t;
         }
 
         public void OnWaveformDrag(BaseEventData data)

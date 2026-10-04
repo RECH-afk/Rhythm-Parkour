@@ -82,19 +82,22 @@ namespace RKS.RhythmParkour.Core
                 data.isFirstRun = false;
                 Save.Write();
                 Debug.Log("[IntroBootstrap] First run → loading 'IsFirstGameOpenScene'.");
-                SceneManager.LoadScene("IsFirstGameOpenScene");
+                if (Transition != null) Transition.LoadScene("IsFirstGameOpenScene");
+                else SceneManager.LoadScene("IsFirstGameOpenScene");
                 return;
             }
 
             if (!data.isPlayerAgreedPlay)
             {
                 Debug.Log("[IntroBootstrap] Player not agreed → loading 'IsFirstGameOpenScene'.");
-                Transition?.LoadScene("IsFirstGameOpenScene");
+                if (Transition != null) Transition.LoadScene("IsFirstGameOpenScene");
+                else SceneManager.LoadScene("IsFirstGameOpenScene");
                 return;
             }
 
             Debug.Log("[IntroBootstrap] Loading main menu...");
-            Transition?.LoadScene("IsMenuScene");
+            if (Transition != null) Transition.LoadScene("IsMenuScene");
+            else SceneManager.LoadScene("IsMenuScene");
         }
     }
 }

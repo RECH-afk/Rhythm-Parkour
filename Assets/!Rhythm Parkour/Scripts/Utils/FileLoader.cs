@@ -230,6 +230,18 @@ namespace RKS.RhythmParkour
                 dropZoneImage.color = normalColor;
         }
 
+        public void SetLoadedFile(string path)
+        {
+            currentFilePath = path;
+            if (!string.IsNullOrEmpty(path))
+            {
+                UpdateStatus($"Файл: {Path.GetFileName(path)}");
+                if (dropZoneImage != null)
+                    dropZoneImage.color = successColor;
+            }
+            else Clear();
+        }
+
         protected override void OnDisposed()
         {
         }

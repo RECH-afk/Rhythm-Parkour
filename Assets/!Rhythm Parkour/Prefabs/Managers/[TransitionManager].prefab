@@ -44,5 +44,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 47630ac139d03044993ecac470a064e9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  transitionPrefab: {fileID: 6734806742652896209, guid: f8a2f9776e9a2b74883277047e1f337b, type: 3}
+  transitionPrefab: {fileID: 6283060351028749608, guid: 86ef4cbe6120ff647b147fa7e8254625,
+    type: 3}
   delayBeforeLoad: 3

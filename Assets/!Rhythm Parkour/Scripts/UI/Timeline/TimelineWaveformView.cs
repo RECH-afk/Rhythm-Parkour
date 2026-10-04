@@ -62,7 +62,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (waveformTex != null) Destroy(waveformTex);
             waveformData = WaveformGenerator.GenerateData(clip, desiredWidth);
             int h = Mathf.Clamp(ui.waveformTexHeight, 32, 360);
-            waveformTex = WaveformGenerator.GenerateTexture(waveformData, desiredWidth, h, ui.waveformWaveColor, ui.waveformBgColor);
+            waveformTex = WaveformGenerator.GenerateTexture(waveformData, desiredWidth, h, ui.waveformWaveColor, Color.clear);
             ui.waveformImage.texture = waveformTex;
             ui.waveformImage.color = Color.white;
 

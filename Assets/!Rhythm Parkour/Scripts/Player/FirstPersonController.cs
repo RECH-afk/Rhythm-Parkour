@@ -75,30 +75,25 @@ namespace EasyPeasyFirstPersonController
         public float maxFlowMeter = 100f;
         [Tooltip("Скорость падения шкалы Грува в секунду")]
         public float flowDecayRate = 8f;
-        [Tooltip("Множитель скорости во время ритм-рывка")]
-        public float beatDashSpeedMultiplier = 2.2f;
-        [Tooltip("Длительность ритм-рывка")]
-        public float beatDashDuration = 0.25f;
-
         [Header("Music Link")]
         [Tooltip("Брать BPM и фазу бита из Conductor — точная синхронизация с треком. Выкл = внутренний метроном")]
         public bool useConductor = true;
         [Tooltip("BPM в этом контроллере сам подтягивается из BPM текущей песни (видно в инспекторе)")]
         public bool syncBpmFromMusic = true;
+        [Tooltip("Камера пульсирует на каждый бит (FOV и покачивание) — выкл = камера двигается только от игрока")]
+        public bool beatCameraPulseEnabled = false;
         [Tooltip("Пульс FOV на каждый бит (0 = выкл)")]
         public float beatFovPulse = 2.5f;
         [Tooltip("Добавка к амплитуде покачивания на бит")]
         public float beatBobPulse = 0.03f;
         [Tooltip("Полных циклов покачивания на 2 бита (0.5 = шаг каждой ногой в бит)")]
         public float bobCyclesPerBeat = 0.5f;
-        [Tooltip("Множитель высоты прыжка при идеальном попадании в бит (1 = без бонуса)")]
-        public float beatJumpBoost = 1.12f;
         [Tooltip("Буфер прыжка: нажатие чуть раньше приземления всё равно сработает (сек)")]
         public float jumpBufferTime = 0.12f;
 
         [Header("Strict Rhythm Jumps")]
         [Tooltip("Нажатый прыжок выполняется ровно в ближайший бит, а не сразу — игрок всегда прыгает под ритм")]
-        public bool quantizeJumpToBeat = true;
+        public bool quantizeJumpToBeat = false;
         [Tooltip("Нажал раньше чем за столько долей бита — прыжок встанет в очередь на следующий бит")]
         [Range(0.05f, 1f)] public float jumpCaptureBeats = 0.6f;
         [Tooltip("Очередь прыжка сгорает, если бит не наступил за столько битов")]
@@ -118,7 +113,7 @@ namespace EasyPeasyFirstPersonController
 
         [Header("Music Camera Shake")]
         [Tooltip("Камера дрожит в такт играющему треку (кик на каждый бит)")]
-        public bool musicShakeEnabled = true;
+        public bool musicShakeEnabled = false;
         [Tooltip("Сила тряски на бит (смещение камеры в метрах)")]
         [Range(0f, 0.3f)] public float musicShakeAmount = 0.045f;
         [Tooltip("Скорость дрожания")]
@@ -159,12 +154,25 @@ namespace EasyPeasyFirstPersonController
         [Header("Gravity Flip")]
         [Tooltip("1 = обычная гравитация, -1 = перевёрнутая. Ставится триггерами уровня")]
         public float gravityDirection = 1f;
-        [Tooltip("Скорость доворота камеры при перевороте (ролл 0/180)")]
-        public float gravityRollSpeed = 3f;
+        [Tooltip("Пружина доворота камеры (жёсткость). Больше = резче с перелётом")]
+        public float gravityRollStiffness = 90f;
+        [Tooltip("Демпфер доворота камеры. Меньше = больше кача")]
+        public float gravityRollDamping = 8f;
+
+        [Header("Fast Fall (Ctrl in air)")]
+        [Tooltip("Скорость пикирования вниз при Ctrl в прыжке. Быстро, но с плавным разгоном")]
+        public float fastFallSpeed = 28f;
+        [Tooltip("Плавность разгона пике. Меньше = мягче")]
+        public float fastFallSmooth = 8f;
+        [Tooltip("Потолок для перевёрнутой гравитации (м над дорожкой). Там можно прыгать")]
+        public float invertedCeilingHeight = 5f;
 
         private float rotX, rotY, xVelocity, yVelocity;
         private float gravityRoll;
+        private float gravityRollVelocity;
         private bool gravityInverted;
+        private bool fastFallActive;
+        private bool ceilinged;
         private CharacterController characterController;
         private CapsuleCollider playerCapsule;
         private Vector3 moveDirection = Vector3.zero;
@@ -201,8 +209,6 @@ namespace EasyPeasyFirstPersonController
         private float nextBeatTime;
         private float lastBeatTime;
         private float flowMeter;
-        private bool isBeatDashing;
-        private float beatDashTimer;
         private int landingCombo = 0;
         private float lastLandingTime = -1f;
         [Range(0.1f, 2f)] public float comboWindow = 0.5f;
@@ -227,7 +233,6 @@ namespace EasyPeasyFirstPersonController
         private int jumpQueuedBeat = -1;
         private Vector3 baseCamLocalPos = Vector3.zero;
         private bool hasBaseCamPos;
-        private Tween beatDashTween;
 
 
         private float musicShakeKick;
@@ -353,7 +358,6 @@ namespace EasyPeasyFirstPersonController
         protected override void OnDisposed()
         {
             if (shakeTween != null && shakeTween.IsActive()) shakeTween.Kill();
-            if (beatDashTween != null && beatDashTween.IsActive()) beatDashTween.Kill();
             if (scoreLink != null) scoreLink.onJudgement -= OnScoreJudgement;
         }
 
@@ -417,12 +421,6 @@ namespace EasyPeasyFirstPersonController
             }
 
 
-            if (isBeatDashing)
-            {
-                beatDashTimer -= Time.deltaTime;
-                if (beatDashTimer <= 0) isBeatDashing = false;
-            }
-
             if (canZoom && !isSprinting && !isSliding)
                 isZooming = Input.GetKey(zoomKey);
             else
@@ -435,6 +433,12 @@ namespace EasyPeasyFirstPersonController
 
                 if (enableLandingShake && moveDirection.y < -2f)
                     TriggerLandingShake();
+
+                if (fastFallActive)
+                {
+                    fastFallActive = false;
+                    TriggerManualShake(1.5f);
+                }
 
 
                 if (jumpQueued && !isSliding) { jumpQueued = false; jumpBufferTimer = jumpBufferTime; }
@@ -487,7 +491,7 @@ namespace EasyPeasyFirstPersonController
 
             mouseXSway = Mathf.Lerp(mouseXSway, mouseX, Time.deltaTime * 10f);
             rotX += mouseX * 10 * currentSensitivity * Time.deltaTime;
-            rotY -= mouseY * (gravityInverted ? -1f : 1f) * 10 * currentSensitivity * Time.deltaTime;
+            rotY -= mouseY * 10 * currentSensitivity * Time.deltaTime;
             rotY = Mathf.Clamp(rotY, -90f, 90f);
 
             xVelocity = Mathf.Lerp(xVelocity, rotX, snappiness * Time.deltaTime);
@@ -496,7 +500,11 @@ namespace EasyPeasyFirstPersonController
             float targetTiltAngle = isSliding ? slideTiltAngle : 0f;
             currentTiltAngle = Mathf.SmoothDamp(currentTiltAngle, targetTiltAngle, ref tiltVelocity, 0.15f);
 
-            gravityRoll = Mathf.Lerp(gravityRoll, gravityInverted ? 180f : 0f, Time.deltaTime * Mathf.Max(0.1f, gravityRollSpeed));
+            float rollTarget = gravityInverted ? 180f : 0f;
+            float stiff = Mathf.Max(1f, gravityRollStiffness);
+            float damp = Mathf.Max(0.1f, gravityRollDamping);
+            gravityRollVelocity += ((rollTarget - gravityRoll) * stiff - gravityRollVelocity * damp) * Time.deltaTime;
+            gravityRoll += gravityRollVelocity * Time.deltaTime;
             playerCamera.transform.localRotation = Quaternion.Euler(yVelocity - currentTiltAngle, 0f, gravityRoll);
             transform.rotation = Quaternion.Euler(0f, xVelocity, 0f);
         }
@@ -578,11 +586,7 @@ namespace EasyPeasyFirstPersonController
             isSprinting = canSprint && Input.GetKey(KeyCode.LeftShift) && smoothMoveInput.y > 0.1f && isGrounded && !isCrouching && !isSliding && !isZooming;
 
 
-            float flowSpeedMultiplier = 1f + (flowMeter / maxFlowMeter) * 0.5f;
-
             float currentSpeed = isCrouching ? crouchSpeed : (isSprinting ? sprintSpeed : walkSpeed);
-            if (isBeatDashing) currentSpeed *= beatDashSpeedMultiplier;
-            currentSpeed *= flowSpeedMultiplier;
 
             if (!isMove) currentSpeed = 0f;
 
@@ -596,6 +600,13 @@ namespace EasyPeasyFirstPersonController
                 moveDirection.z = moveVector.z;
             }
 
+
+            if (!isGrounded && !isSliding && canJump && (Input.GetKeyDown(KeyCode.LeftControl) || Input.GetKeyDown(KeyCode.RightControl)))
+            {
+                fastFallActive = true;
+                jumpQueued = false;
+                jumpBufferTimer = 0f;
+            }
 
             if (canJump && isMove && Input.GetKeyDown(KeyCode.Space) && !isSliding)
             {
@@ -620,7 +631,7 @@ namespace EasyPeasyFirstPersonController
             else
                 jumpBufferTimer -= Time.deltaTime;
 
-            if (isGrounded || coyoteTimer > 0f)
+            if (isGrounded || coyoteTimer > 0f || ceilinged)
             {
                 if (canJump && isMove && jumpBufferTimer > 0f && !isSliding)
                     DoJump();
@@ -630,7 +641,37 @@ namespace EasyPeasyFirstPersonController
                 moveDirection.y -= gravity * gravityDirection * Time.deltaTime;
             }
 
+            if (isGrounded)
+            {
+                fastFallActive = false;
+            }
+            else if (fastFallActive)
+            {
+                moveDirection.y = Mathf.Lerp(moveDirection.y, -Mathf.Abs(fastFallSpeed), Time.deltaTime * Mathf.Max(0.1f, fastFallSmooth));
+            }
+
             characterController.Move(moveDirection * Time.deltaTime);
+
+            bool wasCeilinged = ceilinged;
+            ceilinged = false;
+            if (gravityDirection < 0f)
+            {
+                float ceilY = (parkourLink != null ? parkourLink.trackY : 0f) + Mathf.Max(1f, invertedCeilingHeight);
+                Vector3 pp = transform.position;
+                if (pp.y >= ceilY)
+                {
+                    float impactUp = moveDirection.y;
+                    pp.y = ceilY;
+                    transform.position = pp;
+                    if (moveDirection.y > 0f) moveDirection.y = 0f;
+                    ceilinged = true;
+                    if (!wasCeilinged && impactUp > 6f)
+                    {
+                        bodyDip = -landingDipAmount * 0.5f;
+                        TriggerManualShake(0.5f);
+                    }
+                }
+            }
 
             if (clampToTrack) ClampToTrack();
 
@@ -725,15 +766,18 @@ namespace EasyPeasyFirstPersonController
 
         private void OnMusicBeat(int beatIndex)
         {
-            Vector3 hv = characterController != null
-                ? new Vector3(characterController.velocity.x, 0f, characterController.velocity.z)
-                : Vector3.zero;
-            bool moving = hv.magnitude > 0.5f;
-            beatFovKick = Mathf.Max(beatFovKick, beatFovPulse * (moving || isSliding ? 1f : 0.35f));
-            beatBobKick = Mathf.Max(beatBobKick, beatBobPulse * (moving ? 1f : 0.4f));
+            if (beatCameraPulseEnabled)
+            {
+                Vector3 hv = characterController != null
+                    ? new Vector3(characterController.velocity.x, 0f, characterController.velocity.z)
+                    : Vector3.zero;
+                bool moving = hv.magnitude > 0.5f;
+                beatFovKick = Mathf.Max(beatFovKick, beatFovPulse * (moving || isSliding ? 1f : 0.35f));
+                beatBobKick = Mathf.Max(beatBobKick, beatBobPulse * (moving ? 1f : 0.4f));
+            }
 
             musicShakeKick = musicShakeAmount;
-            musicShakeSeed = UnityEngine.Random.value * 100f;
+                    musicShakeSeed = 17.31f;
 
             if (jumpQueued && !isSliding && (isGrounded || coyoteTimer > 0f))
             {
@@ -745,11 +789,11 @@ namespace EasyPeasyFirstPersonController
 
         private void DoJump()
         {
-            RhythmGrade g = CheckRhythmAction();
-            float boost = g == RhythmGrade.Perfect ? Mathf.Max(1f, beatJumpBoost) : 1f;
-            moveDirection.y = jumpSpeed * boost * gravityDirection;
+            CheckRhythmAction();
+            moveDirection.y = jumpSpeed * gravityDirection;
             jumpBufferTimer = 0f;
             jumpQueued = false;
+            fastFallActive = false;
             coyoteTimer = 0f;
             bodyDip = -jumpDipAmount;
         }
@@ -858,13 +902,11 @@ namespace EasyPeasyFirstPersonController
 
             if (grade == RhythmGrade.Perfect)
             {
-                ActivateBeatDash();
                 flowMeter = Mathf.Min(maxFlowMeter, flowMeter + 20f);
                 if (scoreLink != null) scoreLink.AddGrooveHit(true);
             }
             else if (grade == RhythmGrade.Good)
             {
-                ActivateBeatDash();
                 flowMeter = Mathf.Min(maxFlowMeter, flowMeter + 10f);
                 if (scoreLink != null) scoreLink.AddGrooveHit(false);
             }
@@ -883,21 +925,6 @@ namespace EasyPeasyFirstPersonController
                 flowMeter = Mathf.Max(0f, flowMeter - damageFlowPenalty);
             else if (j == HitJudgement.Perfect300)
                 flowMeter = Mathf.Min(maxFlowMeter, flowMeter + dodgeFlowBonus);
-        }
-
-        private void ActivateBeatDash()
-        {
-            isBeatDashing = true;
-            beatDashTimer = beatDashDuration;
-
-
-            if (playerCamera != null)
-            {
-                if (!hasBaseCamPos) { baseCamLocalPos = playerCamera.localPosition; hasBaseCamPos = true; }
-                if (beatDashTween != null && beatDashTween.IsActive()) beatDashTween.Kill();
-                playerCamera.localPosition = baseCamLocalPos + Vector3.forward * 0.12f;
-                beatDashTween = playerCamera.transform.DOLocalMove(baseCamLocalPos, 0.18f).SetEase(Ease.OutCubic);
-            }
         }
 
         private void TriggerLandingShake()
@@ -965,6 +992,8 @@ namespace EasyPeasyFirstPersonController
         {
             gravityInverted = inverted;
             gravityDirection = inverted ? -1f : 1f;
+            beatFovKick = Mathf.Max(beatFovKick, 8f);
+            TriggerManualShake(0.6f);
         }
 
         public void ResetGravityFlip() => SetGravityInverted(false);

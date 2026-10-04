@@ -59,7 +59,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         public bool autoQuantize = true;
         public bool snapToGrid = true;
         public KeyCode freeMoveKey = KeyCode.LeftControl;
-        public KeyCode freeMoveKeyAlt = KeyCode.LeftAlt;
+        public KeyCode freeMoveKeyAlt = KeyCode.RightControl;
         public int brushIndex = 0;
         public float defaultNoteSpeed = 12f;
         public bool loopPlayback = false;
@@ -67,8 +67,6 @@ namespace RKS.RhythmParkour.UI.Timeline
         public KeyCode altAddNoteKey = KeyCode.KeypadEnter;
         public float noteDeleteThresholdBeats = 0.35f;
         public Color waveformWaveColor = new Color(0.3f, 0.7f, 1f, 1f);
-        public Color waveformBgColor = new Color(0.13f, 0.13f, 0.15f, 1f);
-        public Color playheadColor = new Color(0f, 1f, 0.5f, 0.95f);
         public Color gridBarColor = new Color(1f, 1f, 1f, 0.38f);
         public Color gridBeatColor = new Color(1f, 1f, 1f, 0.28f);
         public Color gridHalfColor = new Color(1f, 1f, 1f, 0.18f);
@@ -81,7 +79,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         [HideInInspector] public float waveformPulseAmount = 0f;
         public float pixelsPerSecond = 120f;
         public float zoom = 1f;
-        public bool autoScrollWithPlayhead = true;
+        public bool autoScrollWithPlayhead = false;
         public float autoScrollMargin = 0.25f;
         [Tooltip("Если true — при включении AutoScroll плейхед остаётся там где был (не прыгает к фиксированному якорю)")]
         public bool autoscrollKeepCurrentPosition = true;
@@ -94,6 +92,11 @@ namespace RKS.RhythmParkour.UI.Timeline
         [HideInInspector]
         [InjectOptional] public TimelinePreview preview;
         public TextMeshProUGUI previewToggleLabel;
+        public TextMeshProUGUI loopToggleLabel;
+        [Tooltip("Ручной скролл колесом при включённом автоскролле идёт медленнее (сопротивление)")]
+        [Range(0.05f, 1f)] public float autoscrollWheelResistance = 0.25f;
+        [Tooltip("Скорость плавного догона плейхеда при автоскролле")]
+        public float autoScrollSmoothSpeed = 6f;
 
         [Header("Scrub Audio")]
         public bool enableScrubAudio = true;
@@ -115,7 +118,6 @@ namespace RKS.RhythmParkour.UI.Timeline
         public GameObject notePropertiesPanel;
         public TMP_Dropdown propPrefabDropdown;
         public TextMeshProUGUI propTitleLabel;
-        public TMP_InputField propSpeedInput;
 
         [Header("Сетка миниатюр (выбор вида)")]
         public GameObject prefabGridPanel;
@@ -236,6 +238,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             UpdateScrollToPlayhead(true);
             UpdateAutoscrollToggleVisual();
             UpdatePreviewToggleVisual();
+            UpdateLoopToggleVisual();
             targetZoom = zoom;
 
             if (transfer != null && transfer.hasLevel && transfer.levelData != null && levelData != transfer.levelData)
@@ -245,7 +248,6 @@ namespace RKS.RhythmParkour.UI.Timeline
                 RefreshAll();
             }
 
-            if (GetComponent<TimingsPanel>() == null) gameObject.AddComponent<TimingsPanel>();
         }
 
         protected override void OnDisposed()
@@ -388,13 +390,10 @@ namespace RKS.RhythmParkour.UI.Timeline
             }
         }
 
-        public void ToggleFollow() => ToggleAutoscroll();
         void UpdateAutoscrollToggleVisual()
         {
             if (autoscrollToggleLabel != null) autoscrollToggleLabel.text = autoScrollWithPlayhead ? "Autoscroll ON" : "Autoscroll OFF";
         }
-        void UpdateFollowToggleVisual() => UpdateAutoscrollToggleVisual();
-
         public void TogglePreview()
         {
 
@@ -406,6 +405,16 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             bool on = preview != null && preview.previewEnabled;
             if (previewToggleLabel != null) previewToggleLabel.text = on ? "Preview ON" : "Preview OFF";
+        }
+        public void ToggleLoop()
+        {
+            loopPlayback = !loopPlayback;
+            if (audioSource != null && audioSource.clip != null) audioSource.loop = loopPlayback;
+            UpdateLoopToggleVisual();
+        }
+        void UpdateLoopToggleVisual()
+        {
+            if (loopToggleLabel != null) loopToggleLabel.text = loopPlayback ? "Loop ON" : "Loop OFF";
         }
         public void UpdateAutoscrollLockFromScreenPos(Vector2 screenPos)
         {
@@ -503,7 +512,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         }
 
 
-        public bool IsFreeMoveHeld() => Input.GetKey(freeMoveKey) || Input.GetKey(freeMoveKeyAlt) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.RightAlt) || Input.GetKey(KeyCode.LeftShift);
+        public bool IsFreeMoveHeld() => Input.GetKey(freeMoveKey) || Input.GetKey(freeMoveKeyAlt) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
         public bool ShouldSnap() => autoQuantize && snapToGrid && !IsFreeMoveHeld();
 
         [Header("Сетка (секунды)")]
@@ -543,8 +552,8 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (!IsMouseOverTimeline(Input.mousePosition)) return;
                 if (timelineScrollRect == null) return;
                 float cur = timelineScrollRect.horizontalNormalizedPosition;
-
-                cur = Mathf.Clamp01(cur - wheel * wheelScrollSpeed);
+                float scrollScale = autoScrollWithPlayhead ? Mathf.Clamp01(autoscrollWheelResistance) : 1f;
+                cur = Mathf.Clamp01(cur - wheel * wheelScrollSpeed * scrollScale);
                 timelineScrollRect.horizontalNormalizedPosition = cur;
                 timelineScrollRect.velocity = Vector2.zero;
             }
@@ -625,7 +634,6 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if ((waveformRect.localScale - Vector3.one).sqrMagnitude < 0.0001f) waveformRect.localScale = Vector3.one;
             }
             HandleKeyboard(); transport.UpdateCurrentTimeFromAudio(); HandleMouseInput();
-            transport.TickScrubStillness();
             transport.UpdatePlayhead();
             if (autoScrollWithPlayhead)
             {
@@ -757,7 +765,19 @@ namespace RKS.RhythmParkour.UI.Timeline
             float targetNorm = denom > 0.001f ? targetOffset / denom : 0f;
             targetNorm = Mathf.Clamp01(targetNorm);
             if (timelineScrollRect.velocity.sqrMagnitude > 1f) timelineScrollRect.velocity = Vector2.zero;
-            timelineScrollRect.horizontalNormalizedPosition = targetNorm;
+            bool smooth = Application.isPlaying && isPlaying && !transport.IsScrubbing;
+            if (smooth)
+            {
+                float cur = timelineScrollRect.horizontalNormalizedPosition;
+                float k = 1f - Mathf.Exp(-Mathf.Max(0.1f, autoScrollSmoothSpeed) * Time.deltaTime);
+                cur = Mathf.Lerp(cur, targetNorm, k);
+                if (Mathf.Abs(cur - targetNorm) < 0.0005f) cur = targetNorm;
+                float newOffset = cur * Mathf.Max(0.001f, contentW - viewportW);
+                float playheadInView = playheadX - newOffset;
+                if (playheadInView < -2f || playheadInView > viewportW + 2f) cur = targetNorm;
+                timelineScrollRect.horizontalNormalizedPosition = cur;
+            }
+            else timelineScrollRect.horizontalNormalizedPosition = targetNorm;
             if (immediate) { Canvas.ForceUpdateCanvases(); timelineContent.anchoredPosition = new Vector2(-targetOffset, timelineContent.anchoredPosition.y); timelineScrollRect.horizontalNormalizedPosition = targetNorm; }
         }
 
@@ -808,11 +828,10 @@ namespace RKS.RhythmParkour.UI.Timeline
                 if (manager != null) manager.levelData = levelData;
                 Debug.Log("[Timeline] Создан новый LevelData (был null) при загрузке аудио", this);
             }
-            bool isNewClip = waveformView.LastClip != clip;
             bool wasEmptyLevel = levelData.events.Count > 0 && string.IsNullOrEmpty(levelData.fullTitle) && string.IsNullOrEmpty(levelData.songAuthor);
             levelData.music = clip; levelData.audioPath = path;
 
-            if (wasEmptyLevel || (isNewClip && levelData.events.Count > 0 && waveformView.LastClip == null))
+            if (wasEmptyLevel)
             {
                 levelData.events.Clear();
                 notesController.DeselectNote();

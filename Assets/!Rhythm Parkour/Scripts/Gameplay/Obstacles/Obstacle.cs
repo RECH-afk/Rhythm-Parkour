@@ -298,6 +298,7 @@ namespace RKS.RhythmParkour.Rhythm
         {
             if (!moving || ph == null || isKeyNote) return;
             touchedPlayer = true;
+            if (countedAsMiss) return;
             if (isTrigger)
             {
                 FireTrigger();
