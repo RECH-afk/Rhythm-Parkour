@@ -93,6 +93,25 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private Button _editLevelButton;
         [SerializeField] private Button _deleteLevelButton;
 
+        [Header("Cover Fullscreen")]
+        [SerializeField] private RectTransform coverFullscreenRect;
+        [SerializeField] private float coverFullscreenAnimDuration = 0.3f;
+        private Transform _coverOrigParent;
+        private int _coverOrigSibling;
+        private Vector2 _coverOrigAnchorMin;
+        private Vector2 _coverOrigAnchorMax;
+        private Vector2 _coverOrigPos;
+        private Vector2 _coverOrigSize;
+        private Vector3 _coverOrigScale;
+        private Quaternion _coverOrigRotation;
+        private bool _coverOrigPreserveAspect;
+        private Vector3 _coverHomeWorldPos;
+        private bool _coverHidList;
+        private bool _coverFullscreen;
+        private bool _coverBusy;
+        private GameObject _coverPlaceholder;
+        private Tween _coverFullscreenTween;
+
         [Header("No Levels Window")]
         [SerializeField] private GameObject _noLevelsWindow;
 
@@ -118,6 +137,8 @@ namespace RKS.RhythmParkour.UI
         private const float DoubleClickThreshold = 0.35f;
 
         private bool _isTransitioning = false;
+        private float _escCooldown;
+        private bool _quitting;
         private Image _pulseImage;
         private Vector3 _pulseBaseScale = Vector3.one;
         private float _pulseT = 999f;
@@ -251,6 +272,7 @@ namespace RKS.RhythmParkour.UI
         {
             HideAllMenusImmediate();
             if (_mainMenuRoot != null) _mainMenuRoot.SetActive(true);
+            WireCoverClick();
             PlayStartupAnimations();
         }
 
@@ -258,7 +280,10 @@ namespace RKS.RhythmParkour.UI
         {
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf)
+                if (Time.unscaledTime < _escCooldown) return;
+                _escCooldown = Time.unscaledTime + 0.4f;
+                if (_coverFullscreen && !_coverBusy) { CloseCoverFullscreen(); }
+                else if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf && !_isTransitioning)
                 {
                     HideQuitConfirmation();
                 }
@@ -523,6 +548,10 @@ namespace RKS.RhythmParkour.UI
 
         protected override void OnDisposed()
         {
+            if (_coverFullscreenTween != null && _coverFullscreenTween.IsActive()) _coverFullscreenTween.Kill();
+            _coverHidList = false;
+            _coverFullscreen = false;
+            _coverBusy = false;
             StopLevelPreview();
             if (_previewClip != null)
             {
@@ -616,6 +645,8 @@ namespace RKS.RhythmParkour.UI
 
         private void TransitionTo(GameObject targetWindow)
         {
+            if (_coverBusy) return;
+            if (_coverFullscreen) CloseCoverFullscreen();
             if (_isTransitioning || targetWindow == null || targetWindow.activeSelf) return;
 
             _isTransitioning = true;
@@ -943,6 +974,8 @@ namespace RKS.RhythmParkour.UI
 
         public void ConfirmQuit()
         {
+            if (_quitting) return;
+            _quitting = true;
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
@@ -1279,6 +1312,187 @@ namespace RKS.RhythmParkour.UI
         public bool HasPreview => !string.IsNullOrEmpty(_lastPreviewAudioPath);
         public bool IsDetailsVisible => _levelDetailsRoot != null && _levelDetailsRoot.activeSelf;
         public bool IsMainMenuVisible => _mainMenuRoot != null && _mainMenuRoot.activeSelf;
+        public bool IsCoverFullscreenVisible => _coverFullscreen;
+
+        private void WireCoverClick()
+        {
+            ResolveCoverRect();
+            RectTransform target = coverFullscreenRect != null ? coverFullscreenRect : (_levelCoverImage != null ? _levelCoverImage.rectTransform : null);
+            if (target == null || target.GetComponent<Button>() != null) return;
+            var trigger = target.GetComponent<EventTrigger>();
+            if (trigger == null) trigger = target.gameObject.AddComponent<EventTrigger>();
+            var entry = trigger.triggers.Find(e => e.eventID == EventTriggerType.PointerClick);
+            if (entry == null) { entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick }; trigger.triggers.Add(entry); }
+            entry.callback.RemoveListener(OnCoverClicked);
+            entry.callback.AddListener(OnCoverClicked);
+        }
+
+        private void ResolveCoverRect()
+        {
+            if (coverFullscreenRect != null) return;
+            RectTransform found = FindChildRect(_levelListMenuRoot, "ImageCover");
+            if (found == null) found = FindChildRect(_levelDetailsRoot, "ImageCover");
+            if (found == null)
+            {
+                var go = GameObject.Find("ImageCover");
+                if (go != null) found = go.GetComponent<RectTransform>();
+            }
+            if (found != null) coverFullscreenRect = found;
+        }
+
+        private RectTransform FindChildRect(GameObject root, string childName)
+        {
+            if (root == null || string.IsNullOrEmpty(childName)) return null;
+            foreach (var rt in root.GetComponentsInChildren<RectTransform>(true))
+                if (rt != null && rt.gameObject.name == childName) return rt;
+            return null;
+        }
+
+        private void OnCoverClicked(BaseEventData data) => ToggleCoverFullscreen();
+
+        public void ToggleCoverFullscreen()
+        {
+            if (_coverBusy) return;
+            if (_coverFullscreen) CloseCoverFullscreen();
+            else OpenCoverFullscreen();
+        }
+
+        public void OpenCoverFullscreen()
+        {
+            if (_coverFullscreen || _coverBusy || _levelCoverImage == null || _levelCoverImage.sprite == null) return;
+            ResolveCoverRect();
+            RectTransform rt = coverFullscreenRect != null ? coverFullscreenRect : _levelCoverImage.rectTransform;
+            if (rt == null) return;
+            _coverOrigParent = rt.parent;
+            _coverOrigSibling = rt.GetSiblingIndex();
+            _coverOrigAnchorMin = rt.anchorMin;
+            _coverOrigAnchorMax = rt.anchorMax;
+            _coverOrigPos = rt.anchoredPosition;
+            _coverOrigSize = rt.sizeDelta;
+            _coverOrigScale = rt.localScale;
+            _coverOrigRotation = rt.localRotation;
+            _coverOrigPreserveAspect = _levelCoverImage.preserveAspect;
+            _coverHomeWorldPos = rt.position;
+            CreateCoverPlaceholder();
+            var coverCanvas = rt.GetComponentInParent<Canvas>();
+            if (coverCanvas == null) return;
+            rt.SetParent(coverCanvas.transform, true);
+            rt.SetAsLastSibling();
+            RectTransform canvasRt = coverCanvas.transform as RectTransform;
+            Vector3 centerWorld = canvasRt != null
+                ? coverCanvas.transform.TransformPoint(canvasRt.rect.center)
+                : rt.position;
+            _coverHidList = _levelListMenuRoot != null && _levelListMenuRoot.activeSelf;
+            if (_coverHidList) HideLevelListAnimated();
+            _levelCoverImage.preserveAspect = true;
+            _coverFullscreen = true;
+            _coverBusy = true;
+            rt.DOKill();
+            if (_coverFullscreenTween != null && _coverFullscreenTween.IsActive()) _coverFullscreenTween.Kill();
+            float dur = Mathf.Max(0.05f, coverFullscreenAnimDuration);
+            Vector2 growTo = new Vector2(900f, 900f);
+            _coverFullscreenTween = DOTween.Sequence()
+                .Join(rt.DOMove(centerWorld, dur, false).SetEase(Ease.OutCubic))
+                .Join(rt.DOSizeDelta(growTo, dur).SetEase(Ease.OutBack))
+                .Insert(0f, rt.DOLocalRotate(new Vector3(0f, 0f, -10f), dur * 0.45f).SetEase(Ease.OutCubic))
+                .Insert(dur * 0.45f, rt.DOLocalRotate(Vector3.zero, dur * 0.55f).SetEase(Ease.OutBack))
+                .OnComplete(() => _coverBusy = false)
+                .SetTarget(rt);
+        }
+
+        public void CloseCoverFullscreen()
+        {
+            if (!_coverFullscreen || _levelCoverImage == null) return;
+            _coverFullscreen = false;
+            if (_coverFullscreenTween != null && _coverFullscreenTween.IsActive()) _coverFullscreenTween.Kill();
+            RectTransform rt = coverFullscreenRect != null ? coverFullscreenRect : (_levelCoverImage != null ? _levelCoverImage.rectTransform : null);
+            if (rt == null) { RestoreCoverRect(); return; }
+            _coverBusy = true;
+            rt.DOKill();
+            float dur = Mathf.Max(0.05f, coverFullscreenAnimDuration) * 0.7f;
+            _coverFullscreenTween = DOTween.Sequence()
+                .Join(rt.DOMove(_coverHomeWorldPos, dur, false).SetEase(Ease.InOutCubic))
+                .Join(rt.DOSizeDelta(_coverOrigSize, dur).SetEase(Ease.InOutCubic))
+                .Insert(0f, rt.DOLocalRotate(new Vector3(0f, 0f, 7f), dur * 0.4f).SetEase(Ease.OutCubic))
+                .Insert(dur * 0.4f, rt.DOLocalRotate(_coverOrigRotation.eulerAngles, dur * 0.6f).SetEase(Ease.InOutCubic))
+                .OnComplete(RestoreCoverRect)
+                .SetTarget(rt);
+            if (_coverHidList) { _coverHidList = false; ShowLevelListAnimated(); }
+        }
+
+        private void RestoreCoverRect()
+        {
+            _coverBusy = false;
+            RectTransform rt = coverFullscreenRect != null ? coverFullscreenRect : (_levelCoverImage != null ? _levelCoverImage.rectTransform : null);
+            if (rt != null && _coverOrigParent != null)
+            {
+                Vector3 keepWorld = rt.position;
+                rt.SetParent(_coverOrigParent, true);
+                rt.position = keepWorld;
+                rt.SetSiblingIndex(_coverOrigSibling);
+                DestroyCoverPlaceholder();
+                rt.anchorMin = _coverOrigAnchorMin;
+                rt.anchorMax = _coverOrigAnchorMax;
+                rt.anchoredPosition = _coverOrigPos;
+                rt.sizeDelta = _coverOrigSize;
+                rt.localScale = _coverOrigScale;
+                rt.localRotation = _coverOrigRotation;
+            }
+            _levelCoverImage.preserveAspect = _coverOrigPreserveAspect;
+        }
+
+        private void CreateCoverPlaceholder()
+        {
+            DestroyCoverPlaceholder();
+            if (_coverOrigParent == null) return;
+            _coverPlaceholder = new GameObject("CoverPlaceholder");
+            var prt = _coverPlaceholder.AddComponent<RectTransform>();
+            prt.SetParent(_coverOrigParent, false);
+            prt.SetSiblingIndex(_coverOrigSibling);
+            var le = _coverPlaceholder.AddComponent<LayoutElement>();
+            le.preferredWidth = _coverOrigSize.x;
+            le.preferredHeight = _coverOrigSize.y;
+            le.flexibleWidth = 0f;
+            le.flexibleHeight = 0f;
+        }
+
+        private void DestroyCoverPlaceholder()
+        {
+            if (_coverPlaceholder != null) Destroy(_coverPlaceholder);
+            _coverPlaceholder = null;
+        }
+
+        private void HideLevelListAnimated()
+        {
+            if (_levelListMenuRoot == null) return;
+            var rt = _levelListMenuRoot.GetComponent<RectTransform>();
+            if (rt == null) { _levelListMenuRoot.SetActive(false); return; }
+            rt.DOKill();
+            Vector2 orig = _originalPositions.TryGetValue(_levelListMenuRoot, out var o) ? o : rt.anchoredPosition;
+            float dur = Mathf.Max(0.05f, coverFullscreenAnimDuration);
+            DOTween.Sequence()
+                .Join(rt.DOAnchorPos(orig + new Vector2(GetScreenOffsetX(), 0f), dur).SetEase(Ease.InQuart))
+                .Join(rt.DOScale(Vector3.one * 0.97f, dur).SetEase(Ease.InQuart))
+                .OnComplete(() => _levelListMenuRoot.SetActive(false))
+                .SetTarget(_levelListMenuRoot);
+        }
+
+        private void ShowLevelListAnimated()
+        {
+            if (_levelListMenuRoot == null) return;
+            var rt = _levelListMenuRoot.GetComponent<RectTransform>();
+            if (rt == null) { _levelListMenuRoot.SetActive(true); return; }
+            Vector2 orig = _originalPositions.TryGetValue(_levelListMenuRoot, out var o) ? o : rt.anchoredPosition;
+            _levelListMenuRoot.SetActive(true);
+            rt.DOKill();
+            rt.anchoredPosition = orig + new Vector2(GetScreenOffsetX(), 0f);
+            rt.localScale = Vector3.one * 0.97f;
+            float dur = Mathf.Max(0.05f, coverFullscreenAnimDuration) * 1.2f;
+            DOTween.Sequence()
+                .Join(rt.DOAnchorPos(orig, dur).SetEase(Ease.OutQuint))
+                .Join(rt.DOScale(Vector3.one, dur).SetEase(Ease.OutBack))
+                .SetTarget(_levelListMenuRoot);
+        }
 
         public void TogglePreviewPlayback()
         {

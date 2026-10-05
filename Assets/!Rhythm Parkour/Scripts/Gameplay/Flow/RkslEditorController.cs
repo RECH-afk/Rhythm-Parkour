@@ -100,6 +100,8 @@ if (titleInput == null || artistInput == null || creatorInput == null)
         protected override void OnReady()
         {
 
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
             if (transfer != null && transfer.hasLevel && transfer.levelData != null)
             {
                 levelData = transfer.levelData;

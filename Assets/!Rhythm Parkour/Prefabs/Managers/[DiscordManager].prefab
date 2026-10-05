@@ -44,8 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8a19e27e3808d1549b37fcb4f56532ea, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  applicationID: 1236748832952418368
-  details: Initialization...
+  applicationID: 1547633668728815768
+  details: TEST RICH PRESENCE
   state: 
-  largeImage: dd_icon_beta
-  largeText: 2.0
+  largeImage: rhythmparkourwhite
+  largeText: 1.0

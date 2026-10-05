@@ -1027,7 +1027,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16981131, g: 0.16981131, b: 0.16981131, a: 1}
+  m_Color: {r: 0.08679241, g: 0.08679241, b: 0.08679241, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -4202,6 +4202,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 340917072}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 51e349d7891d86040aaebf84cb6479de,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 340917075}
   m_SourcePrefab: {fileID: 100100000, guid: 51e349d7891d86040aaebf84cb6479de, type: 3}
 --- !u!1 &308370641
 GameObject:
@@ -4507,6 +4511,27 @@ MonoBehaviour:
   axis: {x: 0, y: 1, z: 0}
   degreesPerBeat: 15
   smooth: 0.05
+--- !u!135 &340917075
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 340917068}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.0245
+  m_Center: {x: 0.000000008381903, y: -0.000000006519257, z: -3.6023125e-16}
 --- !u!1 &366550983
 GameObject:
   m_ObjectHideFlags: 0
@@ -6298,6 +6323,12 @@ MonoBehaviour:
   scrollSpeed: 6
   acceleration: 12
   damping: 6
+  boundaryCollider: {fileID: 340917075}
+  confineInside: 1
+  collideRadius: 0.3
+  collideLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
 --- !u!1 &591143419
 GameObject:
   m_ObjectHideFlags: 0
@@ -13449,11 +13480,11 @@ RectTransform:
   - {fileID: 861982212}
   m_Father: {fileID: 295294843}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 449.31607, y: 230.25}
-  m_SizeDelta: {x: 129.0263, y: 64.4947}
-  m_Pivot: {x: 0, y: 0}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -1341.6576, y: 230.25}
+  m_SizeDelta: {x: 129.02637, y: 64.4947}
+  m_Pivot: {x: 1, y: 0}
 --- !u!114 &1301427454
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13977,7 +14008,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 0.16981131, g: 0.16981131, b: 0.16981131, a: 1}
+  m_Color: {r: 0.08679241, g: 0.08679241, b: 0.08679241, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -27215,11 +27246,11 @@ RectTransform:
   - {fileID: 1318490045}
   m_Father: {fileID: 295294843}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 291.06604, y: 230.25}
-  m_SizeDelta: {x: 129.0263, y: 64.4947}
-  m_Pivot: {x: 0, y: 0}
+  m_AnchorMin: {x: 0.5, y: 0}
+  m_AnchorMax: {x: 0.5, y: 0}
+  m_AnchoredPosition: {x: -604.4208, y: 230.25}
+  m_SizeDelta: {x: 129.02637, y: 64.4947}
+  m_Pivot: {x: 0.5, y: 0}
 --- !u!114 &2111672150
 MonoBehaviour:
   m_ObjectHideFlags: 0
