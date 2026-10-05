@@ -57,6 +57,8 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private float swayRotationAmount = 1.5f;
         [SerializeField] private float swayMinSpeed = 0.4f;
         [SerializeField] private float swayMaxSpeed = 1.6f;
+        [SerializeField] private float swayBeatBoost = 1.5f;
+        [SerializeField] private float swayKickDecay = 2f;
         [SerializeField] private float pulseSwayAlpha = 0.3f;
         [SerializeField] private float swayBlendSpeed = 2.5f;
 
@@ -87,6 +89,7 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private TextMeshProUGUI _detailAuthorText;
         [SerializeField] private TextMeshProUGUI _detailArtistText;
         [SerializeField] private TextMeshProUGUI _detailTrackText;
+        [SerializeField] private Button _playLevelButton;
         [SerializeField] private Button _editLevelButton;
         [SerializeField] private Button _deleteLevelButton;
 
@@ -136,6 +139,7 @@ namespace RKS.RhythmParkour.UI
         private bool _swayHoldPulse;
         private Vector2 _swayLastDrift;
         private float _swayLastRot;
+        private float _swaySpeedKick;
         private float _logoBeatPulse;
         private bool _logoBeatWasActive;
         private Vector3 _logoBaseScale = Vector3.zero;
@@ -393,6 +397,9 @@ namespace RKS.RhythmParkour.UI
             float b = _swayBlend * _swayBlend * (3f - 2f * _swayBlend);
             float energyNorm = Mathf.Clamp01(_swayEnergySm / Mathf.Max(0.05f, swayDropThreshold * 1.5f));
             float targetSpeed = Mathf.Lerp(Mathf.Max(0.05f, swayMinSpeed), Mathf.Max(Mathf.Max(0.05f, swayMinSpeed), swayMaxSpeed), energyNorm);
+            if (beat) _swaySpeedKick = 1f;
+            _swaySpeedKick = Mathf.Max(0f, _swaySpeedKick - dt * Mathf.Max(0.1f, swayKickDecay));
+            targetSpeed *= 1f + _swaySpeedKick * Mathf.Max(0f, swayBeatBoost);
             _swaySpeedNow = Mathf.Lerp(_swaySpeedNow, targetSpeed, Mathf.Clamp01(dt * 2.5f));
             _swayPhase += dt * _swaySpeedNow;
             float t = _swayPhase;
@@ -408,6 +415,7 @@ namespace RKS.RhythmParkour.UI
                 if (_swayWasActive)
                 {
                     _swayWasActive = false;
+                    _swaySpeedKick = 0f;
                     if (logoOk && _originalPositions.TryGetValue(_logoTransform.gameObject, out var lb))
                     {
                         _logoTransform.anchoredPosition = lb;
@@ -438,13 +446,11 @@ namespace RKS.RhythmParkour.UI
         private bool IsLogoHovered()
         {
             if (_logoTransform == null) return false;
-            if (_menuCanvas == null)
-            {
-                _menuCanvas = GetComponentInParent<Canvas>();
-                if (_menuCanvas == null) _menuCanvas = FindFirstObjectByType<Canvas>();
-                if (_menuCanvas == null) return false;
-            }
-            Camera cam = _menuCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : _menuCanvas.worldCamera;
+            Canvas logoCanvas = _logoTransform.GetComponentInParent<Canvas>();
+            if (logoCanvas == null) logoCanvas = _menuCanvas;
+            if (logoCanvas == null) return false;
+            _menuCanvas = logoCanvas;
+            Camera cam = logoCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : logoCanvas.worldCamera;
             return RectTransformUtility.RectangleContainsScreenPoint(_logoTransform, Input.mousePosition, cam);
         }
 
@@ -1149,8 +1155,10 @@ namespace RKS.RhythmParkour.UI
         private void UpdateDetailsButtonsState()
         {
             bool hasSelection = !string.IsNullOrEmpty(_selectedLevelPath);
+            if (_playLevelButton != null) _playLevelButton.interactable = hasSelection;
             if (_editLevelButton != null) _editLevelButton.interactable = hasSelection;
             if (_deleteLevelButton != null) _deleteLevelButton.interactable = hasSelection;
+
         }
 
         private void PopulateDetails(string path)
@@ -1660,6 +1668,11 @@ namespace RKS.RhythmParkour.UI
 
             if (Transition != null) Transition.LoadScene(_gameSceneName);
             else SceneManager.LoadScene(_gameSceneName);
+        }
+        public void PlaySelectedLevel()
+        {
+            if (string.IsNullOrEmpty(_selectedLevelPath)) return;
+            LoadAndPlay(_selectedLevelPath);
         }
 
         public void EditSelectedLevel()

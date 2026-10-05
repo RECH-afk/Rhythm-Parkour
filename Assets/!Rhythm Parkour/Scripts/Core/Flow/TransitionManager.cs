@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.UI;
@@ -54,22 +55,45 @@ namespace RKS.RhythmParkour.Core.Managers
 
         private Animator _animator;
         private TextMeshProUGUI _progressLabel;
+        private Canvas _overlayCanvas;
         private bool _isTransitioning;
+        private int _loadGen;
+        private readonly List<GraphicRaycaster> _overlayRaycasters = new List<GraphicRaycaster>();
+        private readonly List<Graphic> _overlayGraphics = new List<Graphic>();
 
         protected override void OnReady()
         {
             if (transitionPrefab == null) { Debug.LogError("[Transition] transitionPrefab не назначен", this); return; }
             var instance = Instantiate(transitionPrefab, transform);
             instance.SetActive(true);
-            var canvas = instance.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            if (canvas != null)
+            foreach (var gr in instance.GetComponentsInChildren<GraphicRaycaster>(true))
             {
-                if (canvas.renderMode == RenderMode.ScreenSpaceCamera && canvas.worldCamera == null)
-                    canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-                canvas.overrideSorting = true;
-                canvas.sortingOrder = Mathf.Max(canvas.sortingOrder, 9999);
+                if (gr == null) continue;
+                gr.enabled = false;
+                _overlayRaycasters.Add(gr);
             }
+            if (_overlayRaycasters.Count == 0)
+            {
+                var added = instance.AddComponent<GraphicRaycaster>();
+                if (added != null) _overlayRaycasters.Add(added);
+            }
+            foreach (var g in instance.GetComponentsInChildren<Graphic>(true))
+            {
+                if (g == null) continue;
+                g.raycastTarget = false;
+                _overlayGraphics.Add(g);
+            }
+            var canvas = instance.GetComponentInChildren<Canvas>(true);
+            if (canvas == null) canvas = instance.AddComponent<Canvas>();
+            _overlayCanvas = canvas;
+            foreach (var c in instance.GetComponentsInChildren<Canvas>(true))
+            {
+                if (c == null) continue;
+                c.renderMode = RenderMode.ScreenSpaceOverlay;
+                c.overrideSorting = true;
+                if (c.sortingOrder < 9999) c.sortingOrder = 9999;
+            }
+            EnforceOverlayCanvas();
             _animator = instance.GetComponent<Animator>();
             if (_animator == null) _animator = instance.GetComponentInChildren<Animator>(true);
             if (_animator == null) Debug.LogError("[Transition] Animator не найден в префабе перехода", this);
@@ -80,6 +104,22 @@ namespace RKS.RhythmParkour.Core.Managers
             }
             if (_progressLabel == null) _progressLabel = instance.GetComponentInChildren<TextMeshProUGUI>(true);
             UpdateProgressLabel(0f, 0);
+        }
+
+        void EnforceOverlayCanvas()
+        {
+            if (_overlayCanvas == null) return;
+            _overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _overlayCanvas.overrideSorting = true;
+            if (_overlayCanvas.sortingOrder < 9999) _overlayCanvas.sortingOrder = 9999;
+        }
+
+        void SetOverlayBlocking(bool blocking)
+        {
+            foreach (var gr in _overlayRaycasters)
+                if (gr != null) gr.enabled = blocking;
+            foreach (var g in _overlayGraphics)
+                if (g != null) g.raycastTarget = blocking;
         }
 
         void UpdateProgressLabel(float norm, int phraseIdx)
@@ -108,16 +148,19 @@ namespace RKS.RhythmParkour.Core.Managers
 
         public async Task LoadSceneAsync(string sceneName)
         {
-            if (_isTransitioning)
-                return;
-
+            _loadGen++;
+            int gen = _loadGen;
             _isTransitioning = true;
+            EnforceOverlayCanvas();
+            SetOverlayBlocking(true);
+            UpdateProgressLabel(0f, 0);
 
             if (_animator)
                 _animator.SetTrigger(triggerIn);
 
             if (delayBeforeLoad > 0)
                 await Task.Delay(TimeSpan.FromSeconds(delayBeforeLoad));
+            if (gen != _loadGen) return;
 
             var async = SceneManager.LoadSceneAsync(sceneName);
             async.allowSceneActivation = false;
@@ -128,6 +171,7 @@ namespace RKS.RhythmParkour.Core.Managers
             UpdateProgressLabel(0f, phraseIdx);
             while (async.progress < 0.9f)
             {
+                if (gen != _loadGen) return;
                 shown = Mathf.MoveTowards(shown, async.progress / 0.9f, Time.unscaledDeltaTime * Mathf.Max(0.1f, percentSmoothSpeed));
                 phraseTimer += Time.unscaledDeltaTime;
                 if (phraseTimer >= Mathf.Max(0.1f, phraseChangeInterval)) { phraseTimer = 0f; phraseIdx = NextPhraseIndex(phraseIdx); }
@@ -135,24 +179,30 @@ namespace RKS.RhythmParkour.Core.Managers
                 await Task.Yield();
             }
 
+            if (gen != _loadGen) return;
             async.allowSceneActivation = true;
             while (shown < 0.999f)
             {
+                if (gen != _loadGen) return;
                 shown = Mathf.MoveTowards(shown, 1f, Time.unscaledDeltaTime * Mathf.Max(0.1f, percentSmoothSpeed));
                 phraseTimer += Time.unscaledDeltaTime;
                 if (phraseTimer >= Mathf.Max(0.1f, phraseChangeInterval)) { phraseTimer = 0f; phraseIdx = NextPhraseIndex(phraseIdx); }
                 UpdateProgressLabel(shown, phraseIdx);
                 await Task.Yield();
             }
+            if (gen != _loadGen) return;
             phraseIdx = loadingStages != null && loadingStages.Length > 0 ? loadingStages.Length - 1 : 0;
             UpdateProgressLabel(1f, phraseIdx);
             float endLeft = Mathf.Max(0f, endHoldTime);
             while (endLeft > 0f)
             {
+                if (gen != _loadGen) return;
                 endLeft -= Time.unscaledDeltaTime;
                 await Task.Yield();
             }
 
+            if (gen != _loadGen) return;
+            SetOverlayBlocking(false);
             if (_animator)
                 _animator.SetTrigger(triggerOut);
 
