@@ -134,6 +134,10 @@ namespace RKS.RhythmParkour.UI.Timeline
         private TimelineGridView gridView;
         private TimelineTransport transport;
         private TimelinePropertiesController propsController;
+        private const int maxUndoDepth = 50;
+        private readonly Stack<RhythmLevelData> undoStack = new Stack<RhythmLevelData>();
+        private readonly Stack<RhythmLevelData> redoStack = new Stack<RhythmLevelData>();
+        private RhythmLevelData undoLevelRef;
 
         protected override void OnInjected()
         {
@@ -416,6 +420,87 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             if (loopToggleLabel != null) loopToggleLabel.text = loopPlayback ? "Loop ON" : "Loop OFF";
         }
+        void SyncUndoRef()
+        {
+            if (!ReferenceEquals(undoLevelRef, levelData))
+            {
+                undoStack.Clear();
+                redoStack.Clear();
+                undoLevelRef = levelData;
+            }
+        }
+        void TrimUndoStack(Stack<RhythmLevelData> st)
+        {
+            if (st.Count <= maxUndoDepth) return;
+            var arr = st.ToArray();
+            st.Clear();
+            for (int i = maxUndoDepth - 1; i >= 0; i--) st.Push(arr[i]);
+        }
+        public void PushUndo()
+        {
+            if (levelData == null) return;
+            SyncUndoRef();
+            undoStack.Push(levelData.CloneDeep());
+            TrimUndoStack(undoStack);
+            redoStack.Clear();
+        }
+        void RestoreSnapshot(RhythmLevelData snap)
+        {
+            if (levelData == null || snap == null) return;
+            levelData.music = snap.music;
+            levelData.video = snap.video;
+            levelData.cover = snap.cover;
+            levelData.fullTitle = snap.fullTitle;
+            levelData.songAuthor = snap.songAuthor;
+            levelData.mapAuthor = snap.mapAuthor;
+            levelData.bpm = snap.bpm;
+            levelData.offset = snap.offset;
+            levelData.audioPath = snap.audioPath;
+            levelData.videoPath = snap.videoPath;
+            levelData.particlesEnabled = snap.particlesEnabled;
+            levelData.particleColor = snap.particleColor;
+            levelData.particleSpriteName = snap.particleSpriteName;
+            levelData.particleSprite = snap.particleSprite;
+            levelData.obstacleColor = snap.obstacleColor;
+            levelData.trackColor = snap.trackColor;
+            levelData.sphereRotates = snap.sphereRotates;
+            levelData.sphereUseVideo = snap.sphereUseVideo;
+            levelData.defaultObstacleMaterialName = snap.defaultObstacleMaterialName;
+            levelData.defaultObstacleMaterial = snap.defaultObstacleMaterial;
+            levelData.events = new List<ObstacleEvent>(snap.events);
+        }
+        void RefreshAfterUndo()
+        {
+            if (notesController != null) notesController.DeselectNote();
+            if (preview != null) preview.ForceRefresh();
+            var vs = FindFirstObjectByType<LevelEditorVisualSettings>();
+            if (vs != null) { vs.RefreshFromData(); vs.ApplyVisual(); }
+            FlashStatus("Отмена (Ctrl+Z)");
+        }
+        public void Undo()
+        {
+            if (levelData == null) return;
+            SyncUndoRef();
+            if (undoStack.Count == 0) { FlashStatus("Нечего отменять (Ctrl+Z)"); return; }
+            redoStack.Push(levelData.CloneDeep());
+            TrimUndoStack(redoStack);
+            RestoreSnapshot(undoStack.Pop());
+            RefreshAfterUndo();
+        }
+        public void Redo()
+        {
+            if (levelData == null) return;
+            SyncUndoRef();
+            if (redoStack.Count == 0) { FlashStatus("Нечего вернуть (Ctrl+Shift+Z)"); return; }
+            undoStack.Push(levelData.CloneDeep());
+            TrimUndoStack(undoStack);
+            RestoreSnapshot(redoStack.Pop());
+            if (notesController != null) notesController.DeselectNote();
+            if (preview != null) preview.ForceRefresh();
+            var vs = FindFirstObjectByType<LevelEditorVisualSettings>();
+            if (vs != null) { vs.RefreshFromData(); vs.ApplyVisual(); }
+            FlashStatus("Возврат (Ctrl+Shift+Z)");
+        }
         public void UpdateAutoscrollLockFromScreenPos(Vector2 screenPos)
         {
             if (!autoScrollWithPlayhead || !autoscrollKeepCurrentPosition) return;
@@ -656,6 +741,14 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (Input.GetKeyDown(KeyCode.Space)) TogglePlayPause();
             if (Input.GetKeyDown(addNoteKey) || Input.GetKeyDown(altAddNoteKey)) notesController.AddNoteAtCurrentPlayhead();
             if (Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl)) { if (Input.GetKeyDown(KeyCode.A)) { notesController.SelectAllNotes(); return; } }
+            bool ctrlDown = Input.GetKey(KeyCode.LeftControl) || Input.GetKey(KeyCode.RightControl) || Input.GetKey(KeyCode.LeftCommand) || Input.GetKey(KeyCode.RightCommand);
+            if (ctrlDown && Input.GetKeyDown(KeyCode.Z))
+            {
+                if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)) Redo();
+                else Undo();
+                return;
+            }
+            if (ctrlDown && Input.GetKeyDown(KeyCode.Y)) { Redo(); return; }
             if (Input.GetKeyDown(KeyCode.Delete) || Input.GetKeyDown(KeyCode.Backspace)) notesController.DeleteSelectionOrNearest();
             for (int k = 1; k <= 12; k++) { if (Input.GetKeyDown(KeyCode.Alpha0 + k) || Input.GetKeyDown(KeyCode.Keypad0 + k)) { notesController.SetBrush(k - 1); } }
             if (notesController.HasSelection() && levelData != null && (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow)))

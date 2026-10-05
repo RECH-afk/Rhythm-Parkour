@@ -161,6 +161,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             }
 
             var tgt = notes.GetApplyTargets();
+            ui.PushUndo();
             foreach (var ti in tgt)
             {
                 if (ti < 0 || ti >= levelData.events.Count) continue;

@@ -14,4 +14,6 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/!Rhythm Parkour/Scenes/IsLevelEditorScene.unity
     guid: 835dc4d346e1609419d7d71460d925e3
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.addressableassets: {fileID: 11400000, guid: 46d940a567e4ac245bb11c2ac768bbde,
+      type: 2}

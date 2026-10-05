@@ -127,7 +127,12 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             RestoreTimelineAudio();
 
             if (levelData != null && visual != null) visual.Apply(levelData, previewVideo, true);
-            CaptureSavedState();
+            if (transfer != null && transfer.editorHasSavedState)
+            {
+                savedFingerprint = transfer.editorSavedFingerprint;
+                hasSavedState = true;
+            }
+            else CaptureSavedState();
 
             if (titleInput != null) titleInput.onValueChanged.AddListener(OnMetadataInputChanged);
             if (artistInput != null) artistInput.onValueChanged.AddListener(OnMetadataInputChanged);
@@ -273,6 +278,17 @@ if (titleInput == null || artistInput == null || creatorInput == null)
                 h = h * 31 + (levelData.audioPath ?? "").GetHashCode();
                 h = h * 31 + (levelData.videoPath ?? "").GetHashCode();
                 h = h * 31 + (levelData.music != null ? levelData.music.name.GetHashCode() : 0);
+                h = h * 31 + levelData.bpm.GetHashCode();
+                h = h * 31 + levelData.offset.GetHashCode();
+                h = h * 31 + (levelData.particlesEnabled ? 1 : 0);
+                h = h * 31 + levelData.particleColor.GetHashCode();
+                h = h * 31 + (levelData.particleSpriteName ?? "").GetHashCode();
+                h = h * 31 + levelData.obstacleColor.GetHashCode();
+                h = h * 31 + levelData.trackColor.GetHashCode();
+                h = h * 31 + (levelData.sphereRotates ? 1 : 0);
+                h = h * 31 + (levelData.sphereUseVideo ? 1 : 0);
+                h = h * 31 + (levelData.defaultObstacleMaterialName ?? "").GetHashCode();
+                h = h * 31 + (levelData.cover != null ? 1 : 0);
                 h = h * 31 + levelData.events.Count;
                 foreach (var e in levelData.events)
                 {
@@ -291,6 +307,11 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             SyncLevelFromUI();
             savedFingerprint = ComputeLevelFingerprint();
             hasSavedState = true;
+            if (transfer != null)
+            {
+                transfer.editorSavedFingerprint = savedFingerprint;
+                transfer.editorHasSavedState = true;
+            }
         }
 
         bool HasUnsavedChanges()
@@ -339,6 +360,11 @@ if (titleInput == null || artistInput == null || creatorInput == null)
             if (previewManager != null) previewManager.levelData = levelData;
             if (transfer != null)
                 transfer.SetLevel(levelData, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            if (transfer != null)
+            {
+                transfer.editorSavedFingerprint = savedFingerprint;
+                transfer.editorHasSavedState = hasSavedState;
+            }
             UpdateStatus("Тест уровня — возврат в редактор: Esc");
             if (Transition != null) Transition.LoadScene(gameSceneName);
             else UnityEngine.SceneManagement.SceneManager.LoadScene(gameSceneName);
@@ -502,6 +528,11 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             if (ok) { UpdateStatus($"Сохранено: {Path.GetFileName(path)}"); CaptureSavedState(); }
             else UpdateStatus("Ошибка сохранения");
             return ok;
+        }
+
+        public void SaveLevel()
+        {
+            SaveRksl();
         }
 
         public void SaveAndExit()

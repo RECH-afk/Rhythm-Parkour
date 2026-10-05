@@ -3742,7 +3742,7 @@ MonoBehaviour:
       - m_Target: {fileID: 484157968}
         m_TargetAssemblyTypeName: RKS.RhythmParkour.Rhythm.RkslEditorController,
           Assembly-CSharp
-        m_MethodName: SaveRksl
+        m_MethodName: SaveLevel
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -3962,6 +3962,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   catalog: {fileID: 11400000, guid: c31b00e2c10bc6b409a1b04044debf1b, type: 2}
   rootCanvas: {fileID: 1444323772}
   timelineScrollRect: {fileID: 940876855}
@@ -5868,6 +5870,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   previewVideo: {fileID: 0}
   visualSettings: {fileID: 1442854770}
   coverPreviewImage: {fileID: 766676911}
@@ -9038,6 +9042,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   trackFloor: {fileID: 1243085352}
   trackWidth: 6
   trackMinX: -2.95

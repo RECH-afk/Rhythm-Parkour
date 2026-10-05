@@ -22,6 +22,8 @@ namespace RKS.RhythmParkour.Rhythm
         public string levelName = "";
         public string sourceScene = "";
         public bool fromEditor = false;
+        public int editorSavedFingerprint;
+        public bool editorHasSavedState;
 
 public bool hasLevel
         {
@@ -62,6 +64,8 @@ public bool hasLevel
             sourceScene = srcScene;
             fromEditor = srcScene == "LevelEditor" || srcScene == "IsLevelEditorScene";
             rkslPath = "";
+            editorHasSavedState = false;
+            editorSavedFingerprint = 0;
             UnityEngine.Debug.Log($"[LevelTransfer] SetLevel '{levelName}' from {srcScene} events={data.events?.Count ?? 0}");
         }
 
@@ -100,6 +104,8 @@ public bool hasLevel
             levelName = "";
             sourceScene = "";
             fromEditor = false;
+            editorHasSavedState = false;
+            editorSavedFingerprint = 0;
         }
     }
 }

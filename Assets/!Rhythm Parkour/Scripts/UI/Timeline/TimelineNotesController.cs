@@ -259,6 +259,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             var levelData = ui.levelData;
             if (levelData == null || idx < 0 || idx >= levelData.events.Count) return;
+            ui.PushUndo();
             dragNoteIdx = idx; isDraggingNote = true;
             if (!selectedIndices.Contains(idx))
             {
@@ -427,6 +428,7 @@ namespace RKS.RhythmParkour.UI.Timeline
 
         public void NudgeSelection(float beatDelta)
         {
+            ui.PushUndo();
             if (selectedIndices.Count > 1) NudgeSelected(beatDelta);
             else
             {
@@ -458,6 +460,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             float spawnBeat = levelData.TimeToBeat(spawnTime);
 
             if (ui.brushIndex < 0 || ui.brushIndex >= gCountAdd) { ui.FlashStatus($"Кисть {ui.brushIndex} вне каталога (0–{gCountAdd - 1})"); return; }
+            ui.PushUndo();
             var ev = ObstacleEvent.Create(spawnBeat, ui.brushIndex, Vector3.zero, speed);
             ev.time = spawnTime;
             levelData.events.Add(ev);
@@ -476,6 +479,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             var levelData = ui.levelData;
             if (levelData == null || idx < 0 || idx >= levelData.events.Count) return;
+            ui.PushUndo();
             levelData.events.RemoveAt(idx);
 
             selectedIndex = Mathf.Clamp(idx - 1, -1, levelData.events.Count - 1);
@@ -501,6 +505,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             var levelData = ui.levelData;
             if (levelData == null || selectedIndices.Count == 0) return;
+            ui.PushUndo();
             var sorted = new List<int>(selectedIndices); sorted.Sort((a, b) => b.CompareTo(a));
             foreach (var idx in sorted) if (idx >= 0 && idx < levelData.events.Count) levelData.events.RemoveAt(idx);
 
@@ -511,6 +516,8 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             var levelData = ui.levelData;
             if (levelData == null) return;
+            if (levelData.events.Count == 0) return;
+            ui.PushUndo();
             levelData.events.Clear();
 
             selectedIndex = -1; selectedIndices.Clear(); RefreshNotes(); props.HidePropertiesPanel(); ui.FlashStatus("Все ноты удалены");

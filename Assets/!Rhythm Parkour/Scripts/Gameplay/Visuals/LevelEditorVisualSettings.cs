@@ -270,6 +270,7 @@ public void RefreshFromData()
             if (_isRefreshing) return;
             if (_levelData == null) ResolveDependencies();
             if (_levelData == null) return;
+            timelineUI?.PushUndo();
             _levelData.particlesEnabled = value;
             ApplyVisual();
         }
@@ -279,6 +280,7 @@ public void RefreshFromData()
             if (_isRefreshing) return;
             if (_levelData == null) ResolveDependencies();
             if (_levelData == null) return;
+            timelineUI?.PushUndo();
             _levelData.sphereRotates = value;
             ApplyVisual();
         }
@@ -288,6 +290,7 @@ public void RefreshFromData()
             if (_isRefreshing) return;
             if (_levelData == null) ResolveDependencies();
             if (_levelData == null) return;
+            timelineUI?.PushUndo();
             _levelData.sphereUseVideo = value;
             ApplyVisual();
         }
@@ -328,6 +331,7 @@ public void RefreshFromData()
             _colorPicker.onColorChange.RemoveListener(OnPickerColorChanged);
             _colorPicker.onColorChange.AddListener(OnPickerColorChanged);
 
+            timelineUI?.PushUndo();
             OnPickerColorChanged(current);
         }
 
@@ -497,6 +501,7 @@ public void RefreshFromData()
         private void OnSpritePicked(string storedName, Sprite spr, bool isDefault)
         {
             if (_levelData == null) return;
+            timelineUI?.PushUndo();
             if (isDefault)
             {
                 _levelData.particleSpriteName = "";
@@ -524,6 +529,7 @@ public void RefreshFromData()
         public void ClearParticleSprite()
         {
             if (_levelData == null) return;
+            timelineUI?.PushUndo();
             _levelData.particleSprite = null;
             _levelData.particleSpriteName = "";
             UpdateSpriteLabel();
@@ -647,6 +653,7 @@ public void RefreshFromData()
         private void OnMaterialPicked(string name, Material mat, bool isDefault)
         {
             if (_levelData == null) return;
+            timelineUI?.PushUndo();
 
             if (isDefault)
             {
@@ -682,7 +689,7 @@ public void RefreshFromData()
 
     #region Visual Application
 
-        private void ApplyVisual()
+        public void ApplyVisual()
         {
             if (_levelData == null) return;
 
