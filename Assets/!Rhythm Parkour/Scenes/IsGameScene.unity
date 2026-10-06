@@ -999,7 +999,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 362504558}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -1114,7 +1114,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: SUCK
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c13cfca6da12dc44a86e690fa81e25d5, type: 2}
   m_sharedMaterial: {fileID: -6220101661779451932, guid: c13cfca6da12dc44a86e690fa81e25d5,
@@ -1933,6 +1933,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   trackFloor: {fileID: 1243085352}
   trackWidth: 6
   trackMinX: -2.95
@@ -3265,6 +3267,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   musicInfo: {fileID: 0}
 --- !u!1 &1139418233
 GameObject:
@@ -3934,6 +3938,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   canvasGroup: {fileID: 1443846316}
   panelRect: {fileID: 1443846313}
   coverImage: {fileID: 971354320}
@@ -9312,9 +9318,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: 'GODLIKE
-
-    100%'
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: c13cfca6da12dc44a86e690fa81e25d5, type: 2}
   m_sharedMaterial: {fileID: -6220101661779451932, guid: c13cfca6da12dc44a86e690fa81e25d5,
@@ -9614,6 +9618,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   menu: {fileID: 0}
 --- !u!1 &1962893913
 GameObject:
@@ -9943,10 +9949,10 @@ MonoBehaviour:
   onDeath:
     m_PersistentCalls:
       m_Calls: []
-  flashOnDamage: 1
+  flashOnDamage: 0
   damageFlashColor: {r: 1, g: 0.2, b: 0.2, a: 0.35}
   flashDuration: 0.18
-  showHitbox: 1
+  showHitbox: 0
   hitboxColor: {r: 0.3, g: 0.6, b: 1, a: 0.9}
   hitboxGrow: 1
   parkour: {fileID: 0}
