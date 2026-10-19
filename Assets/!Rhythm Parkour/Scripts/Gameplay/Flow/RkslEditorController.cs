@@ -115,6 +115,7 @@ if (titleInput == null || artistInput == null || creatorInput == null)
 
             EnsureVisualSettings();
             if (exitConfirmWindow != null) exitConfirmWindow.SetActive(false);
+            if (saveSuccessWindow != null) saveSuccessWindow.SetActive(false);
             RestorePathsFromData();
 
             if (levelData != null) PopulateUIFromData();
@@ -508,14 +509,9 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             string defaultName = string.IsNullOrEmpty(levelData.fullTitle) ? "NewLevel" : levelData.fullTitle;
             defaultName = string.Join("_", defaultName.Split(Path.GetInvalidFileNameChars()));
 
-#if UNITY_EDITOR
-            string path = EditorUtility.SaveFilePanel("Сохранить .rksl", "", defaultName + ".rksl", "rksl");
-            if (string.IsNullOrEmpty(path)) return false;
-#else
             string dir = Path.Combine(Application.persistentDataPath, "Levels");
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, defaultName + ".rksl");
-#endif
             var manifest = Store.FromRuntimeData(levelData);
             manifest.title = levelData.fullTitle;
             manifest.artist = levelData.songAuthor;
@@ -525,9 +521,25 @@ if (titleInput != null) levelData.fullTitle = titleInput.text;
             string videoSrc = !string.IsNullOrEmpty(currentVideoPath) ? currentVideoPath : levelData.videoPath;
             string coverSrc = !string.IsNullOrEmpty(currentCoverPath) ? currentCoverPath : null;
             bool ok = Store.Save(path, manifest, audioSrc, videoSrc, coverSrc, currentCoverSprite ?? levelData.cover);
-            if (ok) { UpdateStatus($"Сохранено: {Path.GetFileName(path)}"); CaptureSavedState(); }
+            if (ok) { UpdateStatus($"Сохранено: {Path.GetFileName(path)}"); CaptureSavedState(); ShowSaveSuccessWindow(); }
             else UpdateStatus("Ошибка сохранения");
             return ok;
+        }
+
+        public GameObject saveSuccessWindow;
+        public float saveSuccessVisibleSeconds = 2f;
+
+        void ShowSaveSuccessWindow()
+        {
+            if (saveSuccessWindow == null) return;
+            saveSuccessWindow.SetActive(true);
+            CancelInvoke(nameof(HideSaveSuccessWindow));
+            Invoke(nameof(HideSaveSuccessWindow), Mathf.Max(0.1f, saveSuccessVisibleSeconds));
+        }
+
+        void HideSaveSuccessWindow()
+        {
+            if (saveSuccessWindow != null) saveSuccessWindow.SetActive(false);
         }
 
         public void SaveLevel()

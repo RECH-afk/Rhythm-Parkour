@@ -6671,6 +6671,8 @@ MonoBehaviour:
     levelName: 
     sourceScene: 
     fromEditor: 0
+    editorSavedFingerprint: 0
+    editorHasSavedState: 0
   previewVideo: {fileID: 997951664}
   backgroundImage: {fileID: 124778431}
   blendFadeDuration: 1.2

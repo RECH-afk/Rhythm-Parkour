@@ -85,9 +85,30 @@ namespace RKS.RhythmParkour
                 ProcessSelectedFile(path);
             }
 #else
-            UpdateStatus("Для выбора файлов в билде подключите плагин StandaloneFileBrowser");
-            Debug.LogWarning("Runtime file dialog requires a plugin.");
+            try
+            {
+                var filters = GetSfbFilters();
+                string[] paths = SFB.StandaloneFileBrowser.OpenFilePanel("Выберите файл", "", filters, false);
+                if (paths != null && paths.Length > 0 && !string.IsNullOrEmpty(paths[0]))
+                    ProcessSelectedFile(paths[0]);
+            }
+            catch (System.Exception e)
+            {
+                Flash(errorColor);
+                UpdateStatus("Диалог недоступен");
+                Debug.LogWarning("[FileLoader] SFB: " + e.Message, this);
+            }
 #endif
+        }
+
+        SFB.ExtensionFilter[] GetSfbFilters()
+        {
+            var list = new System.Collections.Generic.List<SFB.ExtensionFilter>();
+            if ((allowedTypes & AllowedFileTypes.Rksl) != 0) list.Add(new SFB.ExtensionFilter("RKS Level", "rksl"));
+            if ((allowedTypes & AllowedFileTypes.Audio) != 0) list.Add(new SFB.ExtensionFilter("Audio", "mp3", "wav", "ogg", "m4a", "aiff"));
+            if ((allowedTypes & AllowedFileTypes.Video) != 0) list.Add(new SFB.ExtensionFilter("Video", "mp4"));
+            if ((allowedTypes & AllowedFileTypes.Photo) != 0) list.Add(new SFB.ExtensionFilter("Image", "png", "jpg", "jpeg", "webp"));
+            return list.ToArray();
         }
 
         string GetFilterForAllowedTypes()
