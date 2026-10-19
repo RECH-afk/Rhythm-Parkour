@@ -1438,11 +1438,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1277012771}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -208.47302, y: 0.00000047684}
-  m_SizeDelta: {x: 79.68, y: 79.68}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -443.63303, y: 12.16}
+  m_SizeDelta: {x: 79.67999, y: 79.68}
+  m_Pivot: {x: 1, y: 0}
 --- !u!114 &226789102
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3815,11 +3815,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 793631256}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -214.3, y: 0.0000013113}
-  m_SizeDelta: {x: 81.76, y: 81.76}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -448.42, y: 11.119999}
+  m_SizeDelta: {x: 81.76001, y: 81.76}
+  m_Pivot: {x: 1, y: 0}
 --- !u!114 &431589428
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6305,6 +6305,7 @@ GameObject:
   - component: {fileID: 793631257}
   - component: {fileID: 793631260}
   - component: {fileID: 793631261}
+  - component: {fileID: 793631262}
   m_Layer: 5
   m_Name: ButtonSettings
   m_TagString: Untagged
@@ -6450,6 +6451,73 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+--- !u!114 &793631262
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 793631255}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66323024b42c2824bb05c5c8d8b3bc11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.FrameAnimationPlayer
+  targetImage: {fileID: 431589429}
+  frames:
+  - {fileID: 21300000, guid: 142637ead19f28c4f9239b57d23138c8, type: 3}
+  - {fileID: 21300000, guid: 813ab76cf53bdd043bd5b87923078ed2, type: 3}
+  - {fileID: 21300000, guid: 3ed423e310f30bb43b817efc08cca03a, type: 3}
+  - {fileID: 21300000, guid: ad4b4513a1708aa409ba1fe383aa580b, type: 3}
+  - {fileID: 21300000, guid: dffa16885bd3b4847bb05beddb7e6f9a, type: 3}
+  - {fileID: 21300000, guid: f10b82fafa332c045a57eeadb9a0e711, type: 3}
+  - {fileID: 21300000, guid: 333a8415a33d5c0489a1b41c842dfb7e, type: 3}
+  - {fileID: 21300000, guid: 3dd950929597a3347bc07863a6b7dfcf, type: 3}
+  - {fileID: 21300000, guid: 5355ba9c629af5644bcd1847258d70bb, type: 3}
+  - {fileID: 21300000, guid: f60efb74361636942b8aa8d3feccf460, type: 3}
+  - {fileID: 21300000, guid: d6dc67a821c44c14895fa97e42c5dd14, type: 3}
+  - {fileID: 21300000, guid: 3b66df467a7407742a89c5ab716db179, type: 3}
+  - {fileID: 21300000, guid: bdb66b8471acdbf4ab4c69f6ff12e578, type: 3}
+  - {fileID: 21300000, guid: 54c361472729e5d41b1366443abb76b3, type: 3}
+  - {fileID: 21300000, guid: bf268f04b3d3aa348bf047ce76b57bad, type: 3}
+  - {fileID: 21300000, guid: d3a8e330b379e5b489d5f8347d472f28, type: 3}
+  - {fileID: 21300000, guid: d5cfee285e85c9d44a98ed116b551cbc, type: 3}
+  - {fileID: 21300000, guid: 170320f294a60e04c8a00e6b0228f249, type: 3}
+  - {fileID: 21300000, guid: 944e20be3fa134b4d816d1b3713fcd71, type: 3}
+  - {fileID: 21300000, guid: 0238ea86a2925ba4e815c7d09a96c497, type: 3}
+  - {fileID: 21300000, guid: 9f81271d281a48847becbebcdbf4e7d1, type: 3}
+  - {fileID: 21300000, guid: 84f9bc44c721b2d45b268c5af6363c1b, type: 3}
+  - {fileID: 21300000, guid: 4d6336946d94d474587d636385a33383, type: 3}
+  - {fileID: 21300000, guid: 943c0737f6a1a004ea63a2ae4a261d81, type: 3}
+  - {fileID: 21300000, guid: da25179c2bccf404aa62fa171339c440, type: 3}
+  - {fileID: 21300000, guid: 76b8e3722de8d854e95049e23e91813b, type: 3}
+  - {fileID: 21300000, guid: 2bc166d56ab0e2b4c8630ef9a7a6f5e6, type: 3}
+  - {fileID: 21300000, guid: 9f345208e246e7d45b2b096f179b0641, type: 3}
+  - {fileID: 21300000, guid: 055c9e1a4f19a7a4ba98087bcaa02ffb, type: 3}
+  - {fileID: 21300000, guid: d00df5555c985584fb21bbc7dde01034, type: 3}
+  - {fileID: 21300000, guid: e408969956de5a349bd9b7318a08e620, type: 3}
+  - {fileID: 21300000, guid: 96989b96d18057a4b97b0ea7a56a7236, type: 3}
+  - {fileID: 21300000, guid: c7a0c5b078b8ffb488bd49e9823d6e42, type: 3}
+  - {fileID: 21300000, guid: f489ccb4cd78e5549bacb21731b1bd13, type: 3}
+  - {fileID: 21300000, guid: 83dc83bedca0e294fbe695a3be4bb921, type: 3}
+  - {fileID: 21300000, guid: 005393d9f19a66941b235c2dbe786191, type: 3}
+  - {fileID: 21300000, guid: 6c8879bc361f0e5469c56a71d05f7f85, type: 3}
+  - {fileID: 21300000, guid: f49532205969c6a4cbb0e4c204acebea, type: 3}
+  - {fileID: 21300000, guid: 6a3be375e145fc14ab2ee5221c6575d4, type: 3}
+  - {fileID: 21300000, guid: 85f3447a89967b446b4290c8934933c5, type: 3}
+  framesPerSecond: 45
+  playMode: 1
+  sizeMode: 0
+  playOnEnable: 0
+  restartOnPlay: 1
+  resetOnStop: 1
+  playOnHover: 1
+  stopOnHoverExit: 1
+  playOnPress: 0
+  stopOnPressRelease: 1
+  onFinished:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &805518885
 GameObject:
   m_ObjectHideFlags: 0
@@ -6711,11 +6779,11 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1701249904}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.5, y: 0.5}
-  m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: -211, y: 0.0000059605}
-  m_SizeDelta: {x: 55.82, y: 68.59}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -458.08997, y: 17.705002}
+  m_SizeDelta: {x: 55.820007, y: 68.59}
+  m_Pivot: {x: 1, y: 0}
 --- !u!114 &838400847
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9701,6 +9769,7 @@ GameObject:
   - component: {fileID: 1277012772}
   - component: {fileID: 1277012775}
   - component: {fileID: 1277012776}
+  - component: {fileID: 1277012777}
   m_Layer: 5
   m_Name: ButtonEditor
   m_TagString: Untagged
@@ -9858,6 +9927,84 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+--- !u!114 &1277012777
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1277012770}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66323024b42c2824bb05c5c8d8b3bc11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.FrameAnimationPlayer
+  targetImage: {fileID: 226789103}
+  frames:
+  - {fileID: 21300000, guid: f664ce93e4600334e9b0bcaaeac4980f, type: 3}
+  - {fileID: 21300000, guid: 0404ddb42f4b9e54cae4eb9b3e36c881, type: 3}
+  - {fileID: 21300000, guid: b574491ebc7460b4e8ad0720265502d6, type: 3}
+  - {fileID: 21300000, guid: c979792f5b797f444917e6b944914f0d, type: 3}
+  - {fileID: 21300000, guid: c557ddc832f2d054da427c6fb618233e, type: 3}
+  - {fileID: 21300000, guid: 2595cb8cfbc2b8b449710d9d3ca521b0, type: 3}
+  - {fileID: 21300000, guid: dc78443a7bb9609449eba4700104af72, type: 3}
+  - {fileID: 21300000, guid: 4cb0caca81df5794d8dddf7d747d72a7, type: 3}
+  - {fileID: 21300000, guid: 32069c83106987e438b69e4d3f4acc30, type: 3}
+  - {fileID: 21300000, guid: f2c487c29a7afad4ba45e8fc1a2331e3, type: 3}
+  - {fileID: 21300000, guid: 6bf25cf1d6cda7444904637af07c5cbc, type: 3}
+  - {fileID: 21300000, guid: 1fec6ae7596363a46801fa48cd388aff, type: 3}
+  - {fileID: 21300000, guid: 3ff927b63b6043944a1c58c793528183, type: 3}
+  - {fileID: 21300000, guid: ab0b209528af36d4888db25472ae54fa, type: 3}
+  - {fileID: 21300000, guid: 1f7c6317a5c3803459aaa2790e86d617, type: 3}
+  - {fileID: 21300000, guid: c436bd2e628f8a44390688798b7e1b81, type: 3}
+  - {fileID: 21300000, guid: 0c755bff3300a944fab6a2e39d2ffbf1, type: 3}
+  - {fileID: 21300000, guid: e008bf3c4a2d04e4389526544a4a0634, type: 3}
+  - {fileID: 21300000, guid: 2c57ffd438e70104f940a584dba31c73, type: 3}
+  - {fileID: 21300000, guid: e2554c57491936d41b11c9d5b96713ef, type: 3}
+  - {fileID: 21300000, guid: 0dbd26fcac81d0942922f21236fceb12, type: 3}
+  - {fileID: 21300000, guid: 0dea1b181dd5a2642badcfc14da23aca, type: 3}
+  - {fileID: 21300000, guid: 1ae8a014e87f48944a22c0888892f6ff, type: 3}
+  - {fileID: 21300000, guid: 60af1df66ba0b324ba126eb1a9b0ca62, type: 3}
+  - {fileID: 21300000, guid: bc66cb689d7d416409b6feae7bbcf597, type: 3}
+  - {fileID: 21300000, guid: 9f1b65d55c590e34da2a530fd11245d9, type: 3}
+  - {fileID: 21300000, guid: 8eb67e29207592c41b0fbbcf20a43659, type: 3}
+  - {fileID: 21300000, guid: ef5b17fdfc3131f4ea85a6ee3e8e0bf2, type: 3}
+  - {fileID: 21300000, guid: 208e36be0c90e5248be9e543c933e7ff, type: 3}
+  - {fileID: 21300000, guid: f38eeea191afd4b48b8459475065458e, type: 3}
+  - {fileID: 21300000, guid: d300934f60412bf4caaed3750345c4b5, type: 3}
+  - {fileID: 21300000, guid: 7af8a363f37f99748b411871086d09fd, type: 3}
+  - {fileID: 21300000, guid: c87c1f19df69774428909d4c91412dc7, type: 3}
+  - {fileID: 21300000, guid: 02cc35ba9f55c334cbe51036579807cb, type: 3}
+  - {fileID: 21300000, guid: cc6a3b3c332ce0040b08477957f462ce, type: 3}
+  - {fileID: 21300000, guid: cff38a745ac665145b1e65eae421cb09, type: 3}
+  - {fileID: 21300000, guid: 6fa98cffbf6b2724992d9fd3afefb71b, type: 3}
+  - {fileID: 21300000, guid: f99480842744c314ab76d3550f19ae3a, type: 3}
+  - {fileID: 21300000, guid: 7d98690185afbd1488d274da2067a1cb, type: 3}
+  - {fileID: 21300000, guid: 82bb20b95b49c9640bcf4d89b1b42543, type: 3}
+  - {fileID: 21300000, guid: a9ce40d64297f2f48a6cda2fa5454288, type: 3}
+  - {fileID: 21300000, guid: 0265363812122954ebfbd7bfc391da99, type: 3}
+  - {fileID: 21300000, guid: 86df5ce63a4164549a5683dc695d856a, type: 3}
+  - {fileID: 21300000, guid: dd8d239478a6f214192d6dcffba67ccb, type: 3}
+  - {fileID: 21300000, guid: a7c69da140eafc6419e82a6b47d9392d, type: 3}
+  - {fileID: 21300000, guid: 80d9e963de6d4f645bc323e95a60cde7, type: 3}
+  - {fileID: 21300000, guid: 1452ab5e1718a18448d614b7c7fe6e84, type: 3}
+  - {fileID: 21300000, guid: 24788683bfa5bd74893550e2afb4acfd, type: 3}
+  - {fileID: 21300000, guid: 4789f0ee0af4c02489230ef4827d3b7c, type: 3}
+  - {fileID: 21300000, guid: 5568356c3ff7bba4ebb4f74357c7579b, type: 3}
+  - {fileID: 21300000, guid: 850f15b9a73de1149a0d3a464da43ecb, type: 3}
+  framesPerSecond: 45
+  playMode: 1
+  sizeMode: 0
+  playOnEnable: 0
+  restartOnPlay: 1
+  resetOnStop: 1
+  playOnHover: 1
+  stopOnHoverExit: 1
+  playOnPress: 1
+  stopOnPressRelease: 1
+  onFinished:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1282916286
 GameObject:
   m_ObjectHideFlags: 0
@@ -12563,6 +12710,7 @@ GameObject:
   - component: {fileID: 1701249905}
   - component: {fileID: 1701249908}
   - component: {fileID: 1701249909}
+  - component: {fileID: 1701249910}
   m_Layer: 5
   m_Name: ButtonQuit
   m_TagString: Untagged
@@ -12720,6 +12868,89 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+--- !u!114 &1701249910
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1701249903}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66323024b42c2824bb05c5c8d8b3bc11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.FrameAnimationPlayer
+  targetImage: {fileID: 838400848}
+  frames:
+  - {fileID: 21300000, guid: b3d3d4d249095844c8517a445d033120, type: 3}
+  - {fileID: 21300000, guid: f749bd90c24d9c04eb19fe4615730a4a, type: 3}
+  - {fileID: 21300000, guid: 086418fc0a95ef5418d7f2ec8e6e4d80, type: 3}
+  - {fileID: 21300000, guid: 6b46e50f5eddd9949a5131191079390d, type: 3}
+  - {fileID: 21300000, guid: 79bc291de4b671b4fb5b25134859a290, type: 3}
+  - {fileID: 21300000, guid: b9416d2519fa55144a7718c7539f3edd, type: 3}
+  - {fileID: 21300000, guid: 012406fa7ff88a7448ae8b649345c6d5, type: 3}
+  - {fileID: 21300000, guid: 9ef0c77ce873acc4eb6da2351531afc0, type: 3}
+  - {fileID: 21300000, guid: 1bc057e64e6f7264c95100a2bbdbbea0, type: 3}
+  - {fileID: 21300000, guid: 0b394aa0d36faa548ae6ae1d82ecb832, type: 3}
+  - {fileID: 21300000, guid: 992b66261f6f4ce468b3e46b5019af06, type: 3}
+  - {fileID: 21300000, guid: f4a6f993b159c8a43ad4088cc56fc092, type: 3}
+  - {fileID: 21300000, guid: ecc3e80c4d7d694418e635f4e033f9e5, type: 3}
+  - {fileID: 21300000, guid: b82618a29168ecb47b9ca15884e4febc, type: 3}
+  - {fileID: 21300000, guid: 85c4b5347269e4f48a4036c623b52ccd, type: 3}
+  - {fileID: 21300000, guid: b581c64adecafbd4688c4229b37e66c0, type: 3}
+  - {fileID: 21300000, guid: 2042ceb80ffbbbd4d9ab42a94d306c93, type: 3}
+  - {fileID: 21300000, guid: 7588ab1a4ab7947478cb4d567e56449c, type: 3}
+  - {fileID: 21300000, guid: d54866bfb46922549ab752387b89ff64, type: 3}
+  - {fileID: 21300000, guid: 149170c97825f8149b955299487dd34e, type: 3}
+  - {fileID: 21300000, guid: de44995b3929a3a488bc47bd1a48064f, type: 3}
+  - {fileID: 21300000, guid: c749a1e93d1d54c44aa99986caaf5846, type: 3}
+  - {fileID: 21300000, guid: 3d4b1b55886bce249baa390a447cf727, type: 3}
+  - {fileID: 21300000, guid: 807d2e6e15ff37244ac8f40735cf3d41, type: 3}
+  - {fileID: 21300000, guid: 59150db03a83a474da90fdb208639e9a, type: 3}
+  - {fileID: 21300000, guid: c1bcb7edeebe4c1419423ac4cd47d123, type: 3}
+  - {fileID: 21300000, guid: 74307022e62a2c743be133a278c79b70, type: 3}
+  - {fileID: 21300000, guid: 79843fe420fd98145a99da3a7f8c6679, type: 3}
+  - {fileID: 21300000, guid: 5aefc8dcaa58a24428513454a984627a, type: 3}
+  - {fileID: 21300000, guid: 3683068a80eb9d54aab730a8b322a684, type: 3}
+  - {fileID: 21300000, guid: 51b3b661f46782b4fbae35c066c24a3f, type: 3}
+  - {fileID: 21300000, guid: b56ddf3e5a40b864e93c96f82b4fef0d, type: 3}
+  - {fileID: 21300000, guid: 9fde1b21f88adc849a9b0896fa22f0ec, type: 3}
+  - {fileID: 21300000, guid: a1b303f35a1838641a3bb462f823f39d, type: 3}
+  - {fileID: 21300000, guid: a8793878381917b4cbe90e5cff75b2d5, type: 3}
+  - {fileID: 21300000, guid: 821fcdb88841a7341b0086bc8c7819ef, type: 3}
+  - {fileID: 21300000, guid: 39d5adac4576d584aab4ec344e9d6cb8, type: 3}
+  - {fileID: 21300000, guid: 25707280bc6403a49bc93d309b6e9520, type: 3}
+  - {fileID: 21300000, guid: 947ad5672b56aab47b66c60dd60bc4ec, type: 3}
+  - {fileID: 21300000, guid: f67142850b4d2f1409f3a1510fc153d7, type: 3}
+  - {fileID: 21300000, guid: 16300196632349045867b76adcff1324, type: 3}
+  - {fileID: 21300000, guid: 0548da06c0c0a6648b01d5ade1c07a0e, type: 3}
+  - {fileID: 21300000, guid: e93eb462e2f03d54e8c95fda9ce3ab5f, type: 3}
+  - {fileID: 21300000, guid: a5e8fb32663bfeb4a892fcd5155922c9, type: 3}
+  - {fileID: 21300000, guid: 84551b5f678e8c049b9a96027773fdca, type: 3}
+  - {fileID: 21300000, guid: be38dc81276dfb345a05eab694efa29c, type: 3}
+  - {fileID: 21300000, guid: 0b42bafde4b08d04abcd958857cc5f39, type: 3}
+  - {fileID: 21300000, guid: 615b170c8826ef04885b16e02aeb517d, type: 3}
+  - {fileID: 21300000, guid: d42bf89f882ce104fa06bbdebfd8040c, type: 3}
+  - {fileID: 21300000, guid: 686c1916774799d4fab08b3637a5b86c, type: 3}
+  - {fileID: 21300000, guid: 2a817cabf091bea4e96dbbe76a4b43d2, type: 3}
+  - {fileID: 21300000, guid: 11975e24e5b2f0241b6bca67ba7428ab, type: 3}
+  - {fileID: 21300000, guid: a4d14edd7dc6bdb41b6507254a61568f, type: 3}
+  - {fileID: 21300000, guid: 33508e8dbf9a6894d855299d216fcb39, type: 3}
+  - {fileID: 21300000, guid: dbd5750af3fbfd941aebac6a380d6305, type: 3}
+  - {fileID: 21300000, guid: 5bce3cee63ecc2d4d868c29b8a55f772, type: 3}
+  framesPerSecond: 45
+  playMode: 1
+  sizeMode: 0
+  playOnEnable: 0
+  restartOnPlay: 1
+  resetOnStop: 1
+  playOnHover: 1
+  stopOnHoverExit: 1
+  playOnPress: 0
+  stopOnPressRelease: 1
+  onFinished:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1714869283
 GameObject:
   m_ObjectHideFlags: 0
@@ -13238,6 +13469,7 @@ GameObject:
   - component: {fileID: 1761878217}
   - component: {fileID: 1761878220}
   - component: {fileID: 1761878221}
+  - component: {fileID: 1761878222}
   m_Layer: 5
   m_Name: ButtonPlay
   m_TagString: Untagged
@@ -13395,6 +13627,78 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+--- !u!114 &1761878222
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1761878215}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66323024b42c2824bb05c5c8d8b3bc11, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RKS.RhythmParkour.UI.FrameAnimationPlayer
+  targetImage: {fileID: 397599972}
+  frames:
+  - {fileID: 21300000, guid: 64b800acb05e5a94395124d98e7aaaee, type: 3}
+  - {fileID: 21300000, guid: 56f6f0b839f74ca42a621db5ffc10e46, type: 3}
+  - {fileID: 21300000, guid: 4d8cfd19578ef064584923532d64039c, type: 3}
+  - {fileID: 21300000, guid: f9a5e1dccf310c04ab671bb37a99a0d9, type: 3}
+  - {fileID: 21300000, guid: b9f32ea16a9e58d43ba51b81e9f5a11a, type: 3}
+  - {fileID: 21300000, guid: 61c2a76c7a9c8e64b86ec87fdc3129d2, type: 3}
+  - {fileID: 21300000, guid: 7312b2220be52c5429ec5c6dc47256ab, type: 3}
+  - {fileID: 21300000, guid: 1f11bf73bd861524da32daf2de7a441b, type: 3}
+  - {fileID: 21300000, guid: 998fb0cbe98f2ba4b96dc7fc1b7164a0, type: 3}
+  - {fileID: 21300000, guid: 6bf06b9fd37fd2a499f22694adb26afb, type: 3}
+  - {fileID: 21300000, guid: e93e5c9115d170e4ca10de9876ca01a6, type: 3}
+  - {fileID: 21300000, guid: 079d9246de1bfa34cb71921bf4ff1887, type: 3}
+  - {fileID: 21300000, guid: 700bfabe0aa4f6b46b40c694cd4548ff, type: 3}
+  - {fileID: 21300000, guid: 4dbd90891d02ae04faa35c3dcf4e89cf, type: 3}
+  - {fileID: 21300000, guid: 4f952ce052566e543a999370c4ea01a8, type: 3}
+  - {fileID: 21300000, guid: 49f064990be35a04e8c1574f93d5f7ed, type: 3}
+  - {fileID: 21300000, guid: 7ae3eec6b0d814f469f37318f75c65f4, type: 3}
+  - {fileID: 21300000, guid: 181d99ec865ba29498c6ebf070ac2f89, type: 3}
+  - {fileID: 21300000, guid: cbf5b1eb636b0ff4ca51d2a9d8417db9, type: 3}
+  - {fileID: 21300000, guid: 8025586d228b5f445bebf1f0f90751d4, type: 3}
+  - {fileID: 21300000, guid: c7333fe29a4446e4b9fef9fe3a7b0746, type: 3}
+  - {fileID: 21300000, guid: 5c47c7aef74f2ff4a828ef4d76c52c7a, type: 3}
+  - {fileID: 21300000, guid: df8532a7373f47c488eb76250b46ad28, type: 3}
+  - {fileID: 21300000, guid: 212e61ebb0980a243aa0c752e6a7e9ae, type: 3}
+  - {fileID: 21300000, guid: 26365c0766fa5b24a94c9dba2f50ca2b, type: 3}
+  - {fileID: 21300000, guid: 1fa08cf642eeb9c4fa395352a7f0f795, type: 3}
+  - {fileID: 21300000, guid: e1326134962962f4fb1ed23a9097372d, type: 3}
+  - {fileID: 21300000, guid: 0cbd4c180f0790f42946b146fd64473a, type: 3}
+  - {fileID: 21300000, guid: 927aaf511452139428880e77ab6db117, type: 3}
+  - {fileID: 21300000, guid: 805e94dec0538ae4d89937df246e4f2c, type: 3}
+  - {fileID: 21300000, guid: 79ab16d5c49c13b448c327a55b5f22b9, type: 3}
+  - {fileID: 21300000, guid: 834c566580cce0d4b8e6dab26f96a800, type: 3}
+  - {fileID: 21300000, guid: 406f14f146bb83f4395bfb827ca73afe, type: 3}
+  - {fileID: 21300000, guid: dff9362d1c044b146b2f5551337ca79f, type: 3}
+  - {fileID: 21300000, guid: a73f505b4466a6f4cb56a522e5ce288f, type: 3}
+  - {fileID: 21300000, guid: c24b61b70f6e65549ac71d380879392b, type: 3}
+  - {fileID: 21300000, guid: 6b8e61d249a4f39498a97787deac8a64, type: 3}
+  - {fileID: 21300000, guid: 07170e1175ba30e4f8e13344657f8fb0, type: 3}
+  - {fileID: 21300000, guid: af9a2aa5778cc7c498a0f16d83caf695, type: 3}
+  - {fileID: 21300000, guid: 311256e92fd97534aa13f750e30c28c9, type: 3}
+  - {fileID: 21300000, guid: d36b8564bba168445af2f4250bebb1a5, type: 3}
+  - {fileID: 21300000, guid: a202e21e540dafc42a36e36deeb18231, type: 3}
+  - {fileID: 21300000, guid: ab6e0008b1499984bb68e81e91252733, type: 3}
+  - {fileID: 21300000, guid: 4b1c6955ead01014188e3fb546a43b8f, type: 3}
+  - {fileID: 21300000, guid: c7cb885ca7ab0f64692a5af65a39e894, type: 3}
+  framesPerSecond: 45
+  playMode: 1
+  sizeMode: 0
+  playOnEnable: 0
+  restartOnPlay: 1
+  resetOnStop: 1
+  playOnHover: 1
+  stopOnHoverExit: 1
+  playOnPress: 1
+  stopOnPressRelease: 1
+  onFinished:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1803860036
 GameObject:
   m_ObjectHideFlags: 0
