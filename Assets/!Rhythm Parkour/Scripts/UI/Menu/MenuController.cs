@@ -83,6 +83,7 @@ namespace RKS.RhythmParkour.UI
         [Header("Level Details Panel")]
         [SerializeField] private GameObject _levelDetailsRoot;
         [SerializeField] private Image _levelCoverImage;
+        [SerializeField] private Sprite _levelCoverNoImage;
         [SerializeField] private TextMeshProUGUI _detailBpmText;
         [SerializeField] private TextMeshProUGUI _detailDurationText;
         [SerializeField] private TextMeshProUGUI _detailNotesText;
@@ -1266,7 +1267,7 @@ namespace RKS.RhythmParkour.UI
                 Destroy(_coverSprite);
                 _coverSprite = null;
             }
-            _levelCoverImage.sprite = null;
+            _levelCoverImage.sprite = _levelCoverNoImage;
             if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath)) return;
             try
             {
