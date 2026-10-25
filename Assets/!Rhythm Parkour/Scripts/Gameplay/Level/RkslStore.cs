@@ -178,6 +178,24 @@ namespace RKS.RhythmParkour.Rhythm
             catch (Exception e) { Debug.LogError($"[Rksl] LoadManifest {rkslPath}: {e}"); return false; }
         }
 
+        public static RkslManifest ReadManifestDirect(string rkslPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(rkslPath) || !File.Exists(rkslPath)) return null;
+                using (var zip = ZipFile.OpenRead(rkslPath))
+                {
+                    if (!((RkslStore)Shared).TryReadManifest(zip, out string json)) return null;
+                    return JsonUtility.FromJson<RkslManifest>(json);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Rksl] manifest direct read failed {rkslPath}: {e.Message}");
+                return null;
+            }
+        }
+
         public bool TryReuseExtracted(string rkslPath, string extractDir, out string audioPath, out string videoPath, out string coverPath)
         {
             audioPath = null; videoPath = null; coverPath = null;
@@ -212,11 +230,9 @@ namespace RKS.RhythmParkour.Rhythm
             catch (Exception e) { Debug.LogWarning($"[Rksl] Reuse check failed: {e.Message}"); return false; }
         }
 
-        public List<string> FindAllRkslFiles(IEnumerable<string> extraPaths = null)
+        public static List<string> GetLevelSearchDirs()
         {
-            var result = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var dirs = new string[]
+            return new List<string>
             {
                 Path.Combine(UnityEngine.Application.persistentDataPath, "Levels"),
                 Path.Combine(UnityEngine.Application.persistentDataPath, "LevelTransfer"),
@@ -225,18 +241,30 @@ namespace RKS.RhythmParkour.Rhythm
                 Path.Combine(UnityEngine.Application.dataPath, "!Rhythm Parkour/Levels"),
                 Path.Combine(UnityEngine.Application.dataPath, "Levels"),
             };
-            foreach (var d in dirs)
-            {
-                if (string.IsNullOrEmpty(d) || !Directory.Exists(d)) continue;
-                try
+        }
+
+        public List<string> FindAllRkslFiles(IEnumerable<string> extraPaths = null)
+        {
+            return FindAllRkslFilesIn(GetLevelSearchDirs(), extraPaths);
+        }
+
+        public static List<string> FindAllRkslFilesIn(IEnumerable<string> searchDirs, IEnumerable<string> extraPaths = null)
+        {
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (searchDirs != null)
+                foreach (var d in searchDirs)
                 {
-                    foreach (var f in Directory.GetFiles(d, "*.rksl"))
+                    if (string.IsNullOrEmpty(d) || !Directory.Exists(d)) continue;
+                    try
                     {
-                        if (seen.Add(f)) result.Add(f);
+                        foreach (var f in Directory.GetFiles(d, "*.rksl"))
+                        {
+                            if (seen.Add(f)) result.Add(f);
+                        }
                     }
+                    catch {}
                 }
-                catch {}
-            }
 
             if (extraPaths != null)
                 foreach (var p in extraPaths)

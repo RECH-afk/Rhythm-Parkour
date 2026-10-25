@@ -52,6 +52,12 @@ namespace RKS.RhythmParkour.Rhythm
         [Tooltip("Расширение хитбокса от визуала со всех сторон (м). Можно в минус — тогда хитбокс МЕНЬШЕ картинки (прощение)")]
         public float hitboxPadding = 0.05f;
 
+        [Header("Front Hit Zone")]
+        [Tooltip("Урон/мисс засчитываются только от передней части (со стороны движения). Бока, верх, низ, тыл — без урона")]
+        public bool frontHitsOnly = true;
+        [Tooltip("Передняя зона как доля глубины препятствия (0.5 = передняя половина)")]
+        [Range(0.05f, 1f)] public float frontZoneShare = 0.5f;
+
         [Header("Trigger Note")]
         [Tooltip("Если вкл — касание не бьёт, а срабатывает триггер (тип задаёт событие уровня)")]
         public bool isTrigger = false;
@@ -297,6 +303,7 @@ namespace RKS.RhythmParkour.Rhythm
         public void HitPlayer(PlayerHealth ph)
         {
             if (!moving || ph == null || isKeyNote) return;
+            if (frontHitsOnly && triggerCol != null && !FrontZoneHit()) return;
             touchedPlayer = true;
             if (countedAsMiss) return;
             if (isTrigger)
@@ -534,7 +541,8 @@ namespace RKS.RhythmParkour.Rhythm
                     bool hit;
                     if (useCapsuleHitTest && playerCapsule != null) hit = CapsuleHitsTrigger();
                     else hit = HasPlayerBounds && triggerCol.bounds.Intersects(GetPlayerBounds());
-                    if (!hit) hit = CameraInsideTrigger();
+                    if (hit && frontHitsOnly) hit = FrontZoneHit();
+                    if (!hit && CameraInsideTrigger() && PointInFrontZone(playerCam.transform.position)) hit = true;
                     if (hit)
                     {
                         if (minGap > 0f) minGap = 0f;
@@ -644,6 +652,54 @@ namespace RKS.RhythmParkour.Rhythm
             return Mathf.Abs(lp.x - c.x) <= e.x + eps
                 && Mathf.Abs(lp.y - c.y) <= e.y + eps
                 && Mathf.Abs(lp.z - c.z) <= e.z + eps;
+        }
+
+
+        bool FrontZoneHit()
+        {
+            if (triggerCol == null) return false;
+            if (!FrontZoneStart(out float zoneStart)) return true;
+            if (useCapsuleHitTest && playerCapsule != null)
+            {
+                if (!GetCapsuleWorld(playerCapsule, out Vector3 a, out Vector3 b, out float r)) return true;
+                Vector3 n = direction;
+                return Mathf.Max(Vector3.Dot(a, n), Vector3.Dot(b, n)) + r >= zoneStart;
+            }
+            if (HasPlayerBounds)
+            {
+                Bounds pb = GetPlayerBounds();
+                Vector3 n = direction;
+                float support = Mathf.Abs(n.x) * pb.extents.x + Mathf.Abs(n.y) * pb.extents.y + Mathf.Abs(n.z) * pb.extents.z;
+                return Vector3.Dot(pb.center, n) + support >= zoneStart;
+            }
+            if (playerCam != null) return PointInFrontZone(playerCam.transform.position);
+            return true;
+        }
+
+        bool PointInFrontZone(Vector3 point)
+        {
+            if (triggerCol == null) return false;
+            if (!FrontZoneStart(out float zoneStart)) return true;
+            return Vector3.Dot(point, direction) >= zoneStart;
+        }
+
+        bool FrontZoneStart(out float zoneStart)
+        {
+            zoneStart = 0f;
+            if (triggerCol == null) return false;
+            Transform t = triggerCol.transform;
+            Vector3 n = direction;
+            Vector3 center = t.TransformPoint(triggerCol.center);
+            Vector3 ls = t.lossyScale;
+            float ex = Mathf.Abs(triggerCol.size.x) * 0.5f * Mathf.Abs(ls.x);
+            float ey = Mathf.Abs(triggerCol.size.y) * 0.5f * Mathf.Abs(ls.y);
+            float ez = Mathf.Abs(triggerCol.size.z) * 0.5f * Mathf.Abs(ls.z);
+            float support = Mathf.Abs(Vector3.Dot(t.right, n)) * ex
+                          + Mathf.Abs(Vector3.Dot(t.up, n)) * ey
+                          + Mathf.Abs(Vector3.Dot(t.forward, n)) * ez;
+            if (support <= 1e-6f) return false;
+            zoneStart = Vector3.Dot(center, n) + support - 2f * support * Mathf.Max(0.05f, frontZoneShare);
+            return true;
         }
 
 

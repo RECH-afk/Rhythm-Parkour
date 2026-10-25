@@ -11,6 +11,7 @@ using UnityEngine.SceneManagement;
 using TMPro;
 using DG.Tweening;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using Zenject;
 using RKS.RhythmParkour;
 using RKS.RhythmParkour.Core.Managers;
@@ -213,6 +214,31 @@ namespace RKS.RhythmParkour.UI
         private string _lastPreviewAudioPath = "";
         private string _lastPreviewVideoPath = "";
         private string _lastPreviewCoverPath = "";
+
+        private readonly Dictionary<string, RkslManifest> _menuManifests = new();
+        private readonly Dictionary<string, Sprite> _coverSpriteCache = new();
+        private readonly List<string> _coverCacheKeys = new();
+        private const int MaxCoverCache = 12;
+        private Coroutine _levelListRoutine;
+        private int _levelListGen;
+        private Coroutine _coverLoadRoutine;
+        private int _coverSeq;
+        private Task<ExtractResult> _detailsIoTask;
+        private string _detailsIoPath;
+
+        private sealed class LevelListData
+        {
+            public List<string> paths;
+            public List<RkslManifest> manifests;
+        }
+
+        private sealed class ExtractResult
+        {
+            public bool ok;
+            public string audio;
+            public string video;
+            public string cover;
+        }
 
         #endregion
 
@@ -991,22 +1017,49 @@ namespace RKS.RhythmParkour.UI
         private void RefreshLevelList()
         {
             if (_levelListContainer == null) return;
+            if (_levelListRoutine != null) StopCoroutine(_levelListRoutine);
+            int gen = _levelListGen + 1;
+            _levelListGen = gen;
+            _levelListRoutine = StartCoroutine(BuildLevelListRoutine(gen));
+        }
 
+        private IEnumerator BuildLevelListRoutine(int gen)
+        {
             ClearSelectedButtonVisual();
-            _levelButtonGOs.Clear();
-            _buttonBaseColors.Clear();
-            for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
+            ClearLevelListChildren();
+            List<string> searchDirs = RkslStore.GetLevelSearchDirs();
+            List<string> transferPaths = transfer != null && transfer.GetSavedPaths() != null
+                ? new List<string>(transfer.GetSavedPaths())
+                : null;
+            var readTask = Task.Run(() => ReadLevelListBackground(searchDirs, transferPaths));
+            while (!readTask.IsCompleted)
             {
-                var child = _levelListContainer.GetChild(i).gameObject;
-                DOTween.Kill(child);
-                child.SetActive(false);
-                Destroy(child);
+                if (gen != _levelListGen) yield break;
+                yield return null;
             }
-
+            if (gen != _levelListGen) yield break;
+            if (readTask.IsFaulted)
+            {
+                Debug.LogWarning("[MenuController] Не удалось прочитать список уровней: " + readTask.Exception, this);
+                yield break;
+            }
+            LevelListData data = readTask.Result;
             _foundPaths.Clear();
-            _foundPaths.AddRange(Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
-
-            for (int i = 0; i < _foundPaths.Count; i++) CreateLevelListItem(_foundPaths[i], i);
+            _foundPaths.AddRange(data.paths);
+            _menuManifests.Clear();
+            int batch = 0;
+            for (int i = 0; i < _foundPaths.Count; i++)
+            {
+                RkslManifest m = (data.manifests != null && i < data.manifests.Count) ? data.manifests[i] : null;
+                _menuManifests[_foundPaths[i]] = m;
+                CreateLevelListItem(_foundPaths[i], i);
+                if (++batch >= 8 && i < _foundPaths.Count - 1)
+                {
+                    batch = 0;
+                    yield return null;
+                    if (gen != _levelListGen) yield break;
+                }
+            }
 
             if (IsPreviewPlaying || PreviewPaused)
             {
@@ -1021,6 +1074,28 @@ namespace RKS.RhythmParkour.UI
                 UpdateDetailsButtonsState();
             }
             RequestLayoutRefresh();
+        }
+
+        private void ClearLevelListChildren()
+        {
+            _levelButtonGOs.Clear();
+            _buttonBaseColors.Clear();
+            for (int i = _levelListContainer.childCount - 1; i >= 0; i--)
+            {
+                var child = _levelListContainer.GetChild(i).gameObject;
+                DOTween.Kill(child);
+                child.SetActive(false);
+                Destroy(child);
+            }
+        }
+
+        private static LevelListData ReadLevelListBackground(List<string> searchDirs, List<string> transferPaths)
+        {
+            var paths = RkslStore.FindAllRkslFilesIn(searchDirs, transferPaths);
+            var manifests = new List<RkslManifest>(paths.Count);
+            for (int i = 0; i < paths.Count; i++)
+                manifests.Add(RkslStore.ReadManifestDirect(paths[i]));
+            return new LevelListData { paths = paths, manifests = manifests };
         }
 
         private void RestoreLastSelection()
@@ -1068,7 +1143,7 @@ namespace RKS.RhythmParkour.UI
         private void CreateLevelListItem(string path, int order)
         {
             RkslManifest man = null;
-            if (!Store.LoadManifestOnly(path, out man) || man == null)
+            if (!_menuManifests.TryGetValue(path, out man))
                 Debug.LogWarning($"[MenuController] Не удалось прочитать манифест уровня: {path}", this);
 
             string title = (man != null && !string.IsNullOrEmpty(man.title)) ? man.title : Path.GetFileNameWithoutExtension(path);
@@ -1197,9 +1272,16 @@ namespace RKS.RhythmParkour.UI
 
         private void PopulateDetails(string path)
         {
-            RkslManifest man = null;
-            if (!Store.LoadManifestOnly(path, out man) || man == null)
+            RkslManifest man;
+            if (!_menuManifests.TryGetValue(path, out man))
+            {
+                if (!Store.LoadManifestOnly(path, out man) || man == null)
+                    Debug.LogWarning($"[MenuController] Не удалось прочитать манифест уровня: {path}", this);
+            }
+            else if (man == null)
+            {
                 Debug.LogWarning($"[MenuController] Не удалось прочитать манифест уровня: {path}", this);
+            }
 
             if (_detailBpmText) _detailBpmText.text = man != null ? $"{man.bpm:0}" : "N/A";
             if (_detailDurationText) _detailDurationText.text = man != null && man.duration > 0f ? FormatDuration(man.duration) : "N/A";
@@ -1231,19 +1313,36 @@ namespace RKS.RhythmParkour.UI
                 videoPath = _lastPreviewVideoPath;
                 coverPath = _lastPreviewCoverPath;
             }
-            else if (Store.TryReuseExtracted(rkslPath, extractDir, out audioPath, out videoPath, out coverPath))
-            {
-                _lastPreviewRkslPath = rkslPath;
-                _lastPreviewAudioPath = audioPath;
-                _lastPreviewVideoPath = videoPath;
-                _lastPreviewCoverPath = coverPath;
-            }
-            else if (!Store.Extract(rkslPath, extractDir, out RkslManifest man, out audioPath, out videoPath, out coverPath))
-            {
-                yield break;
-            }
             else
             {
+                Task<ExtractResult> ioTask;
+                if (_detailsIoTask != null && !_detailsIoTask.IsCompleted && _detailsIoPath == rkslPath)
+                {
+                    ioTask = _detailsIoTask;
+                }
+                else
+                {
+                    string path = rkslPath;
+                    ioTask = Task.Run(() => ProbeOrExtract(path, extractDir));
+                    _detailsIoTask = ioTask;
+                    _detailsIoPath = rkslPath;
+                }
+                while (!ioTask.IsCompleted)
+                {
+                    if (seq != _detailsSeq) yield break;
+                    yield return null;
+                }
+                if (seq != _detailsSeq) yield break;
+                if (ioTask.IsFaulted)
+                {
+                    Debug.LogWarning("[MenuController] Не удалось распаковать уровень: " + ioTask.Exception, this);
+                    yield break;
+                }
+                ExtractResult res = ioTask.Result;
+                if (res == null || !res.ok) yield break;
+                audioPath = res.audio;
+                videoPath = res.video;
+                coverPath = res.cover;
                 _lastPreviewRkslPath = rkslPath;
                 _lastPreviewAudioPath = audioPath;
                 _lastPreviewVideoPath = videoPath;
@@ -1258,34 +1357,86 @@ namespace RKS.RhythmParkour.UI
             SetCoverSprite(coverPath);
         }
 
+        private ExtractResult ProbeOrExtract(string rkslPath, string extractDir)
+        {
+            var res = new ExtractResult();
+            if (Store.TryReuseExtracted(rkslPath, extractDir, out string a, out string v, out string c))
+            {
+                res.ok = true;
+                res.audio = a;
+                res.video = v;
+                res.cover = c;
+                return res;
+            }
+            if (Store.Extract(rkslPath, extractDir, out RkslManifest man, out a, out v, out c))
+            {
+                res.ok = true;
+                res.audio = a;
+                res.video = v;
+                res.cover = c;
+            }
+            return res;
+        }
+
         private void SetCoverSprite(string coverPath)
         {
             if (_levelCoverImage == null) return;
-            if (_coverSprite != null)
+            if (_coverLoadRoutine != null)
             {
-                if (_coverSprite.texture != null) Destroy(_coverSprite.texture);
-                Destroy(_coverSprite);
-                _coverSprite = null;
+                StopCoroutine(_coverLoadRoutine);
+                _coverLoadRoutine = null;
             }
-            _levelCoverImage.sprite = _levelCoverNoImage;
-            if (string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath)) return;
-            try
+            Sprite cached = null;
+            bool have = !string.IsNullOrEmpty(coverPath) && _coverSpriteCache.TryGetValue(coverPath, out cached) && cached != null;
+            _levelCoverImage.sprite = have ? cached : _levelCoverNoImage;
+            _coverSprite = have ? cached : null;
+            if (have || string.IsNullOrEmpty(coverPath) || !File.Exists(coverPath)) return;
+            int seq = ++_coverSeq;
+            _coverLoadRoutine = StartCoroutine(LoadCoverRoutine(coverPath, seq));
+        }
+
+        private IEnumerator LoadCoverRoutine(string coverPath, int seq)
+        {
+            using (var uwr = UnityWebRequestTexture.GetTexture(RkslStore.GetFileUri(coverPath)))
             {
-                byte[] bytes = File.ReadAllBytes(coverPath);
-                Texture2D tex = new Texture2D(2, 2);
-                if (tex.LoadImage(bytes))
+                var send = uwr.SendWebRequest();
+                while (!send.isDone)
                 {
-                    _coverSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
-                    _levelCoverImage.sprite = _coverSprite;
+                    if (seq != _coverSeq) yield break;
+                    yield return null;
                 }
-                else
+                if (seq != _coverSeq) yield break;
+                if (uwr.result != UnityWebRequest.Result.Success)
                 {
-                    Destroy(tex);
+                    Debug.LogWarning($"[MenuController] Не удалось загрузить обложку: {uwr.error}", this);
+                    yield break;
+                }
+                Texture2D tex = DownloadHandlerTexture.GetContent(uwr);
+                if (tex != null)
+                {
+                    Sprite sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.one * 0.5f);
+                    _coverSprite = sprite;
+                    if (_levelCoverImage != null) _levelCoverImage.sprite = sprite;
+                    CacheCover(coverPath, sprite);
                 }
             }
-            catch (System.Exception e)
+        }
+
+        private void CacheCover(string path, Sprite sprite)
+        {
+            if (string.IsNullOrEmpty(path) || sprite == null) return;
+            if (_coverSpriteCache.ContainsKey(path)) return;
+            _coverSpriteCache[path] = sprite;
+            _coverCacheKeys.Add(path);
+            while (_coverCacheKeys.Count > MaxCoverCache)
             {
-                Debug.LogWarning($"[MenuController] Не удалось загрузить обложку: {e.Message}");
+                string oldest = _coverCacheKeys[0];
+                _coverCacheKeys.RemoveAt(0);
+                if (string.IsNullOrEmpty(oldest) || !_coverSpriteCache.TryGetValue(oldest, out Sprite evicted)) continue;
+                _coverSpriteCache.Remove(oldest);
+                if (evicted == null || evicted == _coverSprite) continue;
+                if (evicted.texture != null) Destroy(evicted.texture);
+                Destroy(evicted);
             }
         }
 
@@ -1621,9 +1772,17 @@ namespace RKS.RhythmParkour.UI
                         _previewClip = null;
                         _previewClipPath = "";
                     }
-                    using (var uwr = UnityWebRequestMultimedia.GetAudioClip(RkslStore.GetFileUri(audioPath), RkslStore.GetAudioType(audioPath)))
+                    string clipUri = RkslStore.GetFileUri(audioPath);
+                    AudioType clipType = RkslStore.GetAudioType(audioPath);
+                    using (var uwr = new UnityWebRequest(clipUri, "GET", new DownloadHandlerAudioClip(clipUri, clipType), null))
                     {
-                        yield return uwr.SendWebRequest();
+                        ((DownloadHandlerAudioClip)uwr.downloadHandler).streamAudio = true;
+                        var send = uwr.SendWebRequest();
+                        while (!send.isDone)
+                        {
+                            if (seq != _previewSeq) yield break;
+                            yield return null;
+                        }
                         if (seq != _previewSeq) yield break;
                         if (uwr.result == UnityWebRequest.Result.Success)
                             clip = DownloadHandlerAudioClip.GetContent(uwr);
