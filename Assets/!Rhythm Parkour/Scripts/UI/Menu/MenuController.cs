@@ -123,6 +123,10 @@ namespace RKS.RhythmParkour.UI
         [Header("Quit Confirmation Window")]
         [SerializeField] private GameObject _quitConfirmationWindow;
 
+        [Header("Settings Window")]
+        [Tooltip("Ссылка на объект Settings (окно настроек)")]
+        [SerializeField] private GameObject _settingsWindow;
+
         [Header("Settings")]
         [SerializeField] private string _editorSceneName = "IsLevelEditorScene";
         [SerializeField] private string _gameSceneName = "IsGameScene";
@@ -291,6 +295,7 @@ namespace RKS.RhythmParkour.UI
             CacheOriginalPosition(_noLevelsWindow);
             CacheOriginalPosition(_deleteConfirmationWindow);
             CacheOriginalPosition(_quitConfirmationWindow);
+            if (_settingsWindow != null) CacheOriginalPosition(_settingsWindow);
             if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
             if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
         }
@@ -313,6 +318,10 @@ namespace RKS.RhythmParkour.UI
                 else if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf && !_isTransitioning)
                 {
                     HideQuitConfirmation();
+                }
+                else if (_settingsWindow != null && _settingsWindow.activeSelf && !_isTransitioning)
+                {
+                    ShowMenu();
                 }
                 else if (_mainMenuRoot != null && _mainMenuRoot.activeSelf && !_isTransitioning)
                 {
@@ -664,6 +673,7 @@ namespace RKS.RhythmParkour.UI
             if (_noLevelsWindow != null) _noLevelsWindow.SetActive(false);
             if (_deleteConfirmationWindow != null) _deleteConfirmationWindow.SetActive(false);
             if (_quitConfirmationWindow != null) _quitConfirmationWindow.SetActive(false);
+            if (_settingsWindow != null) _settingsWindow.SetActive(false);
         }
 
         #endregion
@@ -722,6 +732,9 @@ namespace RKS.RhythmParkour.UI
             if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf && _quitConfirmationWindow != targetWindow)
                 windowsToHide.Add(_quitConfirmationWindow);
 
+            if (_settingsWindow != null && _settingsWindow.activeSelf && _settingsWindow != targetWindow)
+                windowsToHide.Add(_settingsWindow);
+
             foreach (var win in windowsToHide)
             {
                 var rt = win.GetComponent<RectTransform>();
@@ -764,6 +777,11 @@ namespace RKS.RhythmParkour.UI
                 {
                     hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
                     rotationZ = -1f;
+                }
+                else if (win == _settingsWindow)
+                {
+                    hideTarget = origPos + new Vector2(GetScreenOffsetX(), 0f);
+                    rotationZ = 1.5f;
                 }
 
                 var hideSeq = DOTween.Sequence()
@@ -812,6 +830,11 @@ namespace RKS.RhythmParkour.UI
                 startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
                 startRotZ = -1f;
             }
+            else if (targetWindow == _settingsWindow)
+            {
+                startPos = origTarget + new Vector2(GetScreenOffsetX(), 0f);
+                startRotZ = 1.5f;
+            }
 
             rtTarget.anchoredPosition = startPos;
             rtTarget.localScale = Vector3.one * 0.97f;
@@ -852,6 +875,20 @@ namespace RKS.RhythmParkour.UI
             HideQuitConfirmationImmediate();
             TransitionTo(_mainMenuRoot);
         }
+
+        public void ShowSettings()
+        {
+            if (_isTransitioning) return;
+            if (_settingsWindow == null)
+            {
+                Debug.LogWarning("[MenuController] Окно настроек не привязано (_settingsWindow).", this);
+                return;
+            }
+            SetSelectedButton(null);
+            TransitionTo(_settingsWindow);
+        }
+
+        public bool IsSettingsVisible => _settingsWindow != null && _settingsWindow.activeSelf;
 
         public void ShowLevelList()
         {

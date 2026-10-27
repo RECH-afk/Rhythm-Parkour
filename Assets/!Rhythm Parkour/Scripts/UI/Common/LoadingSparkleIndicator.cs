@@ -1,10 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
+using RKS.RhythmParkour.Core;
 
 namespace RKS.RhythmParkour.UI
 {
-    public class LoadingSparkleIndicator : MonoBehaviour
+    public class LoadingSparkleIndicator : RKSBehaviour
     {
         [Header("Rect Transform")]
         public RectTransform SparkleIconOne;
@@ -29,7 +30,14 @@ namespace RKS.RhythmParkour.UI
         Vector2 stateAPos;
         Vector2 stateBSize;
         Vector2 stateBPos;
+        Quaternion stateARotation;
+        Quaternion stateBRotation;
+        int stateASibling;
+        int stateBSibling;
+        Color stateAColor = Color.white;
+        Color stateBColor = Color.white;
         bool hasStates;
+        bool siblingRestorePending;
         Sequence loopSeq;
         Image imageOne;
         Image imageTwo;
@@ -45,9 +53,10 @@ namespace RKS.RhythmParkour.UI
             Stop();
         }
 
-        void OnDestroy()
+        protected override void OnDestroy()
         {
             Stop();
+            base.OnDestroy();
         }
 
         void CaptureStates()
@@ -55,10 +64,19 @@ namespace RKS.RhythmParkour.UI
             if (SparkleIconOne == null || SparkleIconTwo == null) return;
             stateASize = SparkleIconOne.sizeDelta;
             stateAPos = SparkleIconOne.anchoredPosition;
+            stateARotation = SparkleIconOne.localRotation;
             stateBSize = SparkleIconTwo.sizeDelta;
             stateBPos = SparkleIconTwo.anchoredPosition;
+            stateBRotation = SparkleIconTwo.localRotation;
+            if (!siblingRestorePending)
+            {
+                stateASibling = SparkleIconOne.GetSiblingIndex();
+                stateBSibling = SparkleIconTwo.GetSiblingIndex();
+            }
             imageOne = SparkleIconOne.GetComponent<Image>();
             imageTwo = SparkleIconTwo.GetComponent<Image>();
+            if (imageOne != null) stateAColor = imageOne.color;
+            if (imageTwo != null) stateBColor = imageTwo.color;
             hasStates = true;
         }
 
@@ -109,6 +127,30 @@ namespace RKS.RhythmParkour.UI
         {
             if (loopSeq != null && loopSeq.IsActive()) loopSeq.Kill();
             loopSeq = null;
+            RestoreStates();
+        }
+
+        void RestoreStates()
+        {
+            if (!hasStates) return;
+            SparkleIconOne.sizeDelta = stateASize;
+            SparkleIconOne.anchoredPosition = stateAPos;
+            SparkleIconOne.localRotation = stateARotation;
+            if (SparkleIconOne.GetSiblingIndex() != stateASibling) siblingRestorePending = true;
+            if (imageOne != null) imageOne.color = stateAColor;
+            SparkleIconTwo.sizeDelta = stateBSize;
+            SparkleIconTwo.anchoredPosition = stateBPos;
+            SparkleIconTwo.localRotation = stateBRotation;
+            if (SparkleIconTwo.GetSiblingIndex() != stateBSibling) siblingRestorePending = true;
+            if (imageTwo != null) imageTwo.color = stateBColor;
+        }
+
+        protected override void Update()
+        {
+            if (!siblingRestorePending) return;
+            siblingRestorePending = false;
+            if (SparkleIconOne != null) SparkleIconOne.SetSiblingIndex(stateASibling);
+            if (SparkleIconTwo != null) SparkleIconTwo.SetSiblingIndex(stateBSibling);
         }
     }
 }

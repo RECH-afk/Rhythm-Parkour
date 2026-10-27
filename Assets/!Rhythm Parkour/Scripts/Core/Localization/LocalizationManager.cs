@@ -22,6 +22,8 @@ namespace RKS.RhythmParkour.Core.Managers
         public delegate void ChangeLangText();
         public event ChangeLangText OnLanguageChanged;
 
+        public event Action<string> OnLanguageLoadFailed;
+
         protected override void OnReady()
         {
             Save.Load();
@@ -70,6 +72,7 @@ namespace RKS.RhythmParkour.Core.Managers
                     if (www.result != UnityWebRequest.Result.Success)
                     {
                         Debug.LogError($"[LocalizationManager] Failed to load {langName}: {www.error}");
+                        OnLanguageLoadFailed?.Invoke(langName);
                         yield break;
                     }
 
@@ -81,6 +84,7 @@ namespace RKS.RhythmParkour.Core.Managers
                 if (!File.Exists(path))
                 {
                     Debug.LogError($"[LocalizationManager] Missing language file: {path}");
+                    OnLanguageLoadFailed?.Invoke(langName);
                     yield break;
                 }
 
@@ -96,6 +100,10 @@ namespace RKS.RhythmParkour.Core.Managers
             }
 
             currentLanguage = langName;
+
+            Save.CurrentData.language = langName;
+            Save.Write();
+
             isReady = true;
             OnLanguageChanged?.Invoke();
 
@@ -105,9 +113,6 @@ namespace RKS.RhythmParkour.Core.Managers
         public void SetLanguage(string langName)
         {
             if (langName == currentLanguage) return;
-
-            Save.CurrentData.language = langName;
-            Save.Write();
             StartCoroutine(LoadLocalizedTextCoroutine(langName));
         }
 

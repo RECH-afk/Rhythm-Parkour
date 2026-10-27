@@ -1,0 +1,57 @@
+{
+    "items": [
+        { "key": "settings.tip.defaultTitle", "value": "это настройки!" },
+        { "key": "settings.tip.defaultDescription", "value": "наведи курсор на какой-нибудь параметр и ты увидишь его описание." },
+
+        { "key": "settings.language.status.loading", "value": "загрузка языка..." },
+        { "key": "settings.language.status.loaded", "value": "язык загружен: {0}" },
+        { "key": "settings.language.status.error", "value": "не удалось загрузить файл языка" },
+        { "key": "settings.language.status.current", "value": "текущий язык: {0}" },
+        { "key": "settings.language.tipTitle", "value": "язык игры" },
+        { "key": "settings.language.tipDesc", "value": "позволяет выбрать язык интерфейса игры. применяется сразу." },
+
+        { "key": "settings.updates.tipTitle", "value": "проверка обновлений" },
+        { "key": "settings.updates.tipDesc", "value": "узнает у сервера устарел ли твой клиент или нет. если да, игра обновиться!" },
+        { "key": "settings.updates.status.checking", "value": "проверка..." },
+        { "key": "settings.updates.status.current", "value": "у тебя версия: {0}" },
+        { "key": "settings.updates.status.upToDate", "value": "у тебя последняя версия клиента ({0})" },
+        { "key": "settings.updates.status.available", "value": "найдена новая версия: {0} (у тебя {1})" },
+        { "key": "settings.updates.status.error", "value": "игра не может достучаться до сервера обновлений" },
+        { "key": "settings.updates.status.noUrl", "value": "URL сервера обновлений не задан" },
+
+        { "key": "settings.windowMode.tipTitle", "value": "режим окна" },
+        { "key": "settings.windowMode.tipDesc", "value": " эта настройка определяет, как игра будет занимать твой экран: на весь экран, в окне, в окне без рамок." },
+        { "key": "settings.windowMode.borderless", "value": "На весь экран" },
+        { "key": "settings.windowMode.exclusive", "value": "В окне без рамок" },
+        { "key": "settings.windowMode.windowed", "value": "В окне" },
+
+        { "key": "settings.resolution.tipTitle", "value": "разрешение экрана" },
+        { "key": "settings.resolution.tipDesc", "value": "то разрешение, в котором рендерится игра. доступные варианты будут зависить от монитора." },
+
+        { "key": "settings.textureQuality.tipTitle", "value": "качество текстур" },
+        { "key": "settings.textureQuality.tipDesc", "value": "понижение качества текстур уменьшит расход видеопамяти и повысит твой FPS, если у тебя слабая видеокарта." },
+        { "key": "settings.textureQuality.full", "value": "Полное" },
+        { "key": "settings.textureQuality.half", "value": "1/2" },
+        { "key": "settings.textureQuality.quarter", "value": "1/4" },
+        { "key": "settings.textureQuality.eighth", "value": "1/8" },
+
+        { "key": "settings.shadows.tipTitle", "value": "качество теней" },
+        { "key": "settings.shadows.tipDesc", "value": "а эта настройка влияет на разрешение и дальность теней. отключение теней заметно повысит твой FPS." },
+        { "key": "settings.shadows.off", "value": "Выключены" },
+        { "key": "settings.shadows.low", "value": "Низкое" },
+        { "key": "settings.shadows.medium", "value": "Среднее" },
+        { "key": "settings.shadows.high", "value": "Высокое" },
+
+        { "key": "settings.bloom.tipTitle", "value": "свечение (bloom)" },
+        { "key": "settings.bloom.tipDesc", "value": "добавляет мягкое свечение вокруг ярких объектов — неон, блики, свет дорожки." },
+        { "key": "settings.chromaticAberration.tipTitle", "value": "хроматическая аберрация" },
+        { "key": "settings.chromaticAberration.tipDesc", "value": "она разделяет цвета по краям экрана, создавая эффект линзы. в основном, заметнее всего при резких поворотах камеры." },
+        { "key": "settings.version.tipTitle", "value": "номер версии" },
+        { "key": "settings.version.tipDesc", "value": "показывает или скрывает номер версии игры в углу экрана." },
+
+        { "key": "settings.soundVolume.tipTitle", "value": "громкость звуков" },
+        { "key": "settings.soundVolume.tipDesc", "value": "это общая громкость звуковых эффектов: попаданий, кликов и других эффектов." },
+        { "key": "settings.musicVolume.tipTitle", "value": "громкость музыки" },
+        { "key": "settings.musicVolume.tipDesc", "value": "громкость любой музыки в игре, очевидно, независимо от звуковых эффектов." }
+    ]
+}

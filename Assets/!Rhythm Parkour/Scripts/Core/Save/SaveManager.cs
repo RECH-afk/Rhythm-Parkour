@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Text;
+using System.Security.Cryptography;
 using UnityEngine;
 using RKS.RhythmParkour;
 using RKS.RhythmParkour.Core;
@@ -16,10 +18,22 @@ namespace RKS.RhythmParkour.Core.Managers
         [Header("File Configuration")]
         [SerializeField] private string fileName = "DD_Data.rkst";
 
+        const string IntegrityPrefix = "RKST-HMAC:";
+        const string IntegrityKeyBase64 = "BReH+Ba816quXKHa7XnKtk+IESw3jHZs2dcUB8XMx5E=";
+
         private string filePath;
         private IDataCodec _codec;
 
         public GameData.Data CurrentData { get; private set; }
+
+        static string ComputeSignature(string payload)
+        {
+            using (var hmac = new HMACSHA256(Convert.FromBase64String(IntegrityKeyBase64)))
+            {
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(payload));
+                return Convert.ToBase64String(hash);
+            }
+        }
 
         protected override void OnInjected()
         {
@@ -60,7 +74,8 @@ namespace RKS.RhythmParkour.Core.Managers
             try
             {
                 string json = JsonUtility.ToJson(data, true);
-                File.WriteAllText(filePath, _codec.Encode(json));
+                string payload = _codec.Encode(json);
+                File.WriteAllText(filePath, IntegrityPrefix + ComputeSignature(payload) + "\n" + payload);
             }
             catch (Exception ex)
             {
@@ -94,7 +109,32 @@ namespace RKS.RhythmParkour.Core.Managers
 
             try
             {
-                string json = _codec.Decode(File.ReadAllText(filePath));
+                string raw = File.ReadAllText(filePath);
+                string json;
+
+                if (raw.StartsWith(IntegrityPrefix, StringComparison.Ordinal))
+                {
+                    int separator = raw.IndexOf('\n');
+                    if (separator < 0) throw new FormatException("Missing payload after integrity header");
+
+                    string signature = raw.Substring(IntegrityPrefix.Length, separator - IntegrityPrefix.Length);
+                    string payload = raw.Substring(separator + 1);
+
+                    if (!string.Equals(ComputeSignature(payload), signature, StringComparison.Ordinal))
+                    {
+                        Debug.LogWarning("[SaveManager] Save integrity check failed - file was modified. Loading default.");
+                        var tamperedDef = new GameData.Data();
+                        SaveDefault(tamperedDef);
+                        return tamperedDef;
+                    }
+
+                    json = _codec.Decode(payload);
+                }
+                else
+                {
+                    json = _codec.Decode(raw);
+                }
+
                 var data = JsonUtility.FromJson<GameData.Data>(json);
                 Debug.Log("[SaveManager] Data loaded successfully.");
                 return data;
@@ -110,8 +150,7 @@ namespace RKS.RhythmParkour.Core.Managers
 
         private void SaveDefault(GameData.Data data)
         {
-            string json = JsonUtility.ToJson(data, true);
-            File.WriteAllText(filePath, _codec.Encode(json));
+            WriteToFile(data);
         }
     }
 }

@@ -1,0 +1,57 @@
+{
+    "items": [
+        { "key": "settings.tip.defaultTitle", "value": "Settings" },
+        { "key": "settings.tip.defaultDescription", "value": "Hover over a setting to see what it does." },
+
+        { "key": "settings.language.status.loading", "value": "Loading language..." },
+        { "key": "settings.language.status.loaded", "value": "Language loaded: {0}" },
+        { "key": "settings.language.status.error", "value": "Failed to load language file" },
+        { "key": "settings.language.status.current", "value": "Interface language: {0}" },
+        { "key": "settings.language.tipTitle", "value": "Interface language" },
+        { "key": "settings.language.tipDesc", "value": "Selects the language of the menu and game interface. The change applies immediately." },
+
+        { "key": "settings.updates.tipTitle", "value": "Update check" },
+        { "key": "settings.updates.tipDesc", "value": "Compares your game version with the one published on the update server." },
+        { "key": "settings.updates.status.checking", "value": "Checking for updates..." },
+                { "key": "settings.updates.status.current", "value": "You have version: {0}" },
+        { "key": "settings.updates.status.upToDate", "value": "You have the latest version ({0})" },
+        { "key": "settings.updates.status.available", "value": "New version available: {0} (you have {1})" },
+        { "key": "settings.updates.status.error", "value": "Could not reach the update server" },
+        { "key": "settings.updates.status.noUrl", "value": "Update server URL is not set" },
+
+        { "key": "settings.windowMode.tipTitle", "value": "Window mode" },
+        { "key": "settings.windowMode.tipDesc", "value": "How the game occupies the screen: borderless fullscreen, exclusive fullscreen, or windowed." },
+        { "key": "settings.windowMode.borderless", "value": "Fullscreen window" },
+        { "key": "settings.windowMode.exclusive", "value": "Exclusive fullscreen" },
+        { "key": "settings.windowMode.windowed", "value": "Windowed" },
+
+        { "key": "settings.resolution.tipTitle", "value": "Screen resolution" },
+        { "key": "settings.resolution.tipDesc", "value": "The resolution the game renders at. Available options depend on your monitor." },
+
+        { "key": "settings.textureQuality.tipTitle", "value": "Texture quality" },
+        { "key": "settings.textureQuality.tipDesc", "value": "Lowering texture quality reduces VRAM usage and increases FPS on weaker GPUs." },
+        { "key": "settings.textureQuality.full", "value": "Full" },
+        { "key": "settings.textureQuality.half", "value": "Half" },
+        { "key": "settings.textureQuality.quarter", "value": "Quarter" },
+        { "key": "settings.textureQuality.eighth", "value": "One eighth" },
+
+        { "key": "settings.shadows.tipTitle", "value": "Shadow quality" },
+        { "key": "settings.shadows.tipDesc", "value": "Affects shadow resolution and distance. Disabling shadows noticeably increases FPS." },
+        { "key": "settings.shadows.off", "value": "Off" },
+        { "key": "settings.shadows.low", "value": "Low" },
+        { "key": "settings.shadows.medium", "value": "Medium" },
+        { "key": "settings.shadows.high", "value": "High" },
+
+        { "key": "settings.bloom.tipTitle", "value": "Bloom" },
+        { "key": "settings.bloom.tipDesc", "value": "Adds a soft glow around bright objects — neon, highlights, and the track lights." },
+        { "key": "settings.chromaticAberration.tipTitle", "value": "Chromatic aberration" },
+        { "key": "settings.chromaticAberration.tipDesc", "value": "Splits colors at the screen edges, creating a lens effect. Most visible during sharp camera turns." },
+        { "key": "settings.version.tipTitle", "value": "Version label" },
+        { "key": "settings.version.tipDesc", "value": "Shows or hides the game version number in the corner of the screen." },
+
+        { "key": "settings.soundVolume.tipTitle", "value": "Sound volume" },
+        { "key": "settings.soundVolume.tipDesc", "value": "Overall volume of sound effects: hits, clicks, pickups." },
+        { "key": "settings.musicVolume.tipTitle", "value": "Music volume" },
+        { "key": "settings.musicVolume.tipDesc", "value": "Volume of the background and level music, independent of sound effects." }
+    ]
+}

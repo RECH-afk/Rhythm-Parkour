@@ -1,4 +1,5 @@
 using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Settings;
 using RKS.RhythmParkour.Core.Storage;
 using UnityEngine;
 using Zenject;
@@ -36,6 +37,9 @@ namespace RKS.RhythmParkour.Core.Installers
             Container.Bind<IDataCodec>().To<RechCodec>().AsSingle();
             Container.Bind<IRkslStore>().To<RkslStore>().AsSingle();
             Container.Bind<ISaveStore>().FromMethod(ctx => ctx.Container.Resolve<SaveManager>()).AsSingle();
+
+            Container.Bind<SettingsService>().AsSingle();
+            Container.Bind<UpdateChecker>().AsSingle();
 
             if (obstacleCatalog != null)
                 Container.Bind<GlobalObstacleCatalog>().FromInstance(obstacleCatalog).AsSingle();

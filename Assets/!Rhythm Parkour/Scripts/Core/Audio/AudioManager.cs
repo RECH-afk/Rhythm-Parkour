@@ -20,6 +20,9 @@ namespace RKS.RhythmParkour.Core.Managers
         [Range(0f, 1f)]
         [SerializeField] private float masterVolume = 1f;
 
+        [Range(0f, 1f)]
+        [SerializeField] private float musicVolume = 1f;
+
         [Header("Sound Libraries")]
         [Tooltip("List of sound libraries that contain sound data.")]
         [SerializeField] private SoundLibrary[] libraries;
@@ -166,6 +169,15 @@ namespace RKS.RhythmParkour.Core.Managers
         }
 
         public float GetVolume() => masterVolume;
+
+        public void SetMusicVolume(float volume)
+        {
+            musicVolume = Mathf.Clamp01(volume);
+            if (musicSourceA != null && musicSourceA.isPlaying) musicSourceA.volume = musicVolume;
+            if (musicSourceB != null && musicSourceB.isPlaying) musicSourceB.volume = musicVolume;
+        }
+
+        public float GetMusicVolume() => musicVolume;
         #endregion
 
         #region Extra Play Methods
@@ -494,8 +506,8 @@ namespace RKS.RhythmParkour.Core.Managers
             while (t < fadeTime)
             {
                 t += Time.deltaTime;
-                active.volume = Mathf.Lerp(1f, 0f, t / fadeTime);
-                next.volume = Mathf.Lerp(0f, 1f, t / fadeTime);
+                active.volume = Mathf.Lerp(1f, 0f, t / fadeTime) * musicVolume;
+                next.volume = Mathf.Lerp(0f, 1f, t / fadeTime) * musicVolume;
                 yield return null;
             }
 
