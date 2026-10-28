@@ -50,8 +50,13 @@
         { "key": "settings.version.tipDesc", "value": "Shows or hides the game version number in the corner of the screen." },
 
         { "key": "settings.soundVolume.tipTitle", "value": "Sound volume" },
-        { "key": "settings.soundVolume.tipDesc", "value": "Overall volume of sound effects: hits, clicks, pickups." },
+        { "key": "settings.soundVolume.tipDesc", "value": "Volume of sound effects: hits, clicks, pickups." },
         { "key": "settings.musicVolume.tipTitle", "value": "Music volume" },
-        { "key": "settings.musicVolume.tipDesc", "value": "Volume of the background and level music, independent of sound effects." }
+        { "key": "settings.musicVolume.tipDesc", "value": "Volume of the background and level music, independent of sound effects." },
+
+        { "key": "settings.generalVolume.tipTitle", "value": "General volume" },
+        { "key": "settings.generalVolume.tipDesc", "value": "Master volume: scales music and sound effects at once. You can also change it with the mouse wheel anywhere, without opening settings." },
+        { "key": "settings.volumeMixer.tipTitle", "value": "Volume mixer" },
+        { "key": "settings.volumeMixer.tipDesc", "value": "Wheel volume control: scroll anywhere for general volume, or hover a mixer knob to change only that channel. Can be turned off here." }
     ]
 }

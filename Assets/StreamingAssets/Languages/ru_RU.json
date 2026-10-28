@@ -50,8 +50,13 @@
         { "key": "settings.version.tipDesc", "value": "показывает или скрывает номер версии игры в углу экрана." },
 
         { "key": "settings.soundVolume.tipTitle", "value": "громкость звуков" },
-        { "key": "settings.soundVolume.tipDesc", "value": "это общая громкость звуковых эффектов: попаданий, кликов и других эффектов." },
+        { "key": "settings.soundVolume.tipDesc", "value": "громкость звуковых эффектов: попаданий, кликов и других эффектов." },
         { "key": "settings.musicVolume.tipTitle", "value": "громкость музыки" },
-        { "key": "settings.musicVolume.tipDesc", "value": "громкость любой музыки в игре, очевидно, независимо от звуковых эффектов." }
+        { "key": "settings.musicVolume.tipDesc", "value": "громкость любой музыки в игре, очевидно, независимо от звуковых эффектов." },
+
+        { "key": "settings.generalVolume.tipTitle", "value": "общая громкость" },
+        { "key": "settings.generalVolume.tipDesc", "value": "это главная громкость: меняет сразу и музыку, и звуки." },
+        { "key": "settings.volumeMixer.tipTitle", "value": "микшер громкости" },
+        { "key": "settings.volumeMixer.tipDesc", "value": "управление громкостью игры колёсиком: крути где угодно — не обязательно заходить в настройки, наведись на круглый ползунок — меняется только он. здесь это можно выключить." }
     ]
 }

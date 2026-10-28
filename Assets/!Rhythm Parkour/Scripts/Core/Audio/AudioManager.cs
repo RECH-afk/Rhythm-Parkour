@@ -23,6 +23,9 @@ namespace RKS.RhythmParkour.Core.Managers
         [Range(0f, 1f)]
         [SerializeField] private float musicVolume = 1f;
 
+        [Range(0f, 1f)]
+        [SerializeField] private float soundsVolume = 1f;
+
         [Header("Sound Libraries")]
         [Tooltip("List of sound libraries that contain sound data.")]
         [SerializeField] private SoundLibrary[] libraries;
@@ -123,7 +126,7 @@ namespace RKS.RhythmParkour.Core.Managers
             }
 
             source.clip = data.clips[Random.Range(0, data.clips.Length)];
-            source.volume = data.volume * masterVolume;
+            source.volume = data.volume * masterVolume * soundsVolume;
             source.pitch = data.pitch;
             source.loop = data.loop;
             source.spatialBlend = data.spatial ? 1f : 0f;
@@ -166,6 +169,9 @@ namespace RKS.RhythmParkour.Core.Managers
         public void SetVolume(float volume)
         {
             masterVolume = Mathf.Clamp01(volume);
+            float v = musicVolume * masterVolume;
+            if (musicSourceA != null && musicSourceA.isPlaying) musicSourceA.volume = v;
+            if (musicSourceB != null && musicSourceB.isPlaying) musicSourceB.volume = v;
         }
 
         public float GetVolume() => masterVolume;
@@ -173,11 +179,19 @@ namespace RKS.RhythmParkour.Core.Managers
         public void SetMusicVolume(float volume)
         {
             musicVolume = Mathf.Clamp01(volume);
-            if (musicSourceA != null && musicSourceA.isPlaying) musicSourceA.volume = musicVolume;
-            if (musicSourceB != null && musicSourceB.isPlaying) musicSourceB.volume = musicVolume;
+            float v = musicVolume * masterVolume;
+            if (musicSourceA != null && musicSourceA.isPlaying) musicSourceA.volume = v;
+            if (musicSourceB != null && musicSourceB.isPlaying) musicSourceB.volume = v;
         }
 
         public float GetMusicVolume() => musicVolume;
+
+        public void SetSoundsVolume(float volume)
+        {
+            soundsVolume = Mathf.Clamp01(volume);
+        }
+
+        public float GetSoundsVolume() => soundsVolume;
         #endregion
 
         #region Extra Play Methods
@@ -192,7 +206,7 @@ namespace RKS.RhythmParkour.Core.Managers
             go.transform.SetParent(transform);
             AudioSource src = go.AddComponent<AudioSource>();
             src.clip = clip;
-            src.volume = data.volume * masterVolume;
+            src.volume = data.volume * masterVolume * soundsVolume;
             src.pitch = data.pitch;
             src.spatialBlend = 0f;
             src.loop = false;
@@ -213,7 +227,7 @@ namespace RKS.RhythmParkour.Core.Managers
 
             AudioSource src = temp.AddComponent<AudioSource>();
             src.clip = data.clips[Random.Range(0, data.clips.Length)];
-            src.volume = data.volume * masterVolume;
+            src.volume = data.volume * masterVolume * soundsVolume;
             src.pitch = data.pitch;
             src.loop = false;
             src.spatialBlend = data.spatial ? 1f : 0f;
@@ -271,7 +285,7 @@ namespace RKS.RhythmParkour.Core.Managers
             if (src == null) yield break;
 
             src.volume = 0f;
-            float target = soundMap[soundName].volume * masterVolume;
+            float target = soundMap[soundName].volume * masterVolume * soundsVolume;
             float t = 0f;
 
             while (t < duration)
@@ -506,8 +520,8 @@ namespace RKS.RhythmParkour.Core.Managers
             while (t < fadeTime)
             {
                 t += Time.deltaTime;
-                active.volume = Mathf.Lerp(1f, 0f, t / fadeTime) * musicVolume;
-                next.volume = Mathf.Lerp(0f, 1f, t / fadeTime) * musicVolume;
+                active.volume = Mathf.Lerp(1f, 0f, t / fadeTime) * musicVolume * masterVolume;
+                next.volume = Mathf.Lerp(0f, 1f, t / fadeTime) * musicVolume * masterVolume;
                 yield return null;
             }
 

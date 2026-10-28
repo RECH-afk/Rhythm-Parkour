@@ -21,6 +21,7 @@ namespace RKS.RhythmParkour.Core.Settings
         public event Action<bool> OnBloomChanged;
         public event Action<bool> OnChromaticAberrationChanged;
         public event Action<bool> OnVersionLabelChanged;
+        public event Action<bool> OnVolumeMixerChanged;
 
         public GameData.Data Data => _save != null ? _save.CurrentData : null;
 
@@ -110,26 +111,48 @@ namespace RKS.RhythmParkour.Core.Settings
             NotifyChanged();
         }
 
-        public void SetSoundVolume(float value)
+        public void SetSoundVolume(float value, bool write = true)
         {
             var d = Data; if (d == null) return;
             value = Mathf.Clamp01(value);
             if (Mathf.Approximately(d.volumeValue, value)) return;
             d.volumeValue = value;
-            _save.Write();
+            if (write) _save.Write();
             ApplyAudio();
             NotifyChanged();
         }
 
-        public void SetMusicVolume(float value)
+        public void SetMusicVolume(float value, bool write = true)
         {
             var d = Data; if (d == null) return;
             value = Mathf.Clamp01(value);
             if (Mathf.Approximately(d.musicVolumeValue, value)) return;
             d.musicVolumeValue = value;
-            _save.Write();
+            if (write) _save.Write();
             ApplyAudio();
             NotifyChanged();
+        }
+
+        public void SetSoundsVolume(float value, bool write = true)
+        {
+            var d = Data; if (d == null) return;
+            value = Mathf.Clamp01(value);
+            if (Mathf.Approximately(d.soundsVolumeValue, value)) return;
+            d.soundsVolumeValue = value;
+            if (write) _save.Write();
+            ApplyAudio();
+            NotifyChanged();
+        }
+
+        public void Write()
+        {
+            _save?.Write();
+        }
+
+        public float GetSoundsVolume()
+        {
+            var d = Data;
+            return d != null ? Mathf.Clamp01(d.soundsVolumeValue) : 1f;
         }
 
         public void SetBloom(bool enabled)
@@ -162,6 +185,22 @@ namespace RKS.RhythmParkour.Core.Settings
             _save.Write();
             OnVersionLabelChanged?.Invoke(enabled);
             NotifyChanged();
+        }
+
+        public void SetVolumeMixerEnabled(bool enabled)
+        {
+            var d = Data; if (d == null) return;
+            if (d.volumeMixerEnabled == enabled) return;
+            d.volumeMixerEnabled = enabled;
+            _save.Write();
+            OnVolumeMixerChanged?.Invoke(enabled);
+            NotifyChanged();
+        }
+
+        public bool IsVolumeMixerEnabled()
+        {
+            var d = Data;
+            return d == null || d.volumeMixerEnabled;
         }
 
         #endregion
@@ -236,6 +275,7 @@ namespace RKS.RhythmParkour.Core.Settings
             var d = Data; if (d == null || _audio == null) return;
             _audio.SetVolume(Mathf.Clamp01(d.volumeValue));
             _audio.SetMusicVolume(Mathf.Clamp01(d.musicVolumeValue));
+            _audio.SetSoundsVolume(Mathf.Clamp01(d.soundsVolumeValue));
         }
 
         public void ApplyPostFx()

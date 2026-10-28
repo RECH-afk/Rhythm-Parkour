@@ -21,6 +21,8 @@ namespace RKS.RhythmParkour.Core
             public int windowModeIndex = 0;
             public float volumeValue = 1.0f;
             public float musicVolumeValue = 1.0f;
+            public float soundsVolumeValue = 1.0f;
+            public bool volumeMixerEnabled = true;
             public bool isVisualMoverEnabled = true;
             public string selectedLevelPath = "";
             public string lastRkslPath = "";

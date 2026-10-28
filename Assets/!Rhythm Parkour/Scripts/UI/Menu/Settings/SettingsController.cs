@@ -39,10 +39,13 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private Toggle _versionToggle;
 
         [Header("Audio Tab")]
+        [SerializeField] private Slider _generalVolumeSlider;
+        [SerializeField] private TMP_Text _generalVolumeLabel;
         [SerializeField] private Slider _soundVolumeSlider;
         [SerializeField] private TMP_Text _soundVolumeLabel;
         [SerializeField] private Slider _musicVolumeSlider;
         [SerializeField] private TMP_Text _musicVolumeLabel;
+        [SerializeField] private Toggle _volumeMixerToggle;
 
         [HideInInspector]
         [InjectOptional] public SettingsService settings;
@@ -87,12 +90,18 @@ namespace RKS.RhythmParkour.UI
                 _localization.OnLanguageLoadFailed += OnLanguageLoadFailed;
             }
 
-            if (settings != null) settings.Initialize();
+            if (settings != null)
+            {
+                settings.Initialize();
+                settings.OnChanged += OnSettingsChanged;
+            }
 
             PopulateAll();
             SyncValues();
             RefreshStatusBars();
         }
+
+        void OnSettingsChanged() => SyncVolumeControls();
 
         protected override void OnDisposed()
         {
@@ -102,6 +111,7 @@ namespace RKS.RhythmParkour.UI
                 _localization.OnLanguageLoadFailed -= OnLanguageLoadFailed;
             }
             if (updateChecker != null) updateChecker.OnResult -= OnUpdateResult;
+            if (settings != null) settings.OnChanged -= OnSettingsChanged;
         }
 
         protected override void Update()
@@ -191,8 +201,10 @@ namespace RKS.RhythmParkour.UI
             if (_bloomToggle == null) Debug.LogWarning("[Settings] Bloom toggle not assigned.", this);
             if (_chromaticAberrationToggle == null) Debug.LogWarning("[Settings] Chromatic aberration toggle not assigned.", this);
             if (_versionToggle == null) Debug.LogWarning("[Settings] Version toggle not assigned.", this);
+            if (_generalVolumeSlider == null) Debug.LogWarning("[Settings] General volume slider not assigned.", this);
             if (_soundVolumeSlider == null) Debug.LogWarning("[Settings] Sound volume slider not assigned.", this);
             if (_musicVolumeSlider == null) Debug.LogWarning("[Settings] Music volume slider not assigned.", this);
+            if (_volumeMixerToggle == null) Debug.LogWarning("[Settings] Volume mixer toggle not assigned.", this);
             if (_languageStatus == null) Debug.LogWarning("[Settings] Language status bar not assigned.", this);
             if (_updatesStatus == null) Debug.LogWarning("[Settings] Updates status bar not assigned.", this);
             if (_checkUpdatesButton == null) Debug.LogWarning("[Settings] Check updates button not assigned.", this);
@@ -318,19 +330,31 @@ namespace RKS.RhythmParkour.UI
             if (_textureDropdown != null) _textureDropdown.SetValueWithoutNotify(d != null ? d.textureQualityIndex : 0);
             if (_shadowsDropdown != null) _shadowsDropdown.SetValueWithoutNotify(d != null ? d.shadowQualityIndex : SettingsService.ShadowQualityCount - 1);
 
-            float soundVolume = d != null ? Mathf.Clamp01(d.volumeValue) : 1f;
-            float musicVolume = d != null ? Mathf.Clamp01(d.musicVolumeValue) : 1f;
-
-            if (_soundVolumeSlider != null) _soundVolumeSlider.SetValueWithoutNotify(soundVolume);
-            if (_musicVolumeSlider != null) _musicVolumeSlider.SetValueWithoutNotify(musicVolume);
-            UpdateVolumeLabel(_soundVolumeLabel, soundVolume);
-            UpdateVolumeLabel(_musicVolumeLabel, musicVolume);
+            SyncVolumeControls();
 
             SyncLanguageValue();
 
             if (_bloomToggle != null) _bloomToggle.SetIsOnWithoutNotify(d == null || d.bloomEnabled);
             if (_chromaticAberrationToggle != null) _chromaticAberrationToggle.SetIsOnWithoutNotify(d != null && d.chromaticAberrationEnabled);
             if (_versionToggle != null) _versionToggle.SetIsOnWithoutNotify(d == null || d.showVersionLabel);
+        }
+
+        void SyncVolumeControls()
+        {
+            var d = settings != null ? settings.Data : null;
+            float generalVolume = d != null ? Mathf.Clamp01(d.volumeValue) : 1f;
+            float soundVolume = d != null ? Mathf.Clamp01(d.soundsVolumeValue) : 1f;
+            float musicVolume = d != null ? Mathf.Clamp01(d.musicVolumeValue) : 1f;
+
+            if (_generalVolumeSlider != null) _generalVolumeSlider.SetValueWithoutNotify(generalVolume);
+            if (_soundVolumeSlider != null) _soundVolumeSlider.SetValueWithoutNotify(soundVolume);
+            if (_musicVolumeSlider != null) _musicVolumeSlider.SetValueWithoutNotify(musicVolume);
+            UpdateVolumeLabel(_generalVolumeLabel, generalVolume);
+            UpdateVolumeLabel(_soundVolumeLabel, soundVolume);
+            UpdateVolumeLabel(_musicVolumeLabel, musicVolume);
+
+            if (_volumeMixerToggle != null)
+                _volumeMixerToggle.SetIsOnWithoutNotify(settings == null || settings.IsVolumeMixerEnabled());
         }
 
         void SyncLanguageValue()
@@ -360,9 +384,15 @@ namespace RKS.RhythmParkour.UI
         public void OnChromaticAberrationChanged(bool value) => settings?.SetChromaticAberration(value);
         public void OnVersionLabelChanged(bool value) => settings?.SetVersionLabel(value);
 
-        public void OnSoundVolumeChanged(float value)
+        public void OnGeneralVolumeChanged(float value)
         {
             settings?.SetSoundVolume(value);
+            UpdateVolumeLabel(_generalVolumeLabel, value);
+        }
+
+        public void OnSoundVolumeChanged(float value)
+        {
+            settings?.SetSoundsVolume(value);
             UpdateVolumeLabel(_soundVolumeLabel, value);
         }
 
@@ -371,6 +401,8 @@ namespace RKS.RhythmParkour.UI
             settings?.SetMusicVolume(value);
             UpdateVolumeLabel(_musicVolumeLabel, value);
         }
+
+        public void OnVolumeMixerChanged(bool value) => settings?.SetVolumeMixerEnabled(value);
 
         static void UpdateVolumeLabel(TMP_Text label, float value)
         {
