@@ -1,21 +1,46 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using Zenject;
 using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour.Core.Managers;
+using RKS.RhythmParkour.Core.Settings;
 using RKS.RhythmParkour.Rhythm;
 
 namespace RKS.RhythmParkour.UI.Timeline
 {
     public class TimelineTransport : RKSBehaviour
     {
+        [InjectOptional] public SettingsService settings;
+
         private TimelineUI ui;
         private float currentTime;
         private bool isScrubbingWaveform;
         private bool wasPlayingBeforeScrub;
-        private float scrubSavedVolume = 1f;
         private bool scrubWasPlaying;
         private Vector2 lastScrubScreenPos;
         private float lastScrubTargetTime;
         private const float scrubStillThresholdPxSq = 4f;
+
+        private float MusicScale
+        {
+            get
+            {
+                if (Audio != null) return Mathf.Clamp01(Audio.GetMusicVolume()) * Mathf.Clamp01(Audio.GetVolume());
+                var d = settings != null ? settings.Data : null;
+                return d != null ? Mathf.Clamp01(d.musicVolumeValue) * Mathf.Clamp01(d.volumeValue) : 1f;
+            }
+        }
+
+        private void ApplyChannelVolume(AudioSource src, float baseVolume)
+        {
+            if (src == null) return;
+            if (Audio != null)
+            {
+                Audio.RegisterExternalSource(src, AudioManager.ExternalChannel.Music, baseVolume);
+                return;
+            }
+            src.volume = MusicScale * baseVolume;
+        }
 
         protected override void Awake()
         {
@@ -89,7 +114,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (audioSource == null) audioSource = ui.gameObject.AddComponent<AudioSource>();
             if (audioSource.clip != clip) audioSource.clip = clip;
             audioSource.time = Mathf.Clamp(t, 0f, clip.length - 0.02f);
-            audioSource.volume = 1f;
+            ApplyChannelVolume(audioSource, 1f);
             audioSource.loop = ui.loopPlayback;
             audioSource.Play();
             currentTime = audioSource.time;
@@ -114,8 +139,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (audioSource == null || audioSource.clip == null) return;
             if (ui.enableScrubAudio)
             {
-                scrubSavedVolume = audioSource.volume;
-                audioSource.volume = Mathf.Clamp01(ui.scrubVolume);
+                ApplyChannelVolume(audioSource, Mathf.Clamp01(ui.scrubVolume));
                 float target = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f);
                 try { audioSource.time = target; } catch { audioSource.time = 0f; }
                 audioSource.loop = false;
@@ -133,7 +157,7 @@ namespace RKS.RhythmParkour.UI.Timeline
             if (audioSource == null || audioSource.clip == null) { wasPlayingBeforeScrub = false; return; }
             if (ui.enableScrubAudio)
             {
-                audioSource.volume = scrubSavedVolume;
+                ApplyChannelVolume(audioSource, 1f);
                 if (!wasPlayingBeforeScrub) { CancelInvoke(nameof(StopScrubPreview)); Invoke(nameof(StopScrubPreview), Mathf.Max(0.05f, ui.scrubAudibleDuration)); }
                 else { if (!audioSource.isPlaying) { try { audioSource.time = Mathf.Clamp(currentTime, 0f, audioSource.clip.length - 0.02f); } catch { } audioSource.Play(); } }
             }
@@ -146,7 +170,7 @@ namespace RKS.RhythmParkour.UI.Timeline
         {
             var audioSource = ui.audioSource;
             if (isScrubbingWaveform) return;
-            if (!scrubWasPlaying && audioSource != null && audioSource.isPlaying) { audioSource.Pause(); audioSource.volume = scrubSavedVolume; }
+            if (!scrubWasPlaying && audioSource != null && audioSource.isPlaying) { audioSource.Pause(); ApplyChannelVolume(audioSource, 1f); }
         }
 
         public void BeginScrubAt(float t, Vector2 screenPos)

@@ -210,6 +210,8 @@ namespace RKS.RhythmParkour.UI
         private Coroutine _autoFinishRoutine;
         private double _lastVideoTime;
         private float _lastResyncTime;
+        private float _videoStallSince = -1f;
+        private bool _videoForceResync;
         private int _detailsSeq;
         private Sprite _coverSprite;
         private AudioClip _previewClip;
@@ -416,11 +418,7 @@ namespace RKS.RhythmParkour.UI
                 if (IsLogoHovered())
                 {
                     _logoExcite = 1f;
-                    if (Audio != null)
-                    {
-                        var clapSrc = Audio.Play(clapSoundName);
-                        if (clapSrc != null) clapSrc.volume = Mathf.Clamp01(clapVolume);
-                    }
+                    if (Audio != null) Audio.PlayScaled(clapSoundName, clapVolume);
                 }
             }
             TickLogoExcite(dt);
@@ -571,15 +569,61 @@ namespace RKS.RhythmParkour.UI
             float musicTime = Audio.GetMusicTime();
             if (musicTime < 0f) return;
             double vt = previewVideo.time;
-            if (Mathf.Abs((float)(vt - _lastVideoTime)) < 0.0001f) return;
+
+            if (_videoForceResync)
+            {
+                _videoForceResync = false;
+                ResyncPreviewVideoHard(musicTime);
+                return;
+            }
+
+            if (Mathf.Abs((float)(vt - _lastVideoTime)) < 0.0001f)
+            {
+                if (Time.unscaledTime - _lastResyncTime > 1f)
+                {
+                    if (_videoStallSince < 0f) _videoStallSince = Time.unscaledTime;
+                    else if (Time.unscaledTime - _videoStallSince > 0.5f)
+                    {
+                        _videoStallSince = -1f;
+                        ResyncPreviewVideoHard(musicTime);
+                    }
+                }
+                return;
+            }
+            _videoStallSince = -1f;
             _lastVideoTime = vt;
             if (Time.unscaledTime - _lastResyncTime < 1f) return;
-            if (Mathf.Abs((float)(vt - musicTime)) > resyncThreshold)
+            double vlen = previewVideo.length;
+            double target = vlen > 0.5 ? musicTime % vlen : musicTime;
+            double diff = vt - target;
+            if (vlen > 0.5) diff -= vlen * System.Math.Round(diff / vlen);
+            if (System.Math.Abs(diff) > resyncThreshold)
             {
-                previewVideo.time = musicTime;
-                _lastVideoTime = musicTime;
+                previewVideo.time = target;
+                _lastVideoTime = target;
                 _lastResyncTime = Time.unscaledTime;
             }
+        }
+
+        private void ResyncPreviewVideoHard(float musicTime)
+        {
+            if (previewVideo == null) return;
+            double vlen = previewVideo.length;
+            double target = vlen > 0.5 ? musicTime % vlen : musicTime;
+            previewVideo.time = target;
+            _lastVideoTime = target;
+            _lastResyncTime = Time.unscaledTime;
+            _videoStallSince = -1f;
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus) _videoForceResync = true;
+        }
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (!paused) _videoForceResync = true;
         }
 
         protected override void OnDisposed()
@@ -1869,44 +1913,68 @@ namespace RKS.RhythmParkour.UI
             }
 
             if (seq != _previewSeq) yield break;
-            if (clip != null && Audio != null)
+            if (!wantVideo)
             {
-                Audio.PlayMusic(clip, previewFadeTime, start);
-                Audio.SetMusicLoop(RepeatEnabled);
-            }
-            if (wantVideo)
-            {
-                previewVideo.Play();
-                float waitFrames = 0f;
-                while (previewVideo.frame <= 0 && waitFrames < 5f && seq == _previewSeq)
+                if (clip != null && Audio != null)
                 {
-                    waitFrames += Time.unscaledDeltaTime;
+                    Audio.PlayMusic(clip, previewFadeTime, start);
+                    Audio.SetMusicLoop(RepeatEnabled);
+                }
+                _previewVideoReady = false;
+                _previewRoutine = null;
+                yield break;
+            }
+
+            double vlen = previewVideo.length;
+            double videoStart = vlen > 0.5 ? ((double)start) % vlen : 0.0;
+            if (videoStart > 0.05)
+            {
+                bool seeked = false;
+                VideoPlayer.EventHandler onSeeked = vp => seeked = true;
+                previewVideo.seekCompleted += onSeeked;
+                previewVideo.time = videoStart;
+                float seekWait = 0f;
+                while (!seeked && seekWait < 2f && seq == _previewSeq)
+                {
+                    seekWait += Time.unscaledDeltaTime;
                     yield return null;
                 }
+                previewVideo.seekCompleted -= onSeeked;
                 if (seq != _previewSeq) yield break;
-                if (previewVideo.frame > 0)
+            }
+
+            previewVideo.Play();
+            float waitFrames = 0f;
+            while (previewVideo.frame <= 0 && waitFrames < 5f && seq == _previewSeq)
+            {
+                waitFrames += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (seq != _previewSeq) yield break;
+            if (previewVideo.frame > 0)
+            {
+                if (clip != null && Audio != null)
                 {
-                    float anchor = Audio != null ? Audio.GetMusicTime() : -1f;
-                    if (anchor < 0f) anchor = start;
-                    double vlen = previewVideo.length;
-                    if (vlen > 0.5) previewVideo.time = anchor % vlen;
-                    _lastVideoTime = previewVideo.time;
-                    _lastResyncTime = Time.unscaledTime;
-                    ApplyVideoTexture();
-                    FadeBackgroundBlend(1f);
-                    _previewVideoReady = clip != null;
+                    Audio.PlayMusic(clip, previewFadeTime, start);
+                    Audio.SetMusicLoop(RepeatEnabled);
                 }
-                else
-                {
-                    Debug.LogWarning("[MenuController] Preview video produced no frames.", this);
-                    previewVideo.Stop();
-                    FadeBackgroundBlend(0f);
-                    _previewVideoReady = false;
-                }
+                _lastVideoTime = previewVideo.time;
+                _lastResyncTime = Time.unscaledTime;
+                ApplyVideoTexture();
+                FadeBackgroundBlend(1f);
+                _previewVideoReady = clip != null;
             }
             else
             {
+                Debug.LogWarning("[MenuController] Preview video produced no frames.", this);
+                previewVideo.Stop();
+                FadeBackgroundBlend(0f);
                 _previewVideoReady = false;
+                if (clip != null && Audio != null)
+                {
+                    Audio.PlayMusic(clip, previewFadeTime, start);
+                    Audio.SetMusicLoop(RepeatEnabled);
+                }
             }
             _previewRoutine = null;
         }

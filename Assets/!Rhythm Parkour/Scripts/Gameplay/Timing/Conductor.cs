@@ -53,6 +53,7 @@ namespace RKS.RhythmParkour.Rhythm
             if (src != null) musicSource = src;
             if (musicSource == null) musicSource = GetComponent<AudioSource>();
             if (musicSource == null) musicSource = gameObject.AddComponent<AudioSource>();
+            if (Audio != null) Audio.RegisterExternalSource(musicSource, AudioManager.ExternalChannel.Music);
             if (data != null && data.music != null) { musicSource.clip = data.music; musicSource.playOnAwake = false; musicSource.loop = false; }
             dspSongStartTime = AudioSettings.dspTime + 0.1;
             if (musicSource.clip != null) musicSource.PlayScheduled(dspSongStartTime);

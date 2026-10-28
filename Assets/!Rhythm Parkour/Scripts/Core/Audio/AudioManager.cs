@@ -145,6 +145,13 @@ namespace RKS.RhythmParkour.Core.Managers
             }
         }
 
+        public AudioSource PlayScaled(string soundName, float volumeScale)
+        {
+            AudioSource source = Play(soundName);
+            if (source != null) source.volume *= Mathf.Clamp01(volumeScale);
+            return source;
+        }
+
         public void StopAll()
         {
             foreach (var source in audioPool)
@@ -166,12 +173,58 @@ namespace RKS.RhythmParkour.Core.Managers
         #endregion
 
         #region Volume Controls
+        public enum ExternalChannel { Music, Sounds }
+
+        private readonly Dictionary<AudioSource, ExternalChannel> externalChannels = new Dictionary<AudioSource, ExternalChannel>();
+        private readonly Dictionary<AudioSource, float> externalBaseVolumes = new Dictionary<AudioSource, float>();
+
+        public void RegisterExternalSource(AudioSource source, ExternalChannel channel, float baseVolume = 1f)
+        {
+            if (source == null) return;
+            externalChannels[source] = channel;
+            externalBaseVolumes[source] = Mathf.Clamp01(baseVolume);
+            ApplyExternalVolume(source);
+        }
+
+        public void UnregisterExternalSource(AudioSource source)
+        {
+            if (source == null) return;
+            externalChannels.Remove(source);
+            externalBaseVolumes.Remove(source);
+        }
+
+        private void ApplyExternalVolume(AudioSource source)
+        {
+            ExternalChannel channel = externalChannels[source];
+            float baseVolume = externalBaseVolumes[source];
+            float chain = channel == ExternalChannel.Music ? musicVolume * masterVolume : soundsVolume * masterVolume;
+            source.volume = chain * baseVolume;
+        }
+
+        private void ApplyExternalVolumes()
+        {
+            List<AudioSource> stale = null;
+            foreach (var pair in externalChannels)
+            {
+                if (pair.Key == null)
+                {
+                    if (stale == null) stale = new List<AudioSource>();
+                    stale.Add(pair.Key);
+                    continue;
+                }
+                ApplyExternalVolume(pair.Key);
+            }
+            if (stale == null) return;
+            foreach (AudioSource source in stale) UnregisterExternalSource(source);
+        }
+
         public void SetVolume(float volume)
         {
             masterVolume = Mathf.Clamp01(volume);
             float v = musicVolume * masterVolume;
             if (musicSourceA != null && musicSourceA.isPlaying) musicSourceA.volume = v;
             if (musicSourceB != null && musicSourceB.isPlaying) musicSourceB.volume = v;
+            ApplyExternalVolumes();
         }
 
         public float GetVolume() => masterVolume;
@@ -182,6 +235,7 @@ namespace RKS.RhythmParkour.Core.Managers
             float v = musicVolume * masterVolume;
             if (musicSourceA != null && musicSourceA.isPlaying) musicSourceA.volume = v;
             if (musicSourceB != null && musicSourceB.isPlaying) musicSourceB.volume = v;
+            ApplyExternalVolumes();
         }
 
         public float GetMusicVolume() => musicVolume;
@@ -189,6 +243,7 @@ namespace RKS.RhythmParkour.Core.Managers
         public void SetSoundsVolume(float volume)
         {
             soundsVolume = Mathf.Clamp01(volume);
+            ApplyExternalVolumes();
         }
 
         public float GetSoundsVolume() => soundsVolume;
