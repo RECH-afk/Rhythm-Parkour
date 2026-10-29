@@ -22,6 +22,8 @@ namespace RKS.RhythmParkour.UI
         [SerializeField] private string _updateManifestUrl = "";
         [Tooltip("Пауза между проверками обновлений, сек")]
         [SerializeField] private float updateCheckCooldownSeconds = 10f;
+        [Tooltip("Найдено обновление — сразу скачать и установить (перезапуск игры)")]
+        [SerializeField] private bool autoDownloadUpdates = true;
 
         [Header("Game Tab")]
         [SerializeField] private TMP_Dropdown _languageDropdown;
@@ -69,6 +71,7 @@ namespace RKS.RhythmParkour.UI
         string _pendingLanguage;
         bool _checkOnCooldown;
         float _nextCheckAllowedAt;
+        float _applyProgress;
         bool _settingsWasVisible;
 
         #endregion
@@ -502,6 +505,7 @@ namespace RKS.RhythmParkour.UI
                         _updatesStatus?.SetStatus(
                             string.Format(Loc("settings.updates.status.available"), latestDisplay, installedShort),
                             OptionStatusState.Success);
+                        if (autoDownloadUpdates) StartApplyUpdate();
                         break;
                     }
 
@@ -509,6 +513,67 @@ namespace RKS.RhythmParkour.UI
                     _updatesStatus?.SetStatus(Loc("settings.updates.status.error"), OptionStatusState.Error);
                     break;
             }
+        }
+
+        void StartApplyUpdate()
+        {
+            if (updateChecker == null || updateChecker.isApplying) return;
+
+            updateChecker.OnApplyStage -= OnApplyStage;
+            updateChecker.OnApplyProgress -= OnApplyProgress;
+            updateChecker.OnApplyResult -= OnApplyResult;
+            updateChecker.OnApplyStage += OnApplyStage;
+            updateChecker.OnApplyProgress += OnApplyProgress;
+            updateChecker.OnApplyResult += OnApplyResult;
+
+            _applyProgress = 0f;
+            updateChecker.ApplyLatestUpdate();
+        }
+
+        void OnApplyStage(UpdateApplyStage stage)
+        {
+            switch (stage)
+            {
+                case UpdateApplyStage.Downloading:
+                    _updatesStatus?.SetStatus(string.Format(Loc("settings.updates.status.downloading"), Mathf.RoundToInt(_applyProgress * 100f)), OptionStatusState.Busy);
+                    break;
+
+                case UpdateApplyStage.Extracting:
+                    _updatesStatus?.SetStatus(Loc("settings.updates.status.extracting"), OptionStatusState.Busy);
+                    break;
+
+                case UpdateApplyStage.Preparing:
+                    _updatesStatus?.SetStatus(Loc("settings.updates.status.restarting"), OptionStatusState.Busy);
+                    break;
+            }
+        }
+
+        void OnApplyProgress(float p)
+        {
+            _applyProgress = p;
+            if (updateChecker != null && updateChecker.isApplying)
+                _updatesStatus?.SetStatus(string.Format(Loc("settings.updates.status.downloading"), Mathf.RoundToInt(p * 100f)), OptionStatusState.Busy);
+        }
+
+        void OnApplyResult(bool ok, string error)
+        {
+            if (updateChecker != null)
+            {
+                updateChecker.OnApplyStage -= OnApplyStage;
+                updateChecker.OnApplyProgress -= OnApplyProgress;
+                updateChecker.OnApplyResult -= OnApplyResult;
+            }
+
+            if (!ok)
+            {
+                if (error == UpdateChecker.EditorOnlyError)
+                    _updatesStatus?.SetStatus(Loc("settings.updates.status.editor"), OptionStatusState.Error);
+                else
+                    _updatesStatus?.SetStatus(string.Format(Loc("settings.updates.status.applyError"), error ?? ""), OptionStatusState.Error);
+                return;
+            }
+
+            _updatesStatus?.SetStatus(Loc("settings.updates.status.restarting"), OptionStatusState.Success);
         }
 
         #endregion

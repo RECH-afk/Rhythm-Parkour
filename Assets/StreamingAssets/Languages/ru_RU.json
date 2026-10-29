@@ -18,6 +18,11 @@
         { "key": "settings.updates.status.available", "value": "найдена новая версия: {0} (у тебя {1})" },
         { "key": "settings.updates.status.error", "value": "игра не может достучаться до сервера обновлений" },
         { "key": "settings.updates.status.noUrl", "value": "URL сервера обновлений не задан" },
+        { "key": "settings.updates.status.downloading", "value": "скачивание обновления... {0}%" },
+        { "key": "settings.updates.status.extracting", "value": "установка файлов обновления..." },
+        { "key": "settings.updates.status.restarting", "value": "обновление готово — игра перезапустится" },
+        { "key": "settings.updates.status.applyError", "value": "не удалось обновиться: {0}" },
+        { "key": "settings.updates.status.editor", "value": "DON'T WORK IN UNITY" },
 
         { "key": "settings.windowMode.tipTitle", "value": "режим окна" },
         { "key": "settings.windowMode.tipDesc", "value": " эта настройка определяет, как игра будет занимать твой экран: на весь экран, в окне, в окне без рамок." },

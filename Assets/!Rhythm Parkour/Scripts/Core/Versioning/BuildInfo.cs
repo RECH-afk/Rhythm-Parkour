@@ -13,6 +13,7 @@ namespace RKS.RhythmParkour.Core
         public string branch = "";
         public string buildDate = "";
         public string tag = "";
+        public string phase = "";
         public bool dirty;
     }
 
@@ -56,5 +57,10 @@ namespace RKS.RhythmParkour.Core
         public static string BuildDate => Data.buildDate;
         public static string Tag => Data.tag;
         public static bool IsDirty => Data.dirty;
+
+        public static void Reload()
+        {
+            _loaded = false;
+        }
     }
 }

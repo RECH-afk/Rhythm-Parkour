@@ -18,6 +18,11 @@
         { "key": "settings.updates.status.available", "value": "New version available: {0} (you have {1})" },
         { "key": "settings.updates.status.error", "value": "Could not reach the update server" },
         { "key": "settings.updates.status.noUrl", "value": "Update server URL is not set" },
+        { "key": "settings.updates.status.downloading", "value": "Downloading update... {0}%" },
+        { "key": "settings.updates.status.extracting", "value": "Installing update files..." },
+        { "key": "settings.updates.status.restarting", "value": "Update ready — the game will restart" },
+        { "key": "settings.updates.status.applyError", "value": "Update failed: {0}" },
+        { "key": "settings.updates.status.editor", "value": "DON'T WORK IN UNITY" },
 
         { "key": "settings.windowMode.tipTitle", "value": "Window mode" },
         { "key": "settings.windowMode.tipDesc", "value": "How the game occupies the screen: borderless fullscreen, exclusive fullscreen, or windowed." },

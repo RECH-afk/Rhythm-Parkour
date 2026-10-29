@@ -1,0 +1,6 @@
+{
+    "downloadUrl": "http://localhost:8080/update.zip",
+    "notes": "test",
+    "autoPack": true,
+    "openFolderAfterBuild": true
+}

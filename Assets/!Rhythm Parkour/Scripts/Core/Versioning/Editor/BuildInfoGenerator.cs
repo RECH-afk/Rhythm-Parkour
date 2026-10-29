@@ -12,6 +12,7 @@ namespace RKS.RhythmParkour.Core
     public static class BuildInfoGenerator
     {
         const string RelativePath = "Assets/Resources/BuildInfo.json";
+        const string DefaultPhase = "alpha";
 
         [InitializeOnLoadMethod]
         static void OnEditorLoad()
@@ -27,6 +28,7 @@ namespace RKS.RhythmParkour.Core
             string count = RunGit(root, "rev-list --count HEAD");
             string branch = RunGit(root, "branch --show-current");
             string describe = RunGit(root, "describe --tags --long --always");
+            string commitDate = RunGit(root, "show -s --format=%cI HEAD");
             bool dirty = RunGit(root, "status --porcelain") != "";
 
             if (string.IsNullOrEmpty(hash)) hash = "unknown";
@@ -44,15 +46,36 @@ namespace RKS.RhythmParkour.Core
             string suffix = dirty ? ".dirty" : "";
             string version = $"{baseVersion}.{count}+{hash}{suffix}";
 
+            string prevPhase = "";
+            string prevDate = "";
+            if (File.Exists(Path.Combine(root, RelativePath)))
+            {
+                try
+                {
+                    var prev = JsonUtility.FromJson<BuildInfoData>(File.ReadAllText(Path.Combine(root, RelativePath)));
+                    if (prev != null)
+                    {
+                        prevPhase = prev.phase ?? "";
+                        prevDate = prev.buildDate ?? "";
+                    }
+                }
+                catch (Exception e) { Debug.LogWarning("[BuildInfo] " + e.Message); }
+            }
+
+            string phase = string.IsNullOrEmpty(prevPhase) ? DefaultPhase : prevPhase;
+
+            string shortVersion = string.IsNullOrEmpty(phase) ? "v" + baseVersion : $"v{baseVersion} - {phase}";
+
             var dto = new BuildInfoData
             {
                 version = version,
-                shortVersion = "v" + baseVersion + " - indev",
+                shortVersion = shortVersion,
                 commitHash = hash,
                 commitCount = count,
                 branch = branch,
-                buildDate = DateTime.UtcNow.ToString("o"),
+                buildDate = string.IsNullOrEmpty(commitDate) ? prevDate : commitDate,
                 tag = tag,
+                phase = phase,
                 dirty = dirty
             };
 
@@ -64,6 +87,7 @@ namespace RKS.RhythmParkour.Core
                 File.WriteAllText(full, json);
                 AssetDatabase.Refresh();
             }
+            BuildInfo.Reload();
         }
 
         static string ParseTag(string describe)

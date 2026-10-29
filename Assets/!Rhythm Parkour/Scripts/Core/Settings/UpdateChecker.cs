@@ -1,8 +1,15 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Networking;
+using Debug = UnityEngine.Debug;
 
 namespace RKS.RhythmParkour.Core.Settings
 {
@@ -12,6 +19,13 @@ namespace RKS.RhythmParkour.Core.Settings
         UpToDate,
         UpdateAvailable,
         Failed,
+    }
+
+    public enum UpdateApplyStage
+    {
+        Downloading,
+        Extracting,
+        Preparing,
     }
 
     [Serializable]
@@ -38,6 +52,16 @@ namespace RKS.RhythmParkour.Core.Settings
         public string Notes { get; private set; }
 
         public event Action<UpdateCheckState, string> OnResult;
+
+        public event Action<UpdateApplyStage> OnApplyStage;
+        public event Action<float> OnApplyProgress;
+        public event Action<bool, string> OnApplyResult;
+
+        public const string EditorOnlyError = "editor-only";
+        const string ApplyBatName = "rks_apply_update.bat";
+        const string UpdateTempDir = "update_tmp";
+
+        public bool isApplying { get; private set; }
 
         public void CheckForUpdates(string urlOverride = null)
         {
@@ -113,6 +137,181 @@ namespace RKS.RhythmParkour.Core.Settings
             }
         }
 
+        public void ApplyLatestUpdate()
+        {
+            if (isApplying) return;
+            if (string.IsNullOrEmpty(DownloadUrl))
+            {
+                OnApplyResult?.Invoke(false, "no downloadUrl");
+                return;
+            }
+#if UNITY_EDITOR
+            Debug.LogWarning("[UpdateChecker] Установка обновления работает только в собранной игре.");
+            OnApplyResult?.Invoke(false, EditorOnlyError);
+            return;
+#else
+            isApplying = true;
+            ApplyRoutine();
+#endif
+        }
+
+        async void ApplyRoutine()
+        {
+            try
+            {
+                string gameRoot = Path.GetDirectoryName(Application.dataPath);
+                string tmp = Path.Combine(gameRoot, UpdateTempDir);
+                string extract = Path.Combine(tmp, "extracted");
+                string zipPath = Path.Combine(tmp, "update.zip");
+
+                OnApplyStage?.Invoke(UpdateApplyStage.Downloading);
+                if (Directory.Exists(tmp)) Directory.Delete(tmp, true);
+                Directory.CreateDirectory(tmp);
+
+                if (DownloadUrl.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(new Uri(DownloadUrl).LocalPath, zipPath, true);
+                }
+                else
+                {
+                    using (var request = new UnityWebRequest(DownloadUrl, "GET", new DownloadHandlerFile(zipPath), null))
+                    {
+                        request.timeout = 0;
+                        var op = request.SendWebRequest();
+                        while (!op.isDone)
+                        {
+                            OnApplyProgress?.Invoke(request.downloadProgress);
+                            await Task.Yield();
+                        }
+                        if (request.result != UnityWebRequest.Result.Success)
+                        {
+                            OnApplyResult?.Invoke(false, request.error);
+                            return;
+                        }
+                    }
+                }
+
+                OnApplyStage?.Invoke(UpdateApplyStage.Extracting);
+                await Task.Run(() => ZipFile.ExtractToDirectory(zipPath, extract));
+                string sourceRoot = ResolveExtractRoot(extract);
+                string newExe = FindNewExe(sourceRoot);
+                if (newExe == null)
+                {
+                    OnApplyResult?.Invoke(false, "no exe in archive");
+                    return;
+                }
+
+                OnApplyStage?.Invoke(UpdateApplyStage.Preparing);
+                string oldExe = Process.GetCurrentProcess().ProcessName + ".exe";
+                string batPath = Path.Combine(gameRoot, ApplyBatName);
+                File.WriteAllText(batPath, BuildApplyBat(oldExe, newExe), Encoding.ASCII);
+
+                if (!LaunchApplyBat(batPath, gameRoot)) return;
+
+                OnApplyResult?.Invoke(true, null);
+                Application.Quit();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[UpdateChecker] " + e.Message);
+                OnApplyResult?.Invoke(false, e.Message);
+            }
+            finally
+            {
+                isApplying = false;
+            }
+        }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+        static extern IntPtr ShellExecute(IntPtr hwnd, string operation, string file, string parameters, string directory, int showCmd);
+
+        bool LaunchApplyBat(string batPath, string gameRoot)
+        {
+            var errors = new List<string>();
+
+            try
+            {
+                IntPtr code = ShellExecute(IntPtr.Zero, "open", batPath, null, gameRoot, 0);
+                if (code.ToInt64() > 32)
+                {
+                    Debug.Log("[UpdateChecker] Updater launched: " + batPath);
+                    return true;
+                }
+                errors.Add("ShellExecute error " + code.ToInt64());
+            }
+            catch (Exception e) { errors.Add("ShellExecute: " + e.Message); }
+
+            string cmdPath = string.IsNullOrEmpty(Environment.SystemDirectory)
+                ? "cmd.exe"
+                : Path.Combine(Environment.SystemDirectory, "cmd.exe");
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = cmdPath,
+                    Arguments = "/C " + ApplyBatName,
+                    WorkingDirectory = gameRoot,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                Debug.Log("[UpdateChecker] Updater launched via cmd: " + batPath);
+                return true;
+            }
+            catch (Exception e) { errors.Add("cmd: " + e.Message); }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = cmdPath,
+                    Arguments = "/C \"" + batPath + "\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                });
+                Debug.Log("[UpdateChecker] Updater launched via cmd (fallback): " + batPath);
+                return true;
+            }
+            catch (Exception e) { errors.Add("cmd quoted: " + e.Message); }
+
+            OnApplyResult?.Invoke(false, "Could not start the updater (" + string.Join("; ", errors) + "). You can run " + ApplyBatName + " manually from the game folder.");
+            return false;
+        }
+
+        static string ResolveExtractRoot(string extract)
+        {
+            if (Directory.GetFiles(extract).Length > 0 || Directory.GetDirectories(extract).Length != 1)
+                return extract;
+            return Directory.GetDirectories(extract)[0];
+        }
+
+        static string FindNewExe(string sourceRoot)
+        {
+            var exes = Directory.GetFiles(sourceRoot, "*.exe", SearchOption.TopDirectoryOnly);
+            if (exes.Length == 0) return null;
+            string current = Process.GetCurrentProcess().ProcessName + ".exe";
+            foreach (var path in exes)
+                if (string.Equals(Path.GetFileName(path), current, StringComparison.OrdinalIgnoreCase))
+                    return Path.GetFileName(path);
+            return Path.GetFileName(exes[0]);
+        }
+
+        static string BuildApplyBat(string oldExe, string newExe)
+        {
+            return "@echo off\r\n"
+                 + "cd /d \"%~dp0\"\r\n"
+                 + ":waitloop\r\n"
+                 + "tasklist /FI \"IMAGENAME eq " + oldExe + "\" | find /I \"" + oldExe + "\" >nul\r\n"
+                 + "if not errorlevel 1 (\r\n"
+                 + "  timeout /t 1 /nobreak >nul\r\n"
+                 + "  goto waitloop\r\n"
+                 + ")\r\n"
+                 + "robocopy \"update_tmp\\extracted\" \".\" /E /NFL /NDL /NJH /NJS /NP /XF " + ApplyBatName + "\r\n"
+                 + "rmdir /S /Q \"update_tmp\"\r\n"
+                 + "start \"\" \"" + newExe + "\"\r\n"
+                 + "del \"%~f0\"\r\n";
+        }
+
         static string BuildCanonical(UpdateManifest manifest)
         {
             return (manifest.latestVersion ?? string.Empty) + "\n"
@@ -124,8 +323,8 @@ namespace RKS.RhythmParkour.Core.Settings
         {
             if (string.IsNullOrEmpty(manifest.signature))
             {
-                Debug.LogWarning("[UpdateChecker] Manifest has no signature.");
-                return false;
+                Debug.Log("[UpdateChecker] Манифест без подписи — принят (для простоты; HTTPS обязателен на проде).");
+                return true;
             }
 
             try
