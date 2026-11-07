@@ -68,7 +68,11 @@ namespace RKS.RhythmParkour.Core.Build
 
             var gate = VersionToolWindow.OpenBuildGate();
             if (gate == null || !gate.Confirmed)
+            {
+                Debug.LogError("[PlayerBuild] Build aborted: the Version Tool gate was not confirmed"
+                    + (VersionToolWindow.BuildCancelledByUser ? " (Cancel pressed)" : "") + ".");
                 throw new Exception("Build cancelled: the Version Tool window was closed without Start Build.");
+            }
 
             BuildInfoGenerator.Refresh();
         }
@@ -85,9 +89,9 @@ namespace RKS.RhythmParkour.Core.Build
 
             try
             {
-                UpdatePackager.Pack(report.summary.outputPath);
-                if (cfg.openFolderAfterBuild)
-                    EditorUtility.RevealInFinder(Path.Combine(UpdatePackager.ServerDir, "update.zip"));
+                string packed = UpdatePackager.Pack(report.summary.outputPath);
+                if (cfg.openFolderAfterBuild && packed != null)
+                    EditorUtility.RevealInFinder(packed);
             }
             catch (Exception e)
             {
@@ -100,6 +104,16 @@ namespace RKS.RhythmParkour.Core.Build
     {
         public const string ServerDirName = "Server";
         const string ConfigRelativePath = "ProjectSettings/RksUpdateServer.json";
+
+        public static string NormalizeArchiveUrl(string url)
+        {
+            string u = (url ?? "").Trim();
+            if (string.IsNullOrEmpty(u)) return "";
+            if (u.StartsWith("file://", StringComparison.OrdinalIgnoreCase)) return u;
+            if (u.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return u;
+            if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) return "https://" + u.Substring(7);
+            return "https://" + u;
+        }
 
         [Serializable]
         public sealed class ServerConfig
@@ -135,7 +149,7 @@ namespace RKS.RhythmParkour.Core.Build
                     if (IsExcludedFromZip(relative.Split('\\', '/')[0])) continue;
 
                     if ((i & 31) == 0)
-                        EditorUtility.DisplayProgressBar("Update", "Packing update.zip... " + relative, total == 0 ? 1f : (float)i / total);
+                        EditorUtility.DisplayProgressBar("Update", "Packing archive... " + relative, total == 0 ? 1f : (float)i / total);
 
                     ZipArchiveEntry entry = archive.CreateEntry(relative.Replace('\\', '/'), System.IO.Compression.CompressionLevel.Optimal);
                     using (Stream input = File.OpenRead(file))
@@ -182,21 +196,27 @@ namespace RKS.RhythmParkour.Core.Build
             Pack(exe);
         }
 
-        public static void Pack(string exePath)
+        const string ZipNameToken = "{VERSION}";
+
+        public static string Pack(string exePath)
         {
             string buildDir = Path.GetDirectoryName(Path.GetFullPath(exePath));
             string root = ProjectRoot.TrimEnd('\\', '/');
             if (buildDir.TrimEnd('\\', '/') == root || Directory.Exists(Path.Combine(buildDir, "Assets")))
             {
                 Debug.LogWarning("[PlayerBuild] Build is inside the project - update packing skipped.");
-                return;
+                return null;
             }
 
             Directory.CreateDirectory(ServerDir);
-            string zip = Path.Combine(ServerDir, "update.zip");
+
+            var cfg = LoadConfig();
+            string zipName = ResolveArchiveName(cfg.downloadUrl, out string downloadUrl);
+            string zip = Path.Combine(ServerDir, zipName);
+            CleanupOldArchives(zipName);
             if (File.Exists(zip)) File.Delete(zip);
 
-            EditorUtility.DisplayProgressBar("Update", "Packing update.zip...", 0.1f);
+            EditorUtility.DisplayProgressBar("Update", "Packing " + zipName + "...", 0.1f);
             try
             {
                 CreateZip(buildDir, zip);
@@ -206,8 +226,6 @@ namespace RKS.RhythmParkour.Core.Build
                 EditorUtility.ClearProgressBar();
             }
 
-            var cfg = LoadConfig();
-            string downloadUrl = string.IsNullOrEmpty(cfg.downloadUrl) ? new Uri(zip).AbsoluteUri : cfg.downloadUrl.Trim();
             var manifest = new UpdateManifestForServer
             {
                 latestVersion = BuildInfo.Version,
@@ -217,7 +235,75 @@ namespace RKS.RhythmParkour.Core.Build
             string jsonPath = Path.Combine(ServerDir, "update.json");
             File.WriteAllText(jsonPath, JsonUtility.ToJson(manifest, false), new UTF8Encoding(false));
 
+            if (!downloadUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                Debug.LogWarning("[PlayerBuild] Archive URL is not HTTPS (" + downloadUrl + ") - this package works for local testing only, not for players.");
+
             Debug.Log($"[PlayerBuild] Update package ready (version {BuildInfo.Version}):\n{zip}\n{jsonPath}");
+            return zip;
+        }
+
+        static string VersionForFiles()
+        {
+            string v = VersionToolWindow.SanitizeVersion(PlayerSettings.bundleVersion);
+            if (string.IsNullOrEmpty(v)) v = "0.1";
+            string phase = VersionToolWindow.ReadPhase();
+            if (!string.IsNullOrEmpty(phase) && !phase.Equals("stable", StringComparison.OrdinalIgnoreCase))
+            {
+                string clean = new string(phase.Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+                if (clean.Length > 0) v += "-" + clean;
+            }
+            return v;
+        }
+
+        static string ResolveArchiveName(string configUrl, out string downloadUrl)
+        {
+            string url = NormalizeArchiveUrl(configUrl);
+            string fileName = "RhythmParkour_v" + VersionForFiles() + ".zip";
+
+            if (string.IsNullOrEmpty(url))
+            {
+                downloadUrl = new Uri(Path.Combine(ServerDir, fileName)).AbsoluteUri;
+                return fileName;
+            }
+
+            int tokenIndex = url.IndexOf(ZipNameToken, StringComparison.OrdinalIgnoreCase);
+            if (tokenIndex >= 0)
+                url = url.Substring(0, tokenIndex) + VersionForFiles() + url.Substring(tokenIndex + ZipNameToken.Length);
+
+            downloadUrl = url;
+            string clean = url.Split('?', '#')[0].TrimEnd('/', '\\');
+            int slash = Math.Max(clean.LastIndexOf('/'), clean.LastIndexOf('\\'));
+            string seg = slash >= 0 ? clean.Substring(slash + 1) : clean;
+            return !string.IsNullOrEmpty(seg) && seg.Contains('.') ? seg : "update.zip";
+        }
+
+        static void CleanupOldArchives(string currentName)
+        {
+            try
+            {
+                foreach (string old in Directory.GetFiles(ServerDir, "*.zip"))
+                {
+                    string name = Path.GetFileName(old);
+                    if (name.Equals(currentName, StringComparison.OrdinalIgnoreCase)) continue;
+                    bool legacy = name.Equals("update.zip", StringComparison.OrdinalIgnoreCase);
+                    bool versioned = name.StartsWith("RhythmParkour_v", StringComparison.OrdinalIgnoreCase);
+                    if (!legacy && !versioned) continue;
+                    File.Delete(old);
+                    Debug.Log("[PlayerBuild] Removed old archive: " + name);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[PlayerBuild] Archive cleanup failed: " + e.Message);
+            }
+        }
+
+        public static string LatestServerZip()
+        {
+            if (!Directory.Exists(ServerDir)) return ServerDir;
+            var zips = Directory.GetFiles(ServerDir, "*.zip");
+            if (zips.Length == 0) return ServerDir;
+            return zips.OrderByDescending(File.GetLastWriteTime).First();
         }
     }
 
@@ -242,13 +328,17 @@ namespace RKS.RhythmParkour.Core.Build
         public static VersionToolWindow OpenBuildGate()
         {
             var win = CreateInstance<VersionToolWindow>();
-            win.minSize = new Vector2(430f, 300f);
+            win.minSize = new Vector2(430f, 330f);
             win.isBuildGate = true;
             win.SyncFields();
-            win.position = new Rect((Screen.currentResolution.width - 430f) * 0.5f, (Screen.currentResolution.height - 300f) * 0.5f, 430f, 300f);
+            win.position = new Rect((Screen.currentResolution.width - 430f) * 0.5f, (Screen.currentResolution.height - 330f) * 0.5f, 430f, 330f);
+            buildCancelledByUser = false;
             win.ShowModal();
             return win;
         }
+
+        static bool buildCancelledByUser;
+        public static bool BuildCancelledByUser => buildCancelledByUser;
 
         void OnEnable()
         {
@@ -267,7 +357,7 @@ namespace RKS.RhythmParkour.Core.Build
             baseVersion = PlayerSettings.bundleVersion;
             phase = ReadPhase();
             var cfg = UpdatePackager.LoadConfig();
-            serverUrl = cfg.downloadUrl;
+            serverUrl = UpdatePackager.NormalizeArchiveUrl(cfg.downloadUrl);
             releaseNotes = cfg.notes;
             autoPack = cfg.autoPack;
             openFolderAfterBuild = cfg.openFolderAfterBuild;
@@ -311,7 +401,16 @@ namespace RKS.RhythmParkour.Core.Build
             {
                 EditorGUILayout.PrefixLabel("Archive URL");
                 serverUrl = EditorGUILayout.TextField(serverUrl);
+                if (GUILayout.Button("Apply", GUILayout.Width(70)))
+                {
+                    serverUrl = UpdatePackager.NormalizeArchiveUrl(serverUrl);
+                    SaveConfigFromFields();
+                    ShowNotification(new GUIContent(string.IsNullOrEmpty(serverUrl) ? "Saved: local test" : "Saved: " + serverUrl));
+                }
             }
+            string urlPreview = UpdatePackager.NormalizeArchiveUrl(serverUrl);
+            if (!string.IsNullOrEmpty(serverUrl) && urlPreview != serverUrl)
+                EditorGUILayout.HelpBox("Will be saved as: " + urlPreview, MessageType.None);
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.PrefixLabel("Auto-pack");
@@ -324,6 +423,10 @@ namespace RKS.RhythmParkour.Core.Build
                 bool of = EditorGUILayout.Toggle(openFolderAfterBuild);
                 if (of != openFolderAfterBuild) { openFolderAfterBuild = of; SaveConfigFromFields(); }
             }
+
+            string urlWarning = ArchiveUrlWarning(serverUrl);
+            if (urlWarning != null)
+                EditorGUILayout.HelpBox(urlWarning, MessageType.Warning);
 
             EditorGUILayout.Space(6);
             using (new EditorGUILayout.HorizontalScope())
@@ -338,6 +441,10 @@ namespace RKS.RhythmParkour.Core.Build
             EditorGUILayout.HelpBox(
                 $"Build label: {GatePreview()}\nFull version: {GateFullVersion()}",
                 MessageType.Info);
+
+            string urlWarning = ArchiveUrlWarning(serverUrl);
+            if (urlWarning != null)
+                EditorGUILayout.HelpBox(urlWarning, MessageType.Warning);
 
             EditorGUILayout.Space(6);
             EditorGUILayout.LabelField("Version", EditorStyles.boldLabel);
@@ -372,8 +479,24 @@ namespace RKS.RhythmParkour.Core.Build
             using (new EditorGUILayout.HorizontalScope())
             {
                 if (GUILayout.Button("Start Build", GUILayout.Height(30))) ConfirmAndBuild();
-                if (GUILayout.Button("Cancel", GUILayout.Height(30))) { confirmed = false; Close(); }
+                if (GUILayout.Button("Cancel", GUILayout.Height(30)))
+                {
+                    confirmed = false;
+                    buildCancelledByUser = true;
+                    Debug.LogError("[PlayerBuild] Build cancelled by user (Cancel in the Version Tool).");
+                    Close();
+                }
             }
+        }
+
+        static string ArchiveUrlWarning(string url)
+        {
+            string u = (url ?? "").Trim();
+            if (string.IsNullOrEmpty(u))
+                return "Archive URL is empty - the update package gets a local file:// link and works only on this PC, not for players.";
+            if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || u.ToLowerInvariant().Contains("localhost"))
+                return "Archive URL is not HTTPS - players will not be able to download from this link.";
+            return null;
         }
 
         void DrawSuffixButtons()
@@ -468,7 +591,7 @@ namespace RKS.RhythmParkour.Core.Build
         void SaveConfigFromFields()
         {
             var cfg = UpdatePackager.LoadConfig();
-            cfg.downloadUrl = (serverUrl ?? "").Trim();
+            cfg.downloadUrl = UpdatePackager.NormalizeArchiveUrl(serverUrl);
             cfg.notes = releaseNotes ?? "";
             cfg.autoPack = autoPack;
             cfg.openFolderAfterBuild = openFolderAfterBuild;
@@ -486,11 +609,10 @@ namespace RKS.RhythmParkour.Core.Build
         void RevealServer()
         {
             SaveConfigFromFields();
-            string zip = Path.Combine(UpdatePackager.ServerDir, "update.zip");
-            EditorUtility.RevealInFinder(File.Exists(zip) ? zip : UpdatePackager.ServerDir);
+            EditorUtility.RevealInFinder(UpdatePackager.LatestServerZip());
         }
 
-        static string SanitizeVersion(string input)
+        public static string SanitizeVersion(string input)
         {
             return new string((input ?? "").Trim().Where(c => char.IsDigit(c) || c == '.').ToArray());
         }

@@ -20,10 +20,12 @@ namespace RKS.RhythmParkour.UI
         [Header("Update Server")]
         [Tooltip("URL JSON-манифеста обновлений. Пусто — берётся UpdateChecker.manifestUrl")]
         [SerializeField] private string _updateManifestUrl = "";
+        [Tooltip("Имя секретного заголовка для сервера обновлений, например X-Client-Key. Пусто — заголовок не отправляется")]
+        [SerializeField] private string _updateAuthHeaderName = "";
+        [Tooltip("Значение секретного заголовка — сервер отдаёт файлы только запросам с ним (только латиница/цифры)")]
+        [SerializeField] private string _updateAuthHeaderValue = "";
         [Tooltip("Пауза между проверками обновлений, сек")]
         [SerializeField] private float updateCheckCooldownSeconds = 10f;
-        [Tooltip("Найдено обновление — сразу скачать и установить (перезапуск игры)")]
-        [SerializeField] private bool autoDownloadUpdates = true;
 
         [Header("Game Tab")]
         [SerializeField] private TMP_Dropdown _languageDropdown;
@@ -474,6 +476,9 @@ namespace RKS.RhythmParkour.UI
                 return;
             }
 
+            updateChecker.authHeaderName = _updateAuthHeaderName;
+            updateChecker.authHeaderValue = _updateAuthHeaderValue;
+
             _updatesStatus?.SetStatus(Loc("settings.updates.status.checking"), OptionStatusState.Busy);
             if (_checkUpdatesButton != null) _checkUpdatesButton.interactable = false;
             _checkOnCooldown = true;
@@ -505,7 +510,7 @@ namespace RKS.RhythmParkour.UI
                         _updatesStatus?.SetStatus(
                             string.Format(Loc("settings.updates.status.available"), latestDisplay, installedShort),
                             OptionStatusState.Success);
-                        if (autoDownloadUpdates) StartApplyUpdate();
+                        menu?.ShowUpdateConfirmation();
                         break;
                     }
 
@@ -574,6 +579,17 @@ namespace RKS.RhythmParkour.UI
             }
 
             _updatesStatus?.SetStatus(Loc("settings.updates.status.restarting"), OptionStatusState.Success);
+        }
+
+        public void ConfirmUpdate()
+        {
+            if (menu != null) menu.HideUpdateConfirmation();
+            StartApplyUpdate();
+        }
+
+        public void RejectUpdate()
+        {
+            if (menu != null) menu.HideUpdateConfirmation();
         }
 
         #endregion

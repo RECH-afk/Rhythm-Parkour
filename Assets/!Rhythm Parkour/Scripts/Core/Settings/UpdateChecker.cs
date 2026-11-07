@@ -46,6 +46,9 @@ namespace RKS.RhythmParkour.Core.Settings
         public string manifestUrl = DefaultManifestUrl;
         public int timeoutSeconds = 10;
 
+        public string authHeaderName = "";
+        public string authHeaderValue = "";
+
         public bool isChecking { get; private set; }
         public string LatestVersion { get; private set; }
         public string DownloadUrl { get; private set; }
@@ -79,6 +82,12 @@ namespace RKS.RhythmParkour.Core.Settings
             CheckRoutine(url);
         }
 
+        void ApplyAuthHeader(UnityWebRequest request)
+        {
+            if (string.IsNullOrEmpty(authHeaderName) || string.IsNullOrEmpty(authHeaderValue)) return;
+            request.SetRequestHeader(authHeaderName, authHeaderValue);
+        }
+
         async void CheckRoutine(string url)
         {
             try
@@ -86,6 +95,7 @@ namespace RKS.RhythmParkour.Core.Settings
                 using (var request = UnityWebRequest.Get(url))
                 {
                     request.timeout = timeoutSeconds;
+                    ApplyAuthHeader(request);
                     await request.SendWebRequest();
 
                     if (request.result != UnityWebRequest.Result.Success)
@@ -177,6 +187,7 @@ namespace RKS.RhythmParkour.Core.Settings
                     using (var request = new UnityWebRequest(DownloadUrl, "GET", new DownloadHandlerFile(zipPath), null))
                     {
                         request.timeout = 0;
+                        ApplyAuthHeader(request);
                         var op = request.SendWebRequest();
                         while (!op.isDone)
                         {

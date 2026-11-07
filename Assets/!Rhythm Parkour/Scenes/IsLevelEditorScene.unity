@@ -917,6 +917,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &37379448
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1223,6 +1224,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &113169469
 GameObject:
   m_ObjectHideFlags: 0
@@ -1298,6 +1300,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &113169473
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2758,6 +2761,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &224888810
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3004,6 +3008,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &231255159
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3314,7 +3319,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &273022119
 RectTransform:
   m_ObjectHideFlags: 0
@@ -3656,6 +3661,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &287668753
 GameObject:
   m_ObjectHideFlags: 0
@@ -3811,6 +3817,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &295294842
 GameObject:
   m_ObjectHideFlags: 0
@@ -4747,6 +4754,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &385939682
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5115,6 +5123,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &399330069
 GameObject:
   m_ObjectHideFlags: 0
@@ -6258,7 +6267,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1715050993}
   m_Direction: 2
   m_Value: 0
-  m_Size: 0.9999978
+  m_Size: 0.9999981
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -6863,6 +6872,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &607184399
 GameObject:
   m_ObjectHideFlags: 0
@@ -7171,6 +7181,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &621616179
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7294,6 +7305,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &630205318
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -7820,6 +7832,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &693660789
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -8471,6 +8484,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &766676909
 GameObject:
   m_ObjectHideFlags: 0
@@ -8955,6 +8969,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &811041053
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9380,6 +9395,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &839995524
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10074,6 +10090,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &906233735
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10392,6 +10409,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &922810287
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -11254,6 +11272,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1003791742
 GameObject:
   m_ObjectHideFlags: 0
@@ -12222,6 +12241,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &1076290198
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -12605,7 +12625,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: 0.0009868534}
+  m_AnchoredPosition: {x: 0, y: 0.00087801367}
   m_SizeDelta: {x: 0, y: 300}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1157034350
@@ -13870,6 +13890,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &1301427455
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -14308,6 +14329,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1338857801
 GameObject:
   m_ObjectHideFlags: 0
@@ -15090,6 +15112,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &1424259289
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -22802,6 +22825,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1706806085
 GameObject:
   m_ObjectHideFlags: 0
@@ -23112,7 +23136,7 @@ RectTransform:
   m_Father: {fileID: 1555309612}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 0.9999977}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 20, y: 20}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -23448,6 +23472,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1754611515
 GameObject:
   m_ObjectHideFlags: 0
@@ -23678,6 +23703,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1755146881
 GameObject:
   m_ObjectHideFlags: 0
@@ -24126,6 +24152,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1780561562
 GameObject:
   m_ObjectHideFlags: 0
@@ -24954,9 +24981,9 @@ RectTransform:
   m_Father: {fileID: 331543178}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
+  m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: 0}
+  m_SizeDelta: {x: -13.292801, y: 0}
   m_Pivot: {x: 0, y: 1}
 --- !u!114 &1848251933
 MonoBehaviour:
@@ -25414,6 +25441,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &1926018760
 GameObject:
   m_ObjectHideFlags: 0
@@ -25792,6 +25820,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &1935763202
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -26524,6 +26553,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &2004967171
 GameObject:
   m_ObjectHideFlags: 0
@@ -27072,6 +27102,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &2082965229
 GameObject:
   m_ObjectHideFlags: 0
@@ -27178,6 +27209,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &2091518792
 GameObject:
   m_ObjectHideFlags: 0
@@ -27236,6 +27268,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!114 &2091518795
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -27968,6 +28001,7 @@ MonoBehaviour:
   duration: 0.15
   hoverEase: 27
   pressEase: 6
+  edgeTolerance: 8
 --- !u!1 &2118727040
 GameObject:
   m_ObjectHideFlags: 0

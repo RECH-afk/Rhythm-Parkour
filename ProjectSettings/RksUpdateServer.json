@@ -1,5 +1,5 @@
 {
-    "downloadUrl": "http://localhost:8080/update.zip",
+    "downloadUrl": "https://wh35665.web4.maze-tech.ru/rhythmparkour/download/RhythmParkour_v{VERSION}.zip",
     "notes": "test",
     "autoPack": true,
     "openFolderAfterBuild": true

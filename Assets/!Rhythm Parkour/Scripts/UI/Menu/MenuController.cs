@@ -123,6 +123,9 @@ namespace RKS.RhythmParkour.UI
         [Header("Quit Confirmation Window")]
         [SerializeField] private GameObject _quitConfirmationWindow;
 
+        [Header("Update Confirmation Window")]
+        [SerializeField] private GameObject _updateConfirmationWindow;
+
         [Header("Settings Window")]
         [Tooltip("Ссылка на объект Settings (окно настроек)")]
         [SerializeField] private GameObject _settingsWindow;
@@ -297,6 +300,7 @@ namespace RKS.RhythmParkour.UI
             CacheOriginalPosition(_noLevelsWindow);
             CacheOriginalPosition(_deleteConfirmationWindow);
             CacheOriginalPosition(_quitConfirmationWindow);
+            CacheOriginalPosition(_updateConfirmationWindow);
             if (_settingsWindow != null) CacheOriginalPosition(_settingsWindow);
             if (_logoTransform != null) CacheOriginalPosition(_logoTransform.gameObject);
             if (_mainMenuButtonsContainer != null) CacheOriginalPosition(_mainMenuButtonsContainer.gameObject);
@@ -320,6 +324,10 @@ namespace RKS.RhythmParkour.UI
                 else if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf && !_isTransitioning)
                 {
                     HideQuitConfirmation();
+                }
+                else if (_updateConfirmationWindow != null && _updateConfirmationWindow.activeSelf && !_isTransitioning)
+                {
+                    HideUpdateConfirmation();
                 }
                 else if (_settingsWindow != null && _settingsWindow.activeSelf && !_isTransitioning)
                 {
@@ -717,6 +725,7 @@ namespace RKS.RhythmParkour.UI
             if (_noLevelsWindow != null) _noLevelsWindow.SetActive(false);
             if (_deleteConfirmationWindow != null) _deleteConfirmationWindow.SetActive(false);
             if (_quitConfirmationWindow != null) _quitConfirmationWindow.SetActive(false);
+            if (_updateConfirmationWindow != null) _updateConfirmationWindow.SetActive(false);
             if (_settingsWindow != null) _settingsWindow.SetActive(false);
         }
 
@@ -776,6 +785,9 @@ namespace RKS.RhythmParkour.UI
             if (_quitConfirmationWindow != null && _quitConfirmationWindow.activeSelf && _quitConfirmationWindow != targetWindow)
                 windowsToHide.Add(_quitConfirmationWindow);
 
+            if (_updateConfirmationWindow != null && _updateConfirmationWindow.activeSelf && _updateConfirmationWindow != targetWindow)
+                windowsToHide.Add(_updateConfirmationWindow);
+
             if (_settingsWindow != null && _settingsWindow.activeSelf && _settingsWindow != targetWindow)
                 windowsToHide.Add(_settingsWindow);
 
@@ -818,6 +830,11 @@ namespace RKS.RhythmParkour.UI
                     rotationZ = -1f;
                 }
                 else if (win == _quitConfirmationWindow)
+                {
+                    hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
+                    rotationZ = -1f;
+                }
+                else if (win == _updateConfirmationWindow)
                 {
                     hideTarget = origPos + new Vector2(0f, -GetScreenOffsetY());
                     rotationZ = -1f;
@@ -874,6 +891,11 @@ namespace RKS.RhythmParkour.UI
                 startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
                 startRotZ = -1f;
             }
+            else if (targetWindow == _updateConfirmationWindow)
+            {
+                startPos = origTarget + new Vector2(0f, -GetScreenOffsetY() * 0.8f);
+                startRotZ = -1f;
+            }
             else if (targetWindow == _settingsWindow)
             {
                 startPos = origTarget + new Vector2(GetScreenOffsetX(), 0f);
@@ -917,6 +939,7 @@ namespace RKS.RhythmParkour.UI
             UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             HideQuitConfirmationImmediate();
+            HideUpdateConfirmationImmediate();
             TransitionTo(_mainMenuRoot);
         }
 
@@ -942,6 +965,7 @@ namespace RKS.RhythmParkour.UI
             UpdateDetailsButtonsState();
             HideDeleteConfirmationImmediate();
             HideQuitConfirmationImmediate();
+            HideUpdateConfirmationImmediate();
 
             _foundPaths.Clear();
             _foundPaths.AddRange(Store.FindAllRkslFiles(transfer != null ? transfer.GetSavedPaths() : null));
@@ -1089,6 +1113,58 @@ namespace RKS.RhythmParkour.UI
 #else
             Application.Quit();
 #endif
+        }
+
+        #endregion
+
+        #region Update Confirmation
+
+        public void ShowUpdateConfirmation()
+        {
+            if (_isTransitioning) return;
+            if (_updateConfirmationWindow == null)
+            {
+                Debug.LogWarning("[MenuController] Окно подтверждения обновления не привязано (_updateConfirmationWindow).", this);
+                return;
+            }
+            TransitionTo(_updateConfirmationWindow);
+        }
+
+        public void HideUpdateConfirmation()
+        {
+            if (_updateConfirmationWindow == null || !_updateConfirmationWindow.activeSelf) return;
+
+            _isTransitioning = true;
+            var rt = _updateConfirmationWindow.GetComponent<RectTransform>();
+
+            rt.DOKill(true);
+            Vector2 origPos = _originalPositions.TryGetValue(_updateConfirmationWindow, out var o) ? o : rt.anchoredPosition;
+
+            Sequence seq = DOTween.Sequence()
+                .Join(rt.DOAnchorPos(origPos + new Vector2(0f, -GetScreenOffsetY()), _animDuration * 0.5f).SetEase(Ease.InQuart))
+                .Join(rt.DORotate(new Vector3(0, 0, -1f), _animDuration * 0.5f, RotateMode.Fast))
+                .Join(rt.DOScale(0.97f, _animDuration * 0.5f).SetEase(Ease.InQuart))
+                .SetTarget(_updateConfirmationWindow);
+
+            seq.OnComplete(() => {
+                _updateConfirmationWindow.SetActive(false);
+                rt.anchoredPosition = origPos;
+                rt.localScale = Vector3.one;
+                rt.localRotation = Quaternion.identity;
+                _isTransitioning = false;
+
+                if (_settingsWindow != null) TransitionTo(_settingsWindow);
+                else TransitionTo(_mainMenuRoot);
+            });
+        }
+
+        private void HideUpdateConfirmationImmediate()
+        {
+            if (_updateConfirmationWindow != null && _updateConfirmationWindow.activeSelf)
+            {
+                _updateConfirmationWindow.GetComponent<RectTransform>()?.DOKill(true);
+                _updateConfirmationWindow.SetActive(false);
+            }
         }
 
         #endregion

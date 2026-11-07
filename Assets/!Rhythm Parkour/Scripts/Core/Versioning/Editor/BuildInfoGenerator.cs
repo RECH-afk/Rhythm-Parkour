@@ -44,7 +44,7 @@ namespace RKS.RhythmParkour.Core
 
             string tag = ParseTag(describe);
             string suffix = dirty ? ".dirty" : "";
-            string version = $"{baseVersion}.{count}+{hash}{suffix}";
+            string version = $"{baseVersion}+{hash}{suffix}";
 
             string prevPhase = "";
             string prevDate = "";

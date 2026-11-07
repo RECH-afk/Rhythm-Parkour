@@ -1467,7 +1467,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &526289566
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1948,11 +1948,9 @@ MonoBehaviour:
   defaultObstacleSpeed: 12
   obstacleSpeed: 12
   poolSizePerPrefab: 8
-  autoStartOnReady: 1
-  autoStartDelay: 0.5
+  autoPlayOnStart: 1
+  autoPlayDelay: 0.5
   debugHits: 0
-  recorder: {fileID: 0}
-  arriveOnBeat: 1
   nextEventIndex: 0
   isPlaying: 0
   currentTime: 0
@@ -1981,7 +1979,6 @@ MonoBehaviour:
   perfectWeight: 100
   greatWeight: 65
   goodWeight: 35
-  comboScale: 2
   godlikeMin: 0.95
   awesomeMin: 0.8
   soSoMin: 0.6
@@ -1993,7 +1990,6 @@ MonoBehaviour:
   count100: 0
   count50: 0
   countMiss: 0
-  scorePoints: 0
   combo: 0
   maxCombo: 0
   flow: 0
