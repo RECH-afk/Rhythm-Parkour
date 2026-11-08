@@ -36,6 +36,9 @@ namespace RKS.RhythmParkour.Core
             public bool bloomEnabled = true;
             public bool chromaticAberrationEnabled = false;
             public bool showVersionLabel = true;
+
+            public string authToken = "";
+            public string accountName = "";
         }
     }
 }

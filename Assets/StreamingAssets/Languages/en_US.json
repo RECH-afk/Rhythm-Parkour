@@ -62,6 +62,22 @@
         { "key": "settings.generalVolume.tipTitle", "value": "General volume" },
         { "key": "settings.generalVolume.tipDesc", "value": "Master volume: scales music and sound effects at once. You can also change it with the mouse wheel anywhere, without opening settings." },
         { "key": "settings.volumeMixer.tipTitle", "value": "Volume mixer" },
-        { "key": "settings.volumeMixer.tipDesc", "value": "Wheel volume control: scroll anywhere for general volume, or hover a mixer knob to change only that channel. Can be turned off here." }
+        { "key": "settings.volumeMixer.tipDesc", "value": "Wheel volume control: scroll anywhere for general volume, or hover a mixer knob to change only that channel. Can be turned off here." },
+        { "key": "backend.pingOnline", "value": "Ping {0} ms" },
+        { "key": "backend.pingOffline", "value": "Offline" },
+        { "key": "backend.auth.title", "value": "Account" },
+        { "key": "backend.auth.signInOrSignUp", "value": "Sign in to your account" },
+        { "key": "backend.auth.signedInPrefix", "value": "Signed in:" },
+        { "key": "backend.auth.working", "value": "Contacting the server..." },
+        { "key": "backend.auth.success", "value": "Done" },
+        { "key": "backend.auth.signedOut", "value": "Signed out" },
+        { "key": "backend.err.invalid_username", "value": "Username must be 3-24 characters: letters, digits, _ . -" },
+        { "key": "backend.err.weak_password", "value": "Password must be at least 8 characters" },
+        { "key": "backend.err.username_taken", "value": "This username is already taken" },
+        { "key": "backend.err.bad_credentials", "value": "Wrong username or password" },
+        { "key": "backend.err.rate_limited", "value": "Too many requests. Try again later" },
+        { "key": "backend.err.network", "value": "Network error. Check your connection" },
+        { "key": "backend.err.server", "value": "Server is busy or unreachable" },
+        { "key": "backend.err.https_required", "value": "Secure HTTPS connection is required" }
     ]
 }

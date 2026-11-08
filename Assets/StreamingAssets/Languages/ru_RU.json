@@ -62,6 +62,22 @@
         { "key": "settings.generalVolume.tipTitle", "value": "общая громкость" },
         { "key": "settings.generalVolume.tipDesc", "value": "это главная громкость: меняет сразу и музыку, и звуки." },
         { "key": "settings.volumeMixer.tipTitle", "value": "микшер громкости" },
-        { "key": "settings.volumeMixer.tipDesc", "value": "управление громкостью игры колёсиком: крути где угодно — не обязательно заходить в настройки, наведись на круглый ползунок — меняется только он. здесь это можно выключить." }
+        { "key": "settings.volumeMixer.tipDesc", "value": "управление громкостью игры колёсиком: крути где угодно — не обязательно заходить в настройки, наведись на круглый ползунок — меняется только он. здесь это можно выключить." },
+        { "key": "backend.pingOnline", "value": "пинг {0} мс" },
+        { "key": "backend.pingOffline", "value": "нет связи" },
+        { "key": "backend.auth.title", "value": "аккаунт" },
+        { "key": "backend.auth.signInOrSignUp", "value": "вход в аккаунт" },
+        { "key": "backend.auth.signedInPrefix", "value": "ты вошёл:" },
+        { "key": "backend.auth.working", "value": "связываемся с сервером..." },
+        { "key": "backend.auth.success", "value": "готово" },
+        { "key": "backend.auth.signedOut", "value": "ты вышел из аккаунта" },
+        { "key": "backend.err.invalid_username", "value": "имя: 3–24 символа — латиница, цифры, _ . -" },
+        { "key": "backend.err.weak_password", "value": "пароль должен быть не короче 8 символов" },
+        { "key": "backend.err.username_taken", "value": "это имя уже занято" },
+        { "key": "backend.err.bad_credentials", "value": "неверное имя или пароль" },
+        { "key": "backend.err.rate_limited", "value": "слишком много запросов. попробуй позже" },
+        { "key": "backend.err.network", "value": "сетевая ошибка. проверь подключение" },
+        { "key": "backend.err.server", "value": "сервер недоступен, попробуй позже" },
+        { "key": "backend.err.https_required", "value": "требуется защищённое HTTPS-соединение" }
     ]
 }

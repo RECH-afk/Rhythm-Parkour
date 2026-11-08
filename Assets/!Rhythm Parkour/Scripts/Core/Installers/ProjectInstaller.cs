@@ -1,6 +1,7 @@
 using RKS.RhythmParkour.Core.Managers;
 using RKS.RhythmParkour.Core.Settings;
 using RKS.RhythmParkour.Core.Storage;
+using RKS.RhythmParkour.Core.Backend;
 using UnityEngine;
 using Zenject;
 using RKS.RhythmParkour;
@@ -23,6 +24,10 @@ namespace RKS.RhythmParkour.Core.Installers
         [Header("Rhythm shared")]
         [SerializeField] private GlobalObstacleCatalog obstacleCatalog;
 
+        [Header("Backend")]
+        [SerializeField, Tooltip("Prefab of the BackendService manager; add it to the ProjectContext with the Inspector")]
+        private BackendService backendPrefab;
+
         public override void InstallBindings()
         {
             Container.Bind<LocalizationManager>().FromComponentInNewPrefab(localizationPrefab).AsSingle().NonLazy();
@@ -31,6 +36,8 @@ namespace RKS.RhythmParkour.Core.Installers
             Container.Bind<SaveManager>().FromComponentInNewPrefab(savePrefab).AsSingle().NonLazy();
             Container.Bind<TransitionManager>().FromComponentInNewPrefab(transitionPrefab).AsSingle().NonLazy();
 
+            if (backendPrefab != null)
+                Container.Bind<BackendService>().FromComponentInNewPrefab(backendPrefab).AsSingle().NonLazy();
 
             Container.Bind<LevelTransfer>().AsSingle().NonLazy();
             Container.Bind<LevelVisualApplier>().AsSingle();

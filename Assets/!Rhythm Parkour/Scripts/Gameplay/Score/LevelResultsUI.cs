@@ -1,4 +1,5 @@
 using RKS.RhythmParkour.Core;
+using RKS.RhythmParkour.Core.Backend;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
@@ -22,6 +23,8 @@ namespace RKS.RhythmParkour.Rhythm
 
         [SerializeField] private string _gameSceneName = "IsGameScene";
         [SerializeField] private int _minComboToShow = 2;
+
+        [InjectOptional] private BackendService _backendService;
 
         [Header("HUD")]
         [SerializeField] private TextMeshProUGUI _scoreText;
@@ -119,7 +122,12 @@ namespace RKS.RhythmParkour.Rhythm
             RefreshHUD();
         }
 
-        private void OnLevelFinished(LevelResults r) => ShowResults(r);
+        private void OnLevelFinished(LevelResults r)
+        {
+            if (_backendService != null)
+                _backendService.TrackLevelFinished(r);
+            ShowResults(r);
+        }
 
         private void RefreshHUD()
         {
